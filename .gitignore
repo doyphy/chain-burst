@@ -1,0 +1,26 @@
+# --- [ Unreal Engine ] ---
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+FileOpenOrder/
+
+# --- [ IDEs (Rider & VS) ] ---
+.idea/
+.vs/
+*.sln
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+*.sln.DotSettings.user
+
+# --- [ Plugins ] ---
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+
+# --- [ System ] ---
+*.log
+.DS_Store
+Thumbs.db

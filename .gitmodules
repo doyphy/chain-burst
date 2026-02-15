@@ -1,0 +1,3 @@
+[submodule "Content/_ThirdParty"]
+	path = Content/_ThirdParty
+	url = https://github.com/doyphy/chain-burst-assets.git

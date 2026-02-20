@@ -35,8 +35,6 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Camera", meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* SpringArmComponent;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Combat", meta = (AllowPrivateAccess = "true"))
-	UCBChaserCombatComponent* ChaserCombatComponent;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Combat", meta = (AllowPrivateAccess = "true"))
 	UCBCameraControlComponent* CameraControlComponent;
 #pragma endregion
 	
@@ -46,14 +44,12 @@ private:
 	
 	void Input_Move(const FInputActionValue& InputActionValue);
 	void Input_Look(const FInputActionValue& InputActionValue);
-	void Input_Sprint_Started();
-	void Input_Sprint_Completeed();
 	void Input_Camera_Zoom(const FInputActionValue& InputActionValue);
 
 	void Input_AbilityInputPressed(FGameplayTag InInputTag);
 	void Input_AbilityInputReleased(FGameplayTag InInputTag);
 #pragma endregion
-
+	
 public:
-	FORCEINLINE UCBChaserCombatComponent* GetChaserCombatComponent() const { return ChaserCombatComponent; }
+	UCBChaserCombatComponent* GetChaserCombatComponent() const;
 };

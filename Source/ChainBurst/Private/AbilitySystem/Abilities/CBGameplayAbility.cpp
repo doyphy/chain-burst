@@ -2,9 +2,16 @@
 #include "AbilitySystem/Abilities/CBGameplayAbility.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Combat/CBCombatComponent.h"
+#include "Characters/CBBaseCharacter.h"
+
+UCBGameplayAbility::UCBGameplayAbility()
+{
+	// [기본 값] 액터당 하나씩 인스턴스를 생성하도록 설정
+	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
+}
 
 void UCBGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo,
-	const FGameplayAbilitySpec& Spec)
+                                       const FGameplayAbilitySpec& Spec)
 {
 	Super::OnGiveAbility(ActorInfo, Spec);
 	
@@ -40,6 +47,10 @@ void UCBGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 
 UCBCombatComponent* UCBGameplayAbility::GetCBCombatComponentFromActorInfo() const
 {
+	if (ACBBaseCharacter* BaseChar = Cast<ACBBaseCharacter>(GetAvatarActorFromActorInfo()))
+	{
+		
+	}
 	return GetAvatarActorFromActorInfo()->FindComponentByClass<UCBCombatComponent>();
 }
 

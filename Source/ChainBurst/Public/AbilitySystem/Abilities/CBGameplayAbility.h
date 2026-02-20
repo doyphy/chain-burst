@@ -30,6 +30,10 @@ UCLASS()
 class CHAINBURST_API UCBGameplayAbility : public UGameplayAbility
 {
 	GENERATED_BODY()
+	
+public:
+	UCBGameplayAbility();
+	
 protected:
 	//~ Begin UGameplayAbility Interface
 		/** 어빌리티가 부여될 때 호출하는 함수 */

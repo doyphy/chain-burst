@@ -52,7 +52,7 @@ ACBChaserCharacter::ACBChaserCharacter()
 	// 걷기 감속(브레이크) 가속도 설정
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.0f;
 
-	ChaserCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("ChaserCombatComponent"));
+	CombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CombatComponent"));
 	CameraControlComponent = CreateDefaultSubobject<UCBCameraControlComponent>(TEXT("CameraControlComponent"));
 }
 
@@ -64,12 +64,12 @@ void ACBChaserCharacter::PossessedBy(AController* NewController)
 	if (!CharacterLoadout.IsNull())
 	{
 		// 이미 로드되어 있다면 즉시 사용
-		if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && ChaserCombatComponent)
+		if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && CombatComponent)
 		{
 			// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
 			CharacterLoadout->GrantAbilitiesToASC(CBAbilitySystemComponent);
 			// 로드아웃에 있는 무기 모두 컴뱃 컴포넌트에 등록
-			CharacterLoadout->RegisterWeaponsToCombatComponent(ChaserCombatComponent);
+			CharacterLoadout->RegisterWeaponsToCombatComponent(CombatComponent);
 		}
 		else
 		{
@@ -79,12 +79,12 @@ void ACBChaserCharacter::PossessedBy(AController* NewController)
 				CharacterLoadout.ToSoftObjectPath(),
 				FStreamableDelegate::CreateWeakLambda(this, [this]()
 				{
-					if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && ChaserCombatComponent)
+					if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && CombatComponent)
 					{
 						// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
 						CharacterLoadout->GrantAbilitiesToASC(CBAbilitySystemComponent);
 						// 로드아웃에 있는 무기 모두 컴뱃 컴포넌트에 등록
-						CharacterLoadout->RegisterWeaponsToCombatComponent(ChaserCombatComponent);
+						CharacterLoadout->RegisterWeaponsToCombatComponent(CombatComponent);
 					}
 				})
 			);
@@ -131,8 +131,6 @@ void ACBChaserCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	// Input 태그에 해당하는 Input Action을 바인딩
 	CBInputComponent->BindNativeInputAction(InputConfig, CBGameplayTags::Input_Action_Move, ETriggerEvent::Triggered, this, &ThisClass::Input_Move);
 	CBInputComponent->BindNativeInputAction(InputConfig, CBGameplayTags::Input_Action_Look, ETriggerEvent::Triggered, this, &ThisClass::Input_Look);
-	CBInputComponent->BindNativeInputAction(InputConfig, CBGameplayTags::Input_Action_Sprint, ETriggerEvent::Started, this, &ThisClass::Input_Sprint_Started);
-	CBInputComponent->BindNativeInputAction(InputConfig, CBGameplayTags::Input_Action_Sprint, ETriggerEvent::Completed, this, &ThisClass::Input_Sprint_Completeed);
 	CBInputComponent->BindNativeInputAction(InputConfig, CBGameplayTags::Input_Action_Camera_Zoom, ETriggerEvent::Triggered, this, &ThisClass::Input_Camera_Zoom);
 	
 	// InputConfig 의 Ability Input Actions 배열의 모든 액션을 바인딩 (Input_AbilityInputPressed, Input_AbilityInputReleased 함수와 연결)
@@ -164,16 +162,6 @@ void ACBChaserCharacter::Input_Look(const FInputActionValue& InputActionValue)
 	}
 }
 
-void ACBChaserCharacter::Input_Sprint_Started()
-{
-	GetCharacterMovement()->MaxWalkSpeed = 750.0f;
-}
-
-void ACBChaserCharacter::Input_Sprint_Completeed()
-{
-	GetCharacterMovement()->MaxWalkSpeed = 500.0f;
-}
-
 void ACBChaserCharacter::Input_Camera_Zoom(const FInputActionValue& InputActionValue)
 {
 	const float WheelValue = InputActionValue.Get<float>();
@@ -192,4 +180,9 @@ void ACBChaserCharacter::Input_AbilityInputPressed(FGameplayTag InInputTag)
 void ACBChaserCharacter::Input_AbilityInputReleased(FGameplayTag InInputTag)
 {
 	CBAbilitySystemComponent->OnAbilityInputReleased(InInputTag);
+}
+
+UCBChaserCombatComponent* ACBChaserCharacter::GetChaserCombatComponent() const
+{
+	return Cast<UCBChaserCombatComponent>(CombatComponent);
 }

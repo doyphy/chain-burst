@@ -7,6 +7,7 @@
 class USpringArmComponent;
 class UCameraComponent;
 struct FInputActionValue;
+class ACBChaserCharacter;
 
 USTRUCT(BlueprintType)
 struct FCBZoomConfig
@@ -36,11 +37,16 @@ class CHAINBURST_API UCBCameraControlComponent : public UCBExtensionComponent
 public:
 	UCBCameraControlComponent();
 
+	virtual void BeginPlay() override;
+	
 	virtual void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	
 	void InitializeCamera(USpringArmComponent* InSpringArmComponent, UCameraComponent* InCameraComponent);
 	
 protected:
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Camera|References")
+	TObjectPtr<ACBChaserCharacter> CachedCharacter;
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera|Components")
 	TObjectPtr<USpringArmComponent> SpringArm;
 	
@@ -72,7 +78,7 @@ private:
 	/** 현재 줌 비율 (0.0 = 최대 줌인, 1.0 = 최대 줌아웃) */
 	float TargetZoomAlpha = 0.f;  // 목표 Alpha
 	float CurrentZoomAlpha = 0.f; // 현재 Alpha (보간용)
-
+	
 public:
 #pragma region Inputs
 	void Input_Look(const FVector2D& InLookAxisVector);

@@ -1,5 +1,6 @@
 // project
 #include "Components/Camera/CBCameraControlComponent.h"
+#include "Characters/CBChaserCharacter.h"
 
 // engine
 #include "GameFramework/SpringArmComponent.h"
@@ -8,6 +9,13 @@ UCBCameraControlComponent::UCBCameraControlComponent()
 {
 	// Tick 활성화
 	PrimaryComponentTick.bCanEverTick = true;
+}
+
+void UCBCameraControlComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	CachedCharacter = Cast<ACBChaserCharacter>(GetOwner());
 }
 
 void UCBCameraControlComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -46,32 +54,26 @@ void UCBCameraControlComponent::InitializeCamera(USpringArmComponent* InSpringAr
 	SpringArm = InSpringArmComponent;
 	Camera = InCameraComponent;
 	
-	if (SpringArm)
-	{
-		SpringArm->TargetOffset = FVector(0.f,0.f,50.f);
+	SpringArm->TargetOffset = FVector(0.f,0.f,50.f);
 
-		// 기본 길이/오프셋 설정 (최대 줌 인/아웃의 30%로 초기화)
-		CurrentZoomAlpha = 0.3;
-		
-		TargetZoomAlpha = CurrentZoomAlpha;
-		DefaultTargetArmLength = FMath::Lerp(ZoomConfig.MinLength, ZoomConfig.MaxLength, CurrentZoomAlpha);
-		DefaultSocketOffset = FMath::Lerp(ZoomConfig.MinSocketOffset, ZoomConfig.MaxSocketOffset, CurrentZoomAlpha);;
-		
-		SpringArm->SocketOffset = DefaultSocketOffset;
-		SpringArm->TargetArmLength = DefaultTargetArmLength;
-	}
+	// 기본 길이/오프셋 설정 (최대 줌 인/아웃의 30%로 초기화)
+	CurrentZoomAlpha = 0.3;
+	
+	TargetZoomAlpha = CurrentZoomAlpha;
+	DefaultTargetArmLength = FMath::Lerp(ZoomConfig.MinLength, ZoomConfig.MaxLength, CurrentZoomAlpha);
+	DefaultSocketOffset = FMath::Lerp(ZoomConfig.MinSocketOffset, ZoomConfig.MaxSocketOffset, CurrentZoomAlpha);;
+	
+	SpringArm->SocketOffset = DefaultSocketOffset;
+	SpringArm->TargetArmLength = DefaultTargetArmLength;
 }
 
 void UCBCameraControlComponent::Input_Look(const FVector2D& InLookAxisVector)
 {
-	APawn* OwningPawn = GetOwningPawn();
+	if (!CachedCharacter) return;
 	
-	if (OwningPawn != nullptr)
-	{
-		// 입력된 시점 변경 벡터를 기반으로 캐릭터 시점 변경
-		OwningPawn->AddControllerYawInput(InLookAxisVector.X);
-		OwningPawn->AddControllerPitchInput(InLookAxisVector.Y);
-	}
+	// 컨트롤러 회전
+	CachedCharacter->AddControllerYawInput(InLookAxisVector.X);
+	CachedCharacter->AddControllerPitchInput(InLookAxisVector.Y);
 }
 
 void UCBCameraControlComponent::Input_Camera_Zoom(const float& InWheelValue)

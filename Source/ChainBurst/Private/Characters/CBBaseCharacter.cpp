@@ -4,6 +4,8 @@
 #include "AbilitySystem/CBAttributeSet.h"
 #include "CBGameplayTags.h"
 #include "DataAssets/Movement/CBCharacterMovementData.h"
+#include "Components/Movement/CBLocomotionProcessor.h"
+#include "Components/Movement/CBCharacterTrajectoryComponent.h"
 
 // engine
 #include "GameFramework/CharacterMovementComponent.h" 
@@ -14,11 +16,17 @@ ACBBaseCharacter::ACBBaseCharacter()
 	PrimaryActorTick.bCanEverTick = false;
 	// 액터가 생성될 때 Tick이 비활성화된 상태로 시작하도록 설정
 	PrimaryActorTick.bStartWithTickEnabled = false;
+
+	// 네트워크 복제 활성화
+	bReplicates = true;
+	
 	// 캐릭터의 메시가 데칼(총알 자국, 피 등)을 받지 않도록 설정
 	GetMesh()->bReceivesDecals = false;
-
+	
 	CBAbilitySystemComponent = CreateDefaultSubobject<UCBAbilitySystemComponent>(TEXT("CBAbilitySystemComponent"));
 	CBAttributeSet = CreateDefaultSubobject<UCBAttributeSet>(TEXT("CBAttributeSet"));
+	CBTrajectoryComponent = CreateDefaultSubobject<UCBCharacterTrajectoryComponent>(TEXT("CBTrajectoryComponent"));
+	CBLocomotionProcessor = CreateDefaultSubobject<UCBLocomotionProcessor>(TEXT("CBLocomotionProcessor"));
 }
 
 UAbilitySystemComponent* ACBBaseCharacter::GetAbilitySystemComponent() const

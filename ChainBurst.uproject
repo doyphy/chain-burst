@@ -11,7 +11,8 @@
 			"AdditionalDependencies": [
 				"Engine",
 				"EnhancedInput",
-				"GameplayAbilities"
+				"GameplayAbilities",
+				"MotionTrajectory"
 			]
 		}
 	],
@@ -33,6 +34,18 @@
 		},
 		{
 			"Name": "PoseSearch",
+			"Enabled": true
+		},
+		{
+			"Name": "Chooser",
+			"Enabled": true
+		},
+		{
+			"Name": "MotionTrajectory",
+			"Enabled": true
+		},
+		{
+			"Name": "AnimationWarping",
 			"Enabled": true
 		}
 	]

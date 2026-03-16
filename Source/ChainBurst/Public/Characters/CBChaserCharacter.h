@@ -11,6 +11,8 @@ class UCBInputConfig;
 struct FInputActionValue;
 class UCBChaserCombatComponent;
 class UCBCameraControlComponent;
+class UCBCharacterRotationComponent;
+class UCBCharacterAnimInstance;
 
 UCLASS()
 class CHAINBURST_API ACBChaserCharacter : public ACBBaseCharacter
@@ -28,18 +30,20 @@ protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void BeginPlay() override;
 	
-private:
+protected:
 #pragma region Components
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Camera", meta = (AllowPrivateAccess = "true"))
-	UCameraComponent* CameraComponent;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Camera", meta = (AllowPrivateAccess = "true"))
-	USpringArmComponent* SpringArmComponent;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Combat", meta = (AllowPrivateAccess = "true"))
-	UCBCameraControlComponent* CameraControlComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Camera")
+	TObjectPtr<UCameraComponent> CameraComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Camera")
+	TObjectPtr<USpringArmComponent> SpringArmComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Camera")
+	TObjectPtr<UCBCameraControlComponent> CBCameraControlComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Rotation")
+	TObjectPtr<UCBCharacterRotationComponent> CBCharacterRotationComponent;
 #pragma endregion
 	
 #pragma region Inputs
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CharacterData", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|Input")
 	UCBInputConfig* InputConfig;
 	
 	void Input_Move(const FInputActionValue& InputActionValue);
@@ -49,6 +53,12 @@ private:
 	void Input_AbilityInputPressed(FGameplayTag InInputTag);
 	void Input_AbilityInputReleased(FGameplayTag InInputTag);
 #pragma endregion
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCBCharacterAnimInstance> CachedAnimInstance;
+
+	UFUNCTION()
+	void OnAnimInstanceInitialized();
 	
 public:
 	UCBChaserCombatComponent* GetChaserCombatComponent() const;

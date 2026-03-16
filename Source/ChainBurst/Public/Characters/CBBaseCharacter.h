@@ -11,6 +11,8 @@ class UCBCharacterLoadout;
 class UCBCharacterMovementData;
 class UCBCombatComponent;
 struct FOnAttributeChangeData;
+class UCBLocomotionProcessor;
+class UCBCharacterTrajectoryComponent;
 
 UCLASS()
 class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface
@@ -36,25 +38,34 @@ protected:
 
 	/** 이동 속도 변경 시 실행되는 함수 */
 	void OnMovementSpeedChanged(const FOnAttributeChangeData& Data);
-	
+
+#pragma region Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|AbilitySystem")
 	TObjectPtr<UCBAbilitySystemComponent> CBAbilitySystemComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Combat", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UCBCombatComponent> CombatComponent;
+	TObjectPtr<UCBCombatComponent> CBCombatComponent;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|AbilitySystem")
 	TObjectPtr<UCBAttributeSet> CBAttributeSet;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Movement")
+	TObjectPtr<UCBCharacterTrajectoryComponent> CBTrajectoryComponent;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CB|CharacterData")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Movement")
+	TObjectPtr<UCBLocomotionProcessor> CBLocomotionProcessor;
+#pragma endregion
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|CharacterData")
 	TSoftObjectPtr<UCBCharacterLoadout> CharacterLoadout;
 
-	UPROPERTY(EditDefaultsOnly, Category = "CB|Movement")
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Movement")
 	TObjectPtr<UCBCharacterMovementData> MovementDataAsset;
 	
 public:
 	FORCEINLINE UCBAbilitySystemComponent* GetCBAbilitySystemComponent() const { return CBAbilitySystemComponent; }
-	FORCEINLINE UCBAttributeSet* GetAttributeSet() const { return CBAttributeSet; }
-	FORCEINLINE UCBCombatComponent* GetCombatComponent() const { return CombatComponent; }
+	FORCEINLINE UCBAttributeSet* GetCBAttributeSet() const { return CBAttributeSet; }
+	FORCEINLINE UCBCombatComponent* GetCBCombatComponent() const { return CBCombatComponent; }
 	FORCEINLINE UCBCharacterMovementData* GetMovementDataAsset() const { return MovementDataAsset; }
+	FORCEINLINE UCBCharacterTrajectoryComponent* GetCBTrajectoryComponent() const { return CBTrajectoryComponent; }
 };

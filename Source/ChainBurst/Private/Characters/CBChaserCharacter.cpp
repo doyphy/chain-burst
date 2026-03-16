@@ -6,6 +6,8 @@
 #include "DataAssets/Loadout/CBChaserLoadout.h"
 #include "Components/Combat/CBChaserCombatComponent.h"
 #include "Components/Camera/CBCameraControlComponent.h"
+#include "Components/Movement/CBCharacterRotationComponent.h"
+#include "AnimInstances/CBCharacterAnimInstance.h"
 
 // engine
 #include "Components/CapsuleComponent.h"
@@ -16,6 +18,7 @@
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
+
 
 ACBChaserCharacter::ACBChaserCharacter()
 {
@@ -44,16 +47,14 @@ ACBChaserCharacter::ACBChaserCharacter()
 	CameraComponent->bUsePawnControlRotation = false;
 
 	// 캐릭터 이동 시 이동 방향을 바라보도록 설정
-	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->bOrientRotationToMovement = false;
+	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	// 캐릭터 회전 속도 설정 (Yaw 기준)
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
-	// 걷기 최대 속도 설정
-	GetCharacterMovement()->MaxWalkSpeed = 500.0f;
-	// 걷기 감속(브레이크) 가속도 설정
-	GetCharacterMovement()->BrakingDecelerationWalking = 2000.0f;
-
-	CombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CombatComponent"));
-	CameraControlComponent = CreateDefaultSubobject<UCBCameraControlComponent>(TEXT("CameraControlComponent"));
+	
+	CBCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CBChaserCombatComponent"));
+	CBCameraControlComponent = CreateDefaultSubobject<UCBCameraControlComponent>(TEXT("CBCameraControlComponent"));
+	CBCharacterRotationComponent = CreateDefaultSubobject<UCBCharacterRotationComponent>(TEXT("CBCharacterRotationComponent"));
 }
 
 void ACBChaserCharacter::PossessedBy(AController* NewController)
@@ -64,12 +65,12 @@ void ACBChaserCharacter::PossessedBy(AController* NewController)
 	if (!CharacterLoadout.IsNull())
 	{
 		// 이미 로드되어 있다면 즉시 사용
-		if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && CombatComponent)
+		if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && CBCombatComponent)
 		{
 			// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
 			CharacterLoadout->GrantAbilitiesToASC(CBAbilitySystemComponent);
 			// 로드아웃에 있는 무기 모두 컴뱃 컴포넌트에 등록
-			CharacterLoadout->RegisterWeaponsToCombatComponent(CombatComponent);
+			CharacterLoadout->RegisterWeaponsToCombatComponent(CBCombatComponent);
 		}
 		else
 		{
@@ -79,12 +80,12 @@ void ACBChaserCharacter::PossessedBy(AController* NewController)
 				CharacterLoadout.ToSoftObjectPath(),
 				FStreamableDelegate::CreateWeakLambda(this, [this]()
 				{
-					if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && CombatComponent)
+					if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && CBCombatComponent)
 					{
 						// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
 						CharacterLoadout->GrantAbilitiesToASC(CBAbilitySystemComponent);
 						// 로드아웃에 있는 무기 모두 컴뱃 컴포넌트에 등록
-						CharacterLoadout->RegisterWeaponsToCombatComponent(CombatComponent);
+						CharacterLoadout->RegisterWeaponsToCombatComponent(CBCombatComponent);
 					}
 				})
 			);
@@ -96,15 +97,26 @@ void ACBChaserCharacter::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 
-	if (CameraControlComponent)
+	if (CBCameraControlComponent)
 	{
-		CameraControlComponent->InitializeCamera(SpringArmComponent, CameraComponent);
+		CBCameraControlComponent->InitializeCamera(SpringArmComponent, CameraComponent);
 	}
 }
 
 void ACBChaserCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 지연 캐싱: BeginPlay 시점에 애니메이션 인스턴스를 캐싱. 초기화되지 않은 경우 OnAnimInstanceInitialized 델리게이트 바인딩
+	if (USkeletalMeshComponent* CharacterMesh = GetMesh())
+	{
+		CachedAnimInstance = Cast<UCBCharacterAnimInstance>(CharacterMesh->GetAnimInstance());
+
+		if (!CachedAnimInstance)
+		{
+			CharacterMesh->OnAnimInitialized.AddDynamic(this, &ACBChaserCharacter::OnAnimInstanceInitialized);
+		}
+	}
 }
 
 void ACBChaserCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -139,6 +151,9 @@ void ACBChaserCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 
 void ACBChaserCharacter::Input_Move(const FInputActionValue& InputActionValue)
 {
+	// 피벗 중이면 이동 입력 무시
+	// if (CachedAnimInstance && CachedAnimInstance->IsInputLocked()) return;
+	
 	const FVector2D MovementVector = InputActionValue.Get<FVector2D>();
 	if (Controller != nullptr)
 	{
@@ -146,6 +161,7 @@ void ACBChaserCharacter::Input_Move(const FInputActionValue& InputActionValue)
 		const FRotator YawRotation(0, Controller->GetControlRotation().Yaw, 0);
 		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+		
 		// 입력된 이동 벡터를 기반으로 캐릭터 이동
 		AddMovementInput(ForwardDirection, MovementVector.Y);
 		AddMovementInput(RightDirection, MovementVector.X);
@@ -156,9 +172,9 @@ void ACBChaserCharacter::Input_Look(const FInputActionValue& InputActionValue)
 {
 	const FVector2D LookAxisVector = InputActionValue.Get<FVector2D>();
 	
-	if (CameraControlComponent)
+	if (CBCameraControlComponent)
 	{
-		CameraControlComponent->Input_Look(LookAxisVector);
+		CBCameraControlComponent->Input_Look(LookAxisVector);
 	}
 }
 
@@ -166,9 +182,9 @@ void ACBChaserCharacter::Input_Camera_Zoom(const FInputActionValue& InputActionV
 {
 	const float WheelValue = InputActionValue.Get<float>();
 	
-	if (CameraControlComponent)
+	if (CBCameraControlComponent)
 	{
-		CameraControlComponent->Input_Camera_Zoom(WheelValue);
+		CBCameraControlComponent->Input_Camera_Zoom(WheelValue);
 	}
 }
 
@@ -182,7 +198,12 @@ void ACBChaserCharacter::Input_AbilityInputReleased(FGameplayTag InInputTag)
 	CBAbilitySystemComponent->OnAbilityInputReleased(InInputTag);
 }
 
+void ACBChaserCharacter::OnAnimInstanceInitialized()
+{
+	CachedAnimInstance = Cast<UCBCharacterAnimInstance>(GetMesh()->GetAnimInstance());
+}
+
 UCBChaserCombatComponent* ACBChaserCharacter::GetChaserCombatComponent() const
 {
-	return Cast<UCBChaserCombatComponent>(CombatComponent);
+	return Cast<UCBChaserCombatComponent>(CBCombatComponent);
 }

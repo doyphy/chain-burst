@@ -46,6 +46,9 @@ void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 			TargetSpeed
 		);
 
+		// 캐릭터에 속도 태그 부여 (애니메이션 블루프린트에서 이 태그를 보고 애니메이션 상태를 변경할 수 있도록)
+		SpecHandle.Data.Get()->DynamicGrantedTags.AddTag(SpeedDataTag);
+		
 		// 캐릭터에게 효과 적용 및 핸들 저장
 		ActiveGEHandle = ApplyGameplayEffectSpecToOwner(Handle, ActorInfo, ActivationInfo, SpecHandle);
 	}
@@ -57,8 +60,6 @@ void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 
 void UCBGAChangeSpeed::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
-	UE_LOG(LogTemp, Warning, TEXT("EndAbility Called for: %s"), *GetName());
-	
 	// 어빌리티 종료 시 적용했던 GE를 제거 (자동으로 기본 속도인 Run으로 복구됨)
 	if (ActiveGEHandle.IsValid())
 	{
@@ -71,4 +72,14 @@ void UCBGAChangeSpeed::EndAbility(const FGameplayAbilitySpecHandle Handle, const
 	}
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
+void UCBGAChangeSpeed::InputReleased(const FGameplayAbilitySpecHandle Handle,
+	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
+{
+	Super::InputReleased(Handle, ActorInfo, ActivationInfo);
+	if (IsActive())
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+	}
 }

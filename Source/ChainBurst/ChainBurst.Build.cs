@@ -11,7 +11,7 @@ public class ChainBurst : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput",
-			"GameplayTags", "GameplayAbilities", "GameplayTasks"
+			"GameplayTags", "GameplayAbilities", "GameplayTasks", "MotionTrajectory", "PoseSearch"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

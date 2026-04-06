@@ -18,12 +18,22 @@ void UCBCharacterAnimInstance::NativeInitializeAnimation()
 	{
 		CachedMovementComp = CachedCharacter->GetCharacterMovement();
 		CachedTrajectoryComp = CachedCharacter->GetCBTrajectoryComponent();
-		
+
+		// 초기 값 설정
 		if (auto* MoveData = CachedCharacter->GetMovementDataAsset())
 		{
 			WalkMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Shared_Movement_Walk);
 			RunMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Shared_Movement_Run);
 			SprintMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Shared_Movement_Sprint);
+		}
+
+		// 델리게이트 설정
+		if (UAbilitySystemComponent* ASC = CachedCharacter->GetAbilitySystemComponent())
+		{
+			ASC->RegisterGameplayTagEvent(
+				CBGameplayTags::Shared_Status_Combat_InCombat,
+				EGameplayTagEventType::NewOrRemoved)
+			.AddUObject(this, &UCBCharacterAnimInstance::OnCombatTagChanged);
 		}
 	}
 }
@@ -41,7 +51,6 @@ void UCBCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		UAbilitySystemComponent* ASC = CachedCharacter->GetAbilitySystemComponent();
 		if (ASC)
 		{
-			// 태그를 검사해서 Enum 값으로 매핑
 			if (ASC->HasMatchingGameplayTag(CBGameplayTags::Shared_Movement_Sprint))
 			{
 				CurrentLocomotionGait = ECBLocomotionGait::Sprint;
@@ -189,5 +198,10 @@ EPoseSearchInterruptMode UCBCharacterAnimInstance::CalculatePoseSearchInterruptM
 	// 그리고 계속 포즈가 유효하지 않도록 설정 (정지 애니메이션으로 빠르게 전환하기 위해)
 	// 달리던 흐름을 이어가면 발이 미끄러지므로, 이전 흐름을 끊고 새로운 흐름으로 전환하도록 설정
 	return EPoseSearchInterruptMode::InterruptOnDatabaseChangeAndInvalidateContinuingPose;
+}
+
+void UCBCharacterAnimInstance::OnCombatTagChanged(const FGameplayTag InTag, int32 InCount)
+{
+	bIsCombatMode = (InCount > 0);
 }
 

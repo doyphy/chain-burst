@@ -4,6 +4,7 @@
 #include "Characters/CBBaseCharacter.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "CBGameplayTags.h"
+#include "CBAbilitySystemLibrary.h"
 
 void UCBCombatComponent::RegisterWeapon(FCBWeaponData InWeaponToRegister)
 {
@@ -31,7 +32,7 @@ void UCBCombatComponent::RegisterWeapon(FCBWeaponData InWeaponToRegister)
 	}
 	
 	// 무기 부착
-	NewWeapon->AttachToSheath(GetCachedOwnerMesh());
+	NewWeapon->AttachToHand(GetCachedOwnerMesh());
 	
 	// 무기 데이터 생성
 	FCBRegisteredWeaponData NewWeaponData(InWeaponToRegister, NewWeapon);
@@ -50,7 +51,19 @@ void UCBCombatComponent::RegisterWeapon(FCBWeaponData InWeaponToRegister)
 bool UCBCombatComponent::IsCombatMode()
 {
 	// Shared_Status_Combat_InCombat 태그를 검사해서 반환
-	return GetCachedOwnerASC()->HasMatchingGameplayTag(CBGameplayTags::Shared_Status_Combat_InCombat);
+	return UCBAbilitySystemLibrary::IsCombatMode(GetOwner());
+}
+
+UAnimMontage* UCBCombatComponent::GetCurrentEquipMontage() const
+{
+	if (!WeaponSlots.IsValidIndex(CurrentWeaponSlot)) return nullptr;
+	return WeaponSlots[CurrentWeaponSlot].EquipMontage;
+}
+
+UAnimMontage* UCBCombatComponent::GetCurrentUnequipMontage() const
+{
+	if (!WeaponSlots.IsValidIndex(CurrentWeaponSlot)) return nullptr;
+	return WeaponSlots[CurrentWeaponSlot].UnequipMontage;
 }
 
 void UCBCombatComponent::SetCombatMode(bool bInCombat)
@@ -136,7 +149,7 @@ int32 UCBCombatComponent::GetCurrentWeaponSlot()
 {
 	if (WeaponSlots.IsEmpty())
 	{
-		CurrentWeaponSlot = -1;
+		CurrentWeaponSlot = INDEX_NONE;
 	}
 	return CurrentWeaponSlot;
 }
@@ -145,7 +158,7 @@ void UCBCombatComponent::SetCurrentWeaponSlot(int32 NewSlot)
 {
 	if (WeaponSlots.IsEmpty())
 	{
-		CurrentWeaponSlot = -1;
+		CurrentWeaponSlot = INDEX_NONE;
 	}
 	else
 	{
@@ -307,7 +320,7 @@ void UCBCombatComponent::ResetWeaponState()
 	// 슬롯 초기화
 	if (WeaponSlots.IsEmpty())
 	{
-		SetCurrentWeaponSlot(-1);
+		SetCurrentWeaponSlot(INDEX_NONE);
 	}
 	else
 	{

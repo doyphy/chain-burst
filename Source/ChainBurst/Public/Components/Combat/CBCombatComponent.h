@@ -31,24 +31,35 @@ struct FCBRegisteredWeaponData
 	UPROPERTY()
 	ECBWeaponCombatType WeaponCombatType = ECBWeaponCombatType::None;
 
-	/** 비전투 시 부착 소켓 */
+	/** 무기 장착 몽타주 **/
 	UPROPERTY()
-	ECBWeaponSheathSocket SheathSocketType = ECBWeaponSheathSocket::None;
+	TObjectPtr<UAnimMontage> EquipMontage = nullptr;
 
+	/** 무기 해제 몽타주 **/
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> UnequipMontage = nullptr;
+	
 	/** 유효성 검사 함수 */
 	bool IsValid() const { return WeaponTag.IsValid() && WeaponInstance != nullptr; };
 	
 	FCBRegisteredWeaponData() {}
 	
-	FCBRegisteredWeaponData(FGameplayTag InWeaponTag, TObjectPtr<ACBBaseWeapon> InWeaponInstance) : WeaponTag(InWeaponTag), WeaponInstance(InWeaponInstance) {}
+	FCBRegisteredWeaponData(FGameplayTag InWeaponTag, TObjectPtr<ACBBaseWeapon> InWeaponInstance)
+		: WeaponTag(InWeaponTag)
+		, WeaponInstance(InWeaponInstance) {}
 	
-	FCBRegisteredWeaponData(FGameplayTag InWeaponTag, TObjectPtr<ACBBaseWeapon> InWeaponInstance, ECBWeaponCombatType InWeaponCombatType, ECBWeaponSheathSocket InSheathSocketType)
-		: WeaponTag(InWeaponTag), WeaponInstance(InWeaponInstance), WeaponCombatType(InWeaponCombatType), SheathSocketType(InSheathSocketType) {}
+	FCBRegisteredWeaponData(FGameplayTag InWeaponTag, TObjectPtr<ACBBaseWeapon> InWeaponInstance, ECBWeaponCombatType InWeaponCombatType)
+		: WeaponTag(InWeaponTag)
+		, WeaponInstance(InWeaponInstance)
+		, WeaponCombatType(InWeaponCombatType) {}
 
 	/** FCBWeaponData 받아서 초기화하는 생성자 */
 	FCBRegisteredWeaponData(const FCBWeaponData& InWeaponData, ACBBaseWeapon* InWeaponInstance)
-		: WeaponTag(InWeaponData.WeaponTag), WeaponInstance(InWeaponInstance)
-		, WeaponCombatType(InWeaponData.WeaponCombatType), SheathSocketType(InWeaponData.SheathSocketType) {}
+		: WeaponTag(InWeaponData.WeaponTag)
+		, WeaponInstance(InWeaponInstance)
+		, WeaponCombatType(InWeaponData.WeaponCombatType)
+		, EquipMontage(InWeaponData.EquipMontage)
+		, UnequipMontage(InWeaponData.UnequipMontage) {}
 
 	/**
 	 * operator== 정의
@@ -78,7 +89,7 @@ private:
 	 * [상태] 현재 장착된 무기의 인덱스
 	 * (0부터 시작, -1은 무기가 없음)
 	 */
-	int32 CurrentWeaponSlot = -1;
+	int32 CurrentWeaponSlot = INDEX_NONE;
 
 protected:
 	/**
@@ -95,6 +106,7 @@ protected:
 public:
 	/**
 	 * 무기 태그와 무기 인스턴스를 맵에 등록하는 함수.
+	 * UCBCharacterLoadout 에서 호출되어 캐릭터의 무기를 등록하는 데 사용됨.
 	 * @param InWeaponToRegister 등록할 무기 데이터.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Combat")
@@ -104,14 +116,22 @@ public:
 	 * [Getter] 현재 전투 상태 확인 (태그 검사)
 	 * @return 전투 상태면 True, 비전투 상태면 False 반환
 	 */
-	UFUNCTION(BlueprintPure, Category = "Combat")
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
 	bool IsCombatMode();
 
+	/** [Getter] 현재 무기의 장착 몽타주 반환 */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
+	UAnimMontage* GetCurrentEquipMontage() const;
+
+	/** [Getter] 현재 무기의 해제 몽타주 반환 */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
+	UAnimMontage* GetCurrentUnequipMontage() const;
+	
 	/**
 	 * [Setter] 전투 상태 변경 함수
 	 * @param bInCombat true면 전투 상태, false면 비전투 상태
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Combat")
+	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Combat")
 	void SetCombatMode(bool bInCombat);
 
 protected:

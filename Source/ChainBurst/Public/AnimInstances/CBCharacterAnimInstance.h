@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AnimInstances/CBBaseAnimInstance.h"
 #include "PoseSearch/PoseSearchLibrary.h"
+#include "GameplayTagContainer.h"
 #include "CBCharacterAnimInstance.generated.h"
 
 class ACBBaseCharacter;
@@ -67,6 +68,12 @@ public:
 	EPoseSearchInterruptMode CalculatePoseSearchInterruptMode();
 
 protected:
+	/** 전투 태그 변경 시 호출되는 콜백 함수 */
+	void OnCombatTagChanged(const FGameplayTag InTag, int32 InCount);
+	
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|Combat")
+	bool bIsCombatMode = false;
+	
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|Cached")
 	FVector CachedVelocity = FVector::ZeroVector;
 
@@ -126,4 +133,11 @@ private:
 	float SprintMaxSpeed = 700.f;
 
 	float PivotLockTimer = 0.f;
+
+public:
+	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
+	float GetInputX() const { return InputX; }
+
+	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
+	float GetInputY() const { return InputY; }
 };

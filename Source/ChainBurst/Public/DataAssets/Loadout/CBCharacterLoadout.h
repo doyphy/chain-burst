@@ -17,18 +17,18 @@ class CHAINBURST_API UCBCharacterLoadout : public UDataAsset
 {
 	GENERATED_BODY()
 public:
-	/** 어빌리티 시스템 컴포넌트에 어빌리티를 부여하는 함수 */
-	virtual void GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
+	/** [서버 전용] 어빌리티 시스템 컴포넌트에 어빌리티를 부여하는 함수 */
+	virtual void Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
 
-	/** 컴뱃 컴포넌트에 무기를 등록하는 함수 */
-	virtual void RegisterWeaponsToCombatComponent(UCBCombatComponent* InCombatComponent);
+	/** [서버 전용] 컴뱃 컴포넌트에 무기를 등록하는 함수 */
+	virtual void Auth_RegisterWeaponsToCombatComponent(UCBCombatComponent* InCombatComponent);
 	
 protected:
 	// =========================================================
 	// 무기 데이터 (Weapons) - 캐릭터에 등록할 무기
 	// =========================================================
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout", meta = (TitleProperty = "WeaponTag"))
-	TArray<FCBWeaponData> WeaponDatas;
+	FCBWeaponData WeaponData;
 	
 	// =========================================================
 	// 어빌리티 (Abilities) - 역할에 따라 명확히 구분
@@ -51,7 +51,7 @@ protected:
 	/** 
 	 * [반응형] 특정 조건(피격, 사망, 스턴 등)에서 자동 발동되는 시스템 어빌리티
 	 * 예: GA_HitReact(피격 모션 재생), GA_Death(사망 처리), GA_Spawn(등장 연출)
-	 * 이들은 입력으로 발동되지 않고, GameplayEvent로 트리거됩니다.
+	 * 이들은 입력으로 발동되지 않고, GameplayEvent로 트리거.
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout")
 	TArray<TSubclassOf<UCBGameplayAbility>> ReactiveAbilities;

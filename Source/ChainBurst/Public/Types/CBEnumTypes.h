@@ -1,5 +1,8 @@
 #pragma once
 
+#include "CoreMinimal.h"
+#include "CBEnumTypes.generated.h"
+
 /** 무기 전투 타입 */
 UENUM(BlueprintType)
 enum class ECBWeaponCombatType : uint8
@@ -18,5 +21,12 @@ enum class ECBWeaponCombatType : uint8
 	
 	// 숨김 (소환형 무기 등)
 	None		UMETA(DisplayName = "None")
+};
+
+UENUM(BlueprintType)
+enum class ECBSuccessType : uint8
+{
+	Success,
+	Failure,
 };
 

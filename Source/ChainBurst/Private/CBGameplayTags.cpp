@@ -9,9 +9,10 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Walk, "Input.Action.Walk", "캐릭터 걷기 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_ToggleWeapon, "Input.Action.Combat.ToggleWeapon", "무기 장착/해제 토글 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Camera_Zoom, "Input.Action.Camera.Zoom", "카메라 줌 인/아웃")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Attack_Basic, "Input.Action.Attack.Basic", "기본 공격 입력")
 	
 	/** [Chaser] Tags. */
-	UE_DEFINE_GAMEPLAY_TAG(Chaser_Weapon_Sword, "Chaser.Weapon.Sword")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Chaser_Weapon_Sword, "Chaser.Weapon.Sword", "무기 태그 - 검")
 
 	/** [Shared] Tags. */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Shared_Status_Combat_InCombat, "Shared.Status.Combat.InCombat", "현재 전투 상태")

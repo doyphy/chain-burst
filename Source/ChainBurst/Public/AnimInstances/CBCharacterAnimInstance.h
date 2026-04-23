@@ -30,26 +30,59 @@ class CHAINBURST_API UCBCharacterAnimInstance : public UCBBaseAnimInstance
 {
 	GENERATED_BODY()
 	
-public:
+protected:
 	//~ Begin UAnimInstance Interface
+	/** 초기화 함수 */
 	virtual void NativeInitializeAnimation() override;
-	/** 게임 스레드에서 실행되는 업데이트 함수 */
+	/** 게임 스레드에서 실행되는 업데이트 함수 (UObject 접근 가능) */
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
-	/** 워커 스레드에서 실행되는 업데이트 함수 */
+	/** 워커 스레드에서 실행되는 업데이트 함수 (UObject 접근 불가 (외부 접근 불가, 내부 데이터로만), 매우 빠름)*/
 	virtual void NativeThreadSafeUpdateAnimation(float DeltaSeconds) override;
 	//~ End UAnimInstance Interface
+
+	/** 기본적인 데이터 처리 함수 (어빌리티, 컴뱃 컴포넌트 불필요) */
+	void UpdateBasicMovementData();
+
+	/** 커스텀 데이터 처리 함수 (어빌리티, 컴뱃 컴포넌트 필요) */
+	void UpdateCombatAndAbilityData();
 	
-protected:	
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "References")
-	TObjectPtr<ACBBaseCharacter> CachedCharacter;
+	TObjectPtr<ACBBaseCharacter> CachedCharacter = nullptr;
 	
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "References")
-	TObjectPtr<UCharacterMovementComponent> CachedMovementComp;
+	TObjectPtr<UCharacterMovementComponent> CachedCMC = nullptr;
 	
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "References")
-	TObjectPtr<UCBCharacterTrajectoryComponent> CachedTrajectoryComp;
+	TObjectPtr<UCBCharacterTrajectoryComponent> CachedTrajectoryComp = nullptr;
+	
+	/**
+	 * CachedCharacter 를 지연 캐싱해서 가져오는 함수.
+	 * @param OutCharacter 캐싱된 캐릭터 포인터를 참조로 전달. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
+	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
+	 */
+	bool GetCachedCharacter(TObjectPtr<ACBBaseCharacter>& OutCharacter);
+
+	/**
+	 * CMC 를 지연 캐싱해서 가져오는 함수.
+	 * @param OutCMC 캐싱된 CharacterMovementComponent 포인터를 참조로 전달. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
+	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
+	 */
+	bool GetCachedCMC(TObjectPtr<UCharacterMovementComponent>& OutCMC);
+
+	/**
+	 * CachedTrajectoryComp 를 지연 캐싱해서 가져오는 함수.
+	 * @param OutTrajectoryComp 캐싱된 UCBCharacterTrajectoryComponent 포인터를 참조로 전달. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
+	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
+	 */
+	bool GetCachedTrajectoryComp(TObjectPtr<UCBCharacterTrajectoryComponent>& OutTrajectoryComp);
 	
 public:
+	/** 입력 잠금 (피벗 시 일정 시간동안 입력 잠금하기 위함) */
+	bool IsInputLocked() const;
+	
+	// ==========================================
+	// 워커 스레드에서 계산할 함수 (외부에서 호출 가능)
+	// ==========================================
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
 	bool IsStarting() const;
 
@@ -62,18 +95,28 @@ public:
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
 	bool IsStopping() const;
 
-	bool IsInputLocked() const;
-	
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
-	EPoseSearchInterruptMode CalculatePoseSearchInterruptMode();
+	float GetInputX() const { return InputX; }
+
+	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
+	float GetInputY() const { return InputY; }
 
 protected:
 	/** 전투 태그 변경 시 호출되는 콜백 함수 */
 	void OnCombatTagChanged(const FGameplayTag InTag, int32 InCount);
-	
+
+	/** 캐릭터 시스템이 완료되었을 때 실행될 초기화 함수 */
+	void OnCharacterSystemReady();
+
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|Combat")
 	bool bIsCombatMode = false;
 	
+	UPROPERTY(EditDefaultsOnly, Category = "AnimData|LocomotionData")
+	float PivotLockDuration = 0.3f; // 피벗 감지 후 입력 차단 유지 시간
+	
+	// ==========================================
+	// 게임 스레드 변수 (원본에서 가져올 데이터)
+	// ==========================================
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|Cached")
 	FVector CachedVelocity = FVector::ZeroVector;
 
@@ -86,14 +129,14 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "AnimData|Cached")
 	FRotator CachedActorRotation = FRotator::ZeroRotator;
 
+	// ==========================================
+	// 워커 스레드 변수 (계산에 사용할 데이터, 복사본)
+	// ==========================================
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
 	float InputX = 0.f;
 
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
 	float InputY = 0.f;
-
-	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
-	ECBLocomotionState CurrentLocomotionState = ECBLocomotionState::Idle;
 	
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
 	float CurrentAccelerationSize = 0.f;
@@ -114,30 +157,28 @@ protected:
 	ECBLocomotionGait CurrentLocomotionGait = ECBLocomotionGait::Run;
 
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
-	EPoseSearchInterruptMode CurrentInterruptMode = EPoseSearchInterruptMode::DoNotInterrupt;
-
-	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
 	bool bHasAcceleration = false;
 
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
 	bool bIsPivoting = false;
 
-	UPROPERTY(EditDefaultsOnly, Category = "AnimData|LocomotionData")
-	float PivotLockDuration = 0.3f; // 피벗 감지 후 입력 차단 유지 시간
-	
 private:
+	/**
+	 * 애니메이션 데이터 초기화 함수 (OnCharacterSystemReady 에서 호출)
+	 * 캐릭터 시스템이 완료되면 호출할거임.
+	 */
+	void InitAnimData();
+
+	/** 초기화 여부 (중복 초기화 방지 플래그) */
+	bool bIsAnimDataInitialized = false;
+
+	/** [워커 스레드] 이전 로코모션 개이트 */
 	ECBLocomotionGait PreviousLocomotionGait = ECBLocomotionGait::Run;
 
 	float WalkMaxSpeed = 250.f;
 	float RunMaxSpeed = 430.f;
 	float SprintMaxSpeed = 700.f;
 
+	/** [게임 스레드] 피벗 입력 잠금 타이머 */
 	float PivotLockTimer = 0.f;
-
-public:
-	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
-	float GetInputX() const { return InputX; }
-
-	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
-	float GetInputY() const { return InputY; }
 };

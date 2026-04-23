@@ -1,8 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "AbilitySystemInterface.h"
 #include "GameFramework/Character.h"
+#include "AbilitySystemInterface.h"
 #include "CBBaseCharacter.generated.h"
 
 class UCBAbilitySystemComponent;
@@ -14,10 +14,13 @@ struct FOnAttributeChangeData;
 class UCBLocomotionProcessor;
 class UCBCharacterTrajectoryComponent;
 
+DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady)
+
 UCLASS()
 class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
+	
 public:
 	ACBBaseCharacter();
 
@@ -25,34 +28,27 @@ public:
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 	//~ End IAbilitySystemInterface Interface.
 
+	virtual void Tick(float DeltaTime) override;
+
 protected:
-	//~ Begin APawn Interface.
-		/** [서버] 캐릭터가 컨트롤러에 의해 소유될 때 호출되는 함수. */
-	virtual void PossessedBy(AController* NewController) override;
-		/** [클라이언트] PlayerState가 변경될 때 호출되는 함수. */
-	virtual void OnRep_PlayerState() override;
-	//~ End APawn Interface
+	/**
+	 * 자식에서 캐싱
+	 * [플레이어]는 PlayerState에서 [AI]는 Character에서 ASC와 AttributeSet을 가져오는 방식으로 구현
+	 */
+	UPROPERTY()
+	TObjectPtr<UCBAbilitySystemComponent> CBASC;
 
-	/** 캐릭터의 초기 속성 값을 설정하는 함수 */
-	void InitializeAttributes();
-
-	/** 이동 속도 변경 시 실행되는 함수 */
-	void OnMovementSpeedChanged(const FOnAttributeChangeData& Data);
-
-#pragma region Components
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|AbilitySystem")
-	TObjectPtr<UCBAbilitySystemComponent> CBAbilitySystemComponent;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Combat", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UCBCombatComponent> CBCombatComponent;
-	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|AbilitySystem")
+	UPROPERTY()
 	TObjectPtr<UCBAttributeSet> CBAttributeSet;
 	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Movement")
+#pragma region Components
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Combat", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UCBCombatComponent> CBCombatComponent;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Movement")
 	TObjectPtr<UCBCharacterTrajectoryComponent> CBTrajectoryComponent;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Movement")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Movement")
 	TObjectPtr<UCBLocomotionProcessor> CBLocomotionProcessor;
 #pragma endregion
 	
@@ -63,9 +59,18 @@ protected:
 	TObjectPtr<UCBCharacterMovementData> MovementDataAsset;
 	
 public:
-	FORCEINLINE UCBAbilitySystemComponent* GetCBAbilitySystemComponent() const { return CBAbilitySystemComponent; }
-	FORCEINLINE UCBAttributeSet* GetCBAttributeSet() const { return CBAttributeSet; }
-	FORCEINLINE UCBCombatComponent* GetCBCombatComponent() const { return CBCombatComponent; }
-	FORCEINLINE UCBCharacterMovementData* GetMovementDataAsset() const { return MovementDataAsset; }
-	FORCEINLINE UCBCharacterTrajectoryComponent* GetCBTrajectoryComponent() const { return CBTrajectoryComponent; }
+	/** 캐릭터 시스템 준비 완료 델리게이트 */
+	FOnCharacterSystemReady OnCharacterSystemReadyDelegate;
+	/** 캐릭터 시스템 준비 완료 여부 (중복 방지 플래그)*/
+	bool bIsCharacterSystemReady = false;
+	
+	FORCEINLINE UCBAbilitySystemComponent* GetCBAbilitySystemComponent() const { return CBASC.Get(); }
+	FORCEINLINE UCBAttributeSet* GetCBAttributeSet() const { return CBAttributeSet.Get(); }
+	FORCEINLINE UCBCombatComponent* GetCBCombatComponent() const { return CBCombatComponent.Get(); }
+	FORCEINLINE UCBCharacterMovementData* GetMovementDataAsset() const { return MovementDataAsset.Get(); }
+	FORCEINLINE UCBCharacterTrajectoryComponent* GetCBTrajectoryComponent() const { return CBTrajectoryComponent.Get(); }
+
+protected:
+	/** 통합 초기화 함수 (캐릭터 시스템이 완료되면 델리게이트를 방송) */
+	virtual void HandleCharacterSystemReady();
 };

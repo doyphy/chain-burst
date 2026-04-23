@@ -1,4 +1,6 @@
 #pragma once
+
+#include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "Types/CBEnumTypes.h"
 #include "CBStructTypes.generated.h"
@@ -23,16 +25,6 @@ struct FCBWeaponData
 	/** 무기 클래스 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	TSubclassOf<ACBBaseWeapon> WeaponClass;
-
-	/** 무기 전투 타입 (전투 시 무기 부착, 애니메이션 레이어 선택 등)  */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	ECBWeaponCombatType WeaponCombatType = ECBWeaponCombatType::None;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|Montage")
-	TObjectPtr<UAnimMontage> EquipMontage;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|Montage")
-	TObjectPtr<UAnimMontage> UnequipMontage;
 	
 	bool IsValid() const;
 };

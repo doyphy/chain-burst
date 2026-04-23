@@ -1,6 +1,14 @@
 // project
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 
+UCBAbilitySystemComponent::UCBAbilitySystemComponent()
+{
+	SetIsReplicated(true);
+
+	// 복제 모드 설정
+	ReplicationMode = EGameplayEffectReplicationMode::Minimal;
+}
+
 void UCBAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag& InInputTag)
 {
 	// 입력 태그가 유효하지 않으면 함수 종료

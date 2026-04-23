@@ -8,10 +8,10 @@ bool FCBChaserAbilitySet::IsValid() const
 	return InputTag.IsValid() && AbilityToGrant;
 }
 
-void UCBChaserLoadout::GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
+void UCBChaserLoadout::Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
 {
 	// 액티브, 패시브, 반응형 어빌리티 부여 (부모 함수 호출)
-	Super::GrantAbilitiesToASC(InASCToGive, ApplyLevel);
+	Super::Auth_GrantAbilitiesToASC(InASCToGive, ApplyLevel);
 	
 	// ChaserAbilitySets 배열을 순회하며 각 어빌리티 세트를 처리
 	for(const FCBChaserAbilitySet& AbilitySet : ChaserAbilitySets)

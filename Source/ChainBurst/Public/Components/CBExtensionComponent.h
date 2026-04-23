@@ -1,11 +1,13 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "CBExtensionComponent.generated.h"
 
+/**
+ * 컴포넌트의 베이스 클래스
+ * 컴포넌트 공용 헬퍼 함수 모음.
+ */
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class CHAINBURST_API UCBExtensionComponent : public UActorComponent
 {

@@ -4,9 +4,14 @@
 
 // engine
 #include "Components/BoxComponent.h"
+#include "Net/UnrealNetwork.h"
 
 ACBBaseWeapon::ACBBaseWeapon()
 {
+	// 복제 설정
+	bReplicates = true;
+	SetReplicateMovement(true);
+	
 	PrimaryActorTick.bCanEverTick = false;
 
 	// 컴포넌트 생성
@@ -21,6 +26,14 @@ ACBBaseWeapon::ACBBaseWeapon()
 	WeaponCollisionBox->SetupAttachment(RootComponent);
 	WeaponCollisionBox->SetBoxExtent(FVector(20.f));
 	WeaponCollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+}
+
+void ACBBaseWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	
+	DOREPLIFETIME(ACBBaseWeapon, bIsEquipped);
 }
 
 void ACBBaseWeapon::AttachToHand(USceneComponent* TargetMesh)
@@ -40,7 +53,11 @@ void ACBBaseWeapon::AttachToHand(USceneComponent* TargetMesh)
 
 void ACBBaseWeapon::AttachToSheath(USceneComponent* TargetMesh)
 {
-	if (!bRequiresSheathSocketAttachment) return;
+	if (!bRequiresSheathSocketAttachment)
+	{
+		AttachToHand(TargetMesh);
+		return;
+	}
 
 	if (!TargetMesh) return;
 

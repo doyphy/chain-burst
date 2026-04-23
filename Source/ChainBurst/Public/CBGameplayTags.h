@@ -11,6 +11,7 @@ namespace  CBGameplayTags
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Action_Walk)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Action_Combat_ToggleWeapon)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Action_Camera_Zoom)
+	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Action_Attack_Basic)
 	
 
 	/** [Chaser] Tags. */

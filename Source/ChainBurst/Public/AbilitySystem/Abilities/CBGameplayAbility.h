@@ -40,6 +40,10 @@ protected:
 	virtual void OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec) override;
 		/** 어빌리티가 종료될 때 호출하는 함수 */
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
+		/** 어빌리티가 활성화될 수 있는지 여부를 결정하는 함수. ActivateAbility 함수 호출하기 전에 호출됨. */
+	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr,
+		FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
 	//~ End UGameplayAbility Interface
 
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Ability")

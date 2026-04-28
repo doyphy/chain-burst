@@ -18,6 +18,9 @@ namespace  CBGameplayTags
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Chaser_Weapon_Sword)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Chaser_Status_WeaponEquipped)
 
+	/** [Chaser] Ability Tags. */
+	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Chaser_Ability_Combat_ToggleWeapon)
+
 	
 	/** [Shared] Status Tags. */
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Status_Combat_InCombat)
@@ -26,6 +29,8 @@ namespace  CBGameplayTags
 	/** [Shared] Event Tags. */
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Event_Combat_EquipWeapon)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Event_Combat_UnequipWeapon)
+	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Event_Combat_EndAbility)
+	
 	
 	/** [Shared] Movement Tags. */
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Movement_Idle)
@@ -35,4 +40,7 @@ namespace  CBGameplayTags
 
 	/** [Shared] Data Tags. (SetByCaller 전용) */
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Data_Movement_Speed)
+
+	/** [Shared] Ability Tags. */
+	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Ability_Combat_Attack_Basic)
 }

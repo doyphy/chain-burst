@@ -1,10 +1,8 @@
 // project
 #include "AbilitySystem/CBAttributeSet.h"
-#include "Characters/CBBaseCharacter.h"
 
 // engine
 #include "Net/UnrealNetwork.h"
-#include "GameFramework/CharacterMovementComponent.h" 
 #include "GameplayEffectExtension.h"
 
 UCBAttributeSet::UCBAttributeSet()

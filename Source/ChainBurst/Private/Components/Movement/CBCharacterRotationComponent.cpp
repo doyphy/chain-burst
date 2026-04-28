@@ -9,6 +9,8 @@
 UCBCharacterRotationComponent::UCBCharacterRotationComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+	
 	SetIsReplicatedByDefault(true);
 }
 
@@ -16,14 +18,18 @@ void UCBCharacterRotationComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	CachedCharacter = Cast<ACBChaserCharacter>(GetOwner());
-	
-	if (CachedCharacter)
+	if (ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>())
 	{
-		// 데이터 초기화
-		CachedMovementComp = CachedCharacter->GetCharacterMovement();
-		TargetRotation = CachedCharacter->GetActorRotation();
-		SmoothedTargetRotation = TargetRotation;
+		if (OwnerCharacter->bIsCharacterSystemReady)
+		{
+			// 이미 시스템이 준비된 상태라면 즉시 초기화 함수 실행
+			this->OnCharacterSystemReady();
+		}
+		else
+		{
+			// 캐릭터 시스템 준비 완료 델리게이트에 바인딩
+			OwnerCharacter->OnCharacterSystemReadyDelegate.AddUObject(this, &ThisClass::OnCharacterSystemReady);
+		}
 	}
 }
 
@@ -31,7 +37,7 @@ void UCBCharacterRotationComponent::TickComponent(float DeltaTime, enum ELevelTi
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (!CachedCharacter || !CachedMovementComp) return;
+	if (!GetCachedCharacter(CachedCharacter) || !GetCachedCMC(CachedMovementComp)) return;
 
 	// 로컬용 회전 처리
 	if (CachedCharacter->IsLocallyControlled())
@@ -92,6 +98,56 @@ void UCBCharacterRotationComponent::OnRep_TargetRotation()
 	// SmoothedTargetRotation의 목표를 갱신
 	// Tick에서 RInterpTo로 자연스럽게 따라감
 	SmoothedTargetRotation = TargetRotation;
+}
+
+void UCBCharacterRotationComponent::OnCharacterSystemReady()
+{
+	// 델리게이트 구독 해제 (중복 실행 방지)
+	if (ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>())
+	{
+		OwnerCharacter->OnCharacterSystemReadyDelegate.RemoveAll(this);
+	}
+	
+	// Tick 활성화
+	SetComponentTickEnabled(true);
+}
+
+bool UCBCharacterRotationComponent::GetCachedCharacter(TObjectPtr<ACBChaserCharacter>& OutCharacter)
+{
+	// 캐싱된 Character가 이미 존재하면 그대로 반환
+	if (OutCharacter)
+	{
+		return true;
+	}
+
+	// 유효하지 않다면 캐싱 시도
+	OutCharacter = GetOwningPawn<ACBChaserCharacter>();
+
+	if (OutCharacter)
+	{
+		// 회전 데이터 초기화
+		TargetRotation = CachedCharacter->GetActorRotation(); // 현재 회전을 타겟으로 설정
+		SmoothedTargetRotation = TargetRotation; // 스무스 타겟도 동일하게 초기화
+	}
+	
+	return (OutCharacter != nullptr);
+}
+
+bool UCBCharacterRotationComponent::GetCachedCMC(TObjectPtr<UCharacterMovementComponent>& OutCMC)
+{
+	// 캐싱된 CMC가 이미 존재하면 그대로 반환
+	if (OutCMC)
+	{
+		return true;
+	}
+
+	// 유효하지 않다면 캐싱 시도
+	if (ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>())
+	{
+		OutCMC = OwnerCharacter->GetCharacterMovement();
+	}
+	
+	return (OutCMC != nullptr);
 }
 
 void UCBCharacterRotationComponent::Server_SetTargetRotation_Implementation(FRotator NewTargetRotation)

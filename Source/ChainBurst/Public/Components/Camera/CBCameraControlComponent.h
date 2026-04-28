@@ -9,6 +9,11 @@ class UCameraComponent;
 struct FInputActionValue;
 class ACBChaserCharacter;
 
+/**
+ * 카메라 제어 컴포넌트.
+ * 캐릭터의 카메라 관련 로직을 담당하는 컴포넌트로, 카메라 줌, 카메라 흔들림 등 카메라와 관련된 기능들을 구현.
+ * ACBChaserCharacter에 부착되어 있으며, 해당 캐릭터의 카메라 컴포넌트와 스프링암 컴포넌트를 참조하여 제어.
+ */
 USTRUCT(BlueprintType)
 struct FCBZoomConfig
 {
@@ -70,6 +75,13 @@ protected:
 	/** [설정] 줌 보간 속도 (높을수록 빠름) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
 	float ZoomInterpSpeed = 5.0f;
+
+	/**
+	 * Character 를 지연 캐싱해서 가져오는 함수.
+	 * @param OutCharacter 캐싱된 캐릭터 포인터를 참조로 전달. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
+	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
+	 */
+	bool GetCachedCharacter(TObjectPtr<ACBChaserCharacter>& OutCharacter);
 	
 private:
 	FVector DefaultSocketOffset = FVector(0.f, 0.f, 0.f);

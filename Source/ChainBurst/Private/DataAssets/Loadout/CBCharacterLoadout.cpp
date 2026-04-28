@@ -6,7 +6,7 @@
 
 // engine
 
-void UCBCharacterLoadout::GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
+void UCBCharacterLoadout::Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
 {
 	// 어빌리티 시스템 컴포넌트가 유효한지 확인
 	check(InASCToGive);
@@ -19,19 +19,15 @@ void UCBCharacterLoadout::GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCTo
 	GrantAbilities(ReactiveAbilities, InASCToGive, ApplyLevel);
 }
 
-void UCBCharacterLoadout::RegisterWeaponsToCombatComponent(UCBCombatComponent* InCombatComponent)
+void UCBCharacterLoadout::Auth_RegisterWeaponsToCombatComponent(UCBCombatComponent* InCombatComponent)
 {
 	check(InCombatComponent);
 
 	// 등록할 무기가 없으면 함수 종료
-	if (WeaponDatas.IsEmpty()) return;
+	if (!WeaponData.IsValid()) return;
 
-	for (const auto& WeaponData : WeaponDatas)
-	{
-		if (!WeaponData.IsValid()) continue;
-		
-		InCombatComponent->RegisterWeapon(WeaponData);
-	}
+	// 컴뱃 컴포넌트에 무기 등록
+	InCombatComponent->Auth_RegisterWeapon(WeaponData);
 }
 
 void UCBCharacterLoadout::GrantAbilities(const TArray<TSubclassOf<UCBGameplayAbility>>& InAbilitiesToGive,

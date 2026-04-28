@@ -9,13 +9,14 @@ UCBCameraControlComponent::UCBCameraControlComponent()
 {
 	// Tick 활성화
 	PrimaryComponentTick.bCanEverTick = true;
+	
+	// InitializeCamera 함수에서 Tick 활성화
+	PrimaryComponentTick.bStartWithTickEnabled = false;
 }
 
 void UCBCameraControlComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
-	CachedCharacter = Cast<ACBChaserCharacter>(GetOwner());
 }
 
 void UCBCameraControlComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -65,11 +66,28 @@ void UCBCameraControlComponent::InitializeCamera(USpringArmComponent* InSpringAr
 	
 	SpringArm->SocketOffset = DefaultSocketOffset;
 	SpringArm->TargetArmLength = DefaultTargetArmLength;
+
+	// Tick 활성화
+	SetComponentTickEnabled(true);
+}
+
+bool UCBCameraControlComponent::GetCachedCharacter(TObjectPtr<ACBChaserCharacter>& OutCharacter)
+{
+	// 캐싱된 Character가 이미 존재하면 그대로 반환
+	if (OutCharacter)
+	{
+		return true;
+	}
+
+	// 유효하지 않다면 캐싱 시도
+	OutCharacter = GetOwningPawn<ACBChaserCharacter>();
+	
+	return (OutCharacter != nullptr);
 }
 
 void UCBCameraControlComponent::Input_Look(const FVector2D& InLookAxisVector)
 {
-	if (!CachedCharacter) return;
+	if (!GetCachedCharacter(CachedCharacter)) return;
 	
 	// 컨트롤러 회전
 	CachedCharacter->AddControllerYawInput(InLookAxisVector.X);

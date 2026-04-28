@@ -45,13 +45,40 @@ void UCBGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	}
 }
 
+bool UCBGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle,
+	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags,
+	const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+	{
+		return false;
+	}
+
+	UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	
+	if (ASC)
+	{
+		// 현재 어빌리티 태그 (Asset Tags)의 부모 태그들 가져오기
+		FGameplayTagContainer ParentTags = GetAssetTags().GetGameplayTagParents();
+
+		// ASC의 Block된 태그에 내 부모 태그가 있는지 검사 
+		if (ASC->AreAbilityTagsBlocked(ParentTags))
+		{
+			// 어빌리티 활성화 거부
+			return false;
+		}
+	}
+	// 어빌리티 활성화 허용
+	return true;
+}
+
 UCBCombatComponent* UCBGameplayAbility::GetCBCombatComponentFromActorInfo() const
 {
 	if (ACBBaseCharacter* BaseChar = Cast<ACBBaseCharacter>(GetAvatarActorFromActorInfo()))
 	{
-		
+		return BaseChar->GetCBCombatComponent();
 	}
-	return GetAvatarActorFromActorInfo()->FindComponentByClass<UCBCombatComponent>();
+	return nullptr;
 }
 
 UCBAbilitySystemComponent* UCBGameplayAbility::GetCBAbilitySystemComponentFromActorInfo() const

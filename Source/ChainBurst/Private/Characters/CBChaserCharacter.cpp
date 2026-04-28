@@ -8,6 +8,9 @@
 #include "Components/Camera/CBCameraControlComponent.h"
 #include "Components/Movement/CBCharacterRotationComponent.h"
 #include "AnimInstances/CBCharacterAnimInstance.h"
+#include "PlayerState/CBPlayerState.h"
+#include "DataAssets/Movement/CBCharacterMovementData.h"
+#include "AbilitySystem/CBAttributeSet.h"
 
 // engine
 #include "Components/CapsuleComponent.h"
@@ -52,51 +55,41 @@ ACBChaserCharacter::ACBChaserCharacter()
 	// 캐릭터 회전 속도 설정 (Yaw 기준)
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 	
-	CBCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CBChaserCombatComponent"));
+	// CBCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CBChaserCombatComponent"));
 	CBCameraControlComponent = CreateDefaultSubobject<UCBCameraControlComponent>(TEXT("CBCameraControlComponent"));
 	CBCharacterRotationComponent = CreateDefaultSubobject<UCBCharacterRotationComponent>(TEXT("CBCharacterRotationComponent"));
 }
 
+/**
+ * [서버]에서 실행됨. 새로운 컨트롤러 (플레이어 또는 AI)가 이 캐릭터를 소유할 때 호출되는 함수.
+ * @param NewController 새로운 컨트롤러 포인터. 이 컨트롤러가 캐릭터를 소유하게 됨.
+ */
 void ACBChaserCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
-	
-	// CharacterLoadout 가 유효한 소프트 레퍼런스(SoftObjectPtr)인지 확인
-	if (!CharacterLoadout.IsNull())
-	{
-		// 이미 로드되어 있다면 즉시 사용
-		if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && CBCombatComponent)
-		{
-			// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
-			CharacterLoadout->GrantAbilitiesToASC(CBAbilitySystemComponent);
-			// 로드아웃에 있는 무기 모두 컴뱃 컴포넌트에 등록
-			CharacterLoadout->RegisterWeaponsToCombatComponent(CBCombatComponent);
-		}
-		else
-		{
-			// 비동기 로드 요청
-			// 로드가 완료되기 전에 먼저 어빌리티를 활성화해도 문제 없음 (TryAbility).
-			UAssetManager::GetStreamableManager().RequestAsyncLoad(
-				CharacterLoadout.ToSoftObjectPath(),
-				FStreamableDelegate::CreateWeakLambda(this, [this]()
-				{
-					if (CharacterLoadout.IsValid() && CBAbilitySystemComponent && CBCombatComponent)
-					{
-						// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
-						CharacterLoadout->GrantAbilitiesToASC(CBAbilitySystemComponent);
-						// 로드아웃에 있는 무기 모두 컴뱃 컴포넌트에 등록
-						CharacterLoadout->RegisterWeaponsToCombatComponent(CBCombatComponent);
-					}
-				})
-			);
-		}
-	}
+
+	InitializePlayerSystem();
 }
 
+/**
+ * [클라이언트]에서 실행됨. PlayerState가 변경될 때 호출되는 함수.
+ * 서버에서 PossessedBy()가 호출된 후에 PlayerState가 클라이언트에 복제되면서 이 함수가 호출됨.
+ */
+void ACBChaserCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	InitializePlayerSystem();
+}
+
+/**
+ * 컴포넌트 초기화 후에 호출되는 함수. 컴포넌트가 모두 생성되고 초기화된 후에 추가 설정이 필요한 경우 이 함수에서 처리.
+ */
 void ACBChaserCharacter::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 
+	// 카메라 컨트롤 컴포넌트 초기화 (스프링암, 카메라 컴포넌트가 필요)
 	if (CBCameraControlComponent)
 	{
 		CBCameraControlComponent->InitializeCamera(SpringArmComponent, CameraComponent);
@@ -106,19 +99,12 @@ void ACBChaserCharacter::PostInitializeComponents()
 void ACBChaserCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// 지연 캐싱: BeginPlay 시점에 애니메이션 인스턴스를 캐싱. 초기화되지 않은 경우 OnAnimInstanceInitialized 델리게이트 바인딩
-	if (USkeletalMeshComponent* CharacterMesh = GetMesh())
-	{
-		CachedAnimInstance = Cast<UCBCharacterAnimInstance>(CharacterMesh->GetAnimInstance());
-
-		if (!CachedAnimInstance)
-		{
-			CharacterMesh->OnAnimInitialized.AddDynamic(this, &ACBChaserCharacter::OnAnimInstanceInitialized);
-		}
-	}
 }
 
+/**
+ * @param PlayerInputComponent 캐릭터에 입력 컴포넌트를 설정하는 함수.
+ * Enhanced Input 시스템을 사용하여 입력 액션과 태그를 바인딩.
+ */
 void ACBChaserCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -152,7 +138,7 @@ void ACBChaserCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 void ACBChaserCharacter::Input_Move(const FInputActionValue& InputActionValue)
 {
 	// 피벗 중이면 이동 입력 무시
-	// if (CachedAnimInstance && CachedAnimInstance->IsInputLocked()) return;
+	// if (GetCachedAnimInstance(CachedAnimInstance) && CachedAnimInstance->IsInputLocked()) return;
 	
 	const FVector2D MovementVector = InputActionValue.Get<FVector2D>();
 	if (Controller != nullptr)
@@ -190,17 +176,172 @@ void ACBChaserCharacter::Input_Camera_Zoom(const FInputActionValue& InputActionV
 
 void ACBChaserCharacter::Input_AbilityInputPressed(FGameplayTag InInputTag)
 {
-	CBAbilitySystemComponent->OnAbilityInputPressed(InInputTag);
+	CBASC->OnAbilityInputPressed(InInputTag);
 }
 
 void ACBChaserCharacter::Input_AbilityInputReleased(FGameplayTag InInputTag)
 {
-	CBAbilitySystemComponent->OnAbilityInputReleased(InInputTag);
+	CBASC->OnAbilityInputReleased(InInputTag);
 }
 
-void ACBChaserCharacter::OnAnimInstanceInitialized()
+bool ACBChaserCharacter::GetCachedAnimInstance(TObjectPtr<UCBCharacterAnimInstance>& OutAnimInstance)
 {
-	CachedAnimInstance = Cast<UCBCharacterAnimInstance>(GetMesh()->GetAnimInstance());
+	// 캐싱된 CMC가 이미 존재하면 그대로 반환
+	if (OutAnimInstance)
+	{
+		return true;
+	}
+
+	// 유효하지 않다면 캐싱 시도
+	if (USkeletalMeshComponent* CharacterMesh = GetMesh())
+	{
+		OutAnimInstance = Cast<UCBCharacterAnimInstance>(CharacterMesh->GetAnimInstance());
+	}
+	
+	return (OutAnimInstance != nullptr);
+}
+
+// PossessedBy 함수와 OnRep_PlayerState 함수에서 호출되는 초기화 진입 함수.
+// 서버와 클라이언트 모두에서 실행됨.
+void ACBChaserCharacter::InitializePlayerSystem()
+{
+	// ==========================================
+	// 공통 로직 (Common)
+	// ==========================================
+	
+	// Player State 가져오기
+	ACBPlayerState* PS = GetPlayerState<ACBPlayerState>();
+	checkf(PS, TEXT("%s 의 PlayerState 유효하지 않음."), *GetName());
+	
+	if (PS)
+	{
+		// CB ASC 가져오기
+		CBASC = PS->GetCBAbilitySystemComponent();
+		checkf(CBASC, TEXT("%s 의 AbilitySystemComponent 유효하지 않음."), *GetName());
+
+		// CB AttributeSet 가져오기
+		CBAttributeSet = PS->GetCBAttributeSet();
+		checkf(CBAttributeSet, TEXT("%s 의 AttributeSet 유효하지 않음."), *GetName());
+		
+		if (CBASC)
+		{
+			// AbilitySystemComponent에 이 캐릭터(Actor)와 소유자 정보를 초기화하여 어빌리티 시스템이 올바르게 동작하도록 설정
+			CBASC->InitAbilityActorInfo(PS, this);
+		}
+	}
+	
+	// ==========================================
+	// 서버 로직 (Authority Only)
+	// ==========================================
+	if (HasAuthority())
+	{
+		Auth_InitServerData();
+	}
+
+	// ==========================================
+	// 로컬 클라이언트 로직 (Local Client Only)
+	// ==========================================
+	if (IsLocallyControlled())
+	{
+		Local_InitClientData();
+	}
+
+	// 캐릭터 시스템이 완료되었음을 알림.
+	HandleCharacterSystemReady();
+}
+
+void ACBChaserCharacter::Auth_InitServerData()
+{
+	// 어트리뷰트 초기화
+	Auth_InitializeAttributes();
+	
+	// CharacterLoadout 가져오기 및 유효성 검사
+	ensureMsgf(!CharacterLoadout.IsNull(), TEXT("%s 의 CharacterLoadout 유효하지 않음."), *GetName());
+	
+	// CharacterLoadout 가 유효한 소프트 레퍼런스(SoftObjectPtr)인지 확인
+	if (!CharacterLoadout.IsNull())
+	{
+		// 이미 로드되어 있다면 즉시 사용
+		if (CharacterLoadout.IsValid() && CBASC && CBCombatComponent)
+		{
+			// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
+			CharacterLoadout->Auth_GrantAbilitiesToASC(CBASC);
+			// 로드아웃에 있는 무기 컴뱃 컴포넌트에 등록
+			CharacterLoadout->Auth_RegisterWeaponsToCombatComponent(CBCombatComponent);
+		}
+		else
+		{
+			// 비동기 로드 요청
+			// 로드가 완료되기 전에 먼저 어빌리티를 활성화해도 문제 없음 (TryAbility).
+			UAssetManager::GetStreamableManager().RequestAsyncLoad(
+				CharacterLoadout.ToSoftObjectPath(),
+				FStreamableDelegate::CreateWeakLambda(this, [this]()
+				{
+					if (CharacterLoadout.IsValid() && CBASC && CBCombatComponent)
+					{
+						// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
+						CharacterLoadout->Auth_GrantAbilitiesToASC(CBASC);
+						// 로드아웃에 있는 무기 컴뱃 컴포넌트에 등록
+						CharacterLoadout->Auth_RegisterWeaponsToCombatComponent(CBCombatComponent);
+					}
+				})
+			);
+		}
+	}
+}
+
+void ACBChaserCharacter::Local_InitClientData()
+{
+	// 로컬 전용 초기화 로직 (예: 카메라 설정, 입력 설정 등)
+}
+
+/**
+ * [서버 전용] 캐릭터의 어트리뷰트를 초기화하는 함수.
+ * PossessedBy() 함수에서 호출.
+ */
+void ACBChaserCharacter::Auth_InitializeAttributes()
+{
+	if (!CBAttributeSet) return;
+	
+	if (MovementDataAsset)
+	{
+		// 기본 상태(Run) 속도 가져오기
+		float InitialSpeed = MovementDataAsset->GetSpeedForTag(CBGameplayTags::Shared_Movement_Run);
+
+		// 어트리뷰트 기본 값 설정
+		CBAttributeSet->InitMovementSpeed(InitialSpeed);
+		
+		// 이동속도 수동으로 값 초기화
+		if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+		{
+			MoveComp->MaxWalkSpeed = InitialSpeed;
+		}
+
+		// 중복 방지를 위해 기존 바인딩 제거 (네트워크 재접속, 초기화 로직 재실행 등)
+		GetAbilitySystemComponent()->GetGameplayAttributeValueChangeDelegate(CBAttributeSet->GetMovementSpeedAttribute())
+			.RemoveAll(this);
+
+		// 이동 속도 변경 시 실행되는 델리게이트에 함수 바인딩
+		GetAbilitySystemComponent()->GetGameplayAttributeValueChangeDelegate(CBAttributeSet->GetMovementSpeedAttribute())
+		.AddUObject(this, &ACBChaserCharacter::OnMovementSpeedChanged);
+	}
+
+	// [TODO] 기타 속성 초기화 로직 (데이터 에셋에 Health/Mana 등 추가 후 구현)
+}
+
+/**
+ * @param Data 어트리뷰트 변경 시 전달되는 데이터 구조체. NewValue 필드에 변경된 이동 속도 값이 포함되어 있음.
+ * 이동 속도가 변경될 때마다 호출되는 함수. (델리게이트 함수 바인딩)
+ * InitializeAttributes() 함수에서 사용
+ */
+void ACBChaserCharacter::OnMovementSpeedChanged(const FOnAttributeChangeData& Data)
+{
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		// 0보다 작은 값이 들어오지 않도록 안전장치 추가
+		const float NewSpeed = FMath::Max(Data.NewValue, 0.0f);
+		MoveComp->MaxWalkSpeed = NewSpeed;
+	}
 }
 
 UCBChaserCombatComponent* ACBChaserCharacter::GetChaserCombatComponent() const

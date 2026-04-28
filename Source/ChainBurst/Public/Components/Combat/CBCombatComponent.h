@@ -26,30 +26,20 @@ struct FCBRegisteredWeaponData
 	/** 스폰된 무기 인스턴스 */
 	UPROPERTY()
 	TObjectPtr<ACBBaseWeapon> WeaponInstance = nullptr;
-
-	/** 무기 전투 타입 */
-	UPROPERTY()
-	ECBWeaponCombatType WeaponCombatType = ECBWeaponCombatType::None;
-
-	/** 비전투 시 부착 소켓 */
-	UPROPERTY()
-	ECBWeaponSheathSocket SheathSocketType = ECBWeaponSheathSocket::None;
-
+	
 	/** 유효성 검사 함수 */
 	bool IsValid() const { return WeaponTag.IsValid() && WeaponInstance != nullptr; };
-	
-	FCBRegisteredWeaponData() {}
-	
-	FCBRegisteredWeaponData(FGameplayTag InWeaponTag, TObjectPtr<ACBBaseWeapon> InWeaponInstance) : WeaponTag(InWeaponTag), WeaponInstance(InWeaponInstance) {}
-	
-	FCBRegisteredWeaponData(FGameplayTag InWeaponTag, TObjectPtr<ACBBaseWeapon> InWeaponInstance, ECBWeaponCombatType InWeaponCombatType, ECBWeaponSheathSocket InSheathSocketType)
-		: WeaponTag(InWeaponTag), WeaponInstance(InWeaponInstance), WeaponCombatType(InWeaponCombatType), SheathSocketType(InSheathSocketType) {}
 
-	/** FCBWeaponData 받아서 초기화하는 생성자 */
-	FCBRegisteredWeaponData(const FCBWeaponData& InWeaponData, ACBBaseWeapon* InWeaponInstance)
-		: WeaponTag(InWeaponData.WeaponTag), WeaponInstance(InWeaponInstance)
-		, WeaponCombatType(InWeaponData.WeaponCombatType), SheathSocketType(InWeaponData.SheathSocketType) {}
+	FCBRegisteredWeaponData() = default;
+	
+	FCBRegisteredWeaponData(FGameplayTag InWeaponTag, TObjectPtr<ACBBaseWeapon> InWeaponInstance)
+		: WeaponTag(InWeaponTag)
+		, WeaponInstance(InWeaponInstance) {}
 
+	FCBRegisteredWeaponData(FCBWeaponData InWeaponData, TObjectPtr<ACBBaseWeapon> InWeaponInstance)
+		: WeaponTag(InWeaponData.WeaponTag)
+		, WeaponInstance(InWeaponInstance) {}
+	
 	/**
 	 * operator== 정의
 	 * FCBWeaponData 와 비교 연산
@@ -70,86 +60,80 @@ class CHAINBURST_API UCBCombatComponent : public UCBExtensionComponent
 {
 	GENERATED_BODY()
 
+public:
+	UCBCombatComponent();
+	
 private:
-	/** [저장소] 장착된 무기 슬롯 리스트 */
-	TArray<FCBRegisteredWeaponData> WeaponSlots;
-
-	/**
-	 * [상태] 현재 장착된 무기의 인덱스
-	 * (0부터 시작, -1은 무기가 없음)
-	 */
-	int32 CurrentWeaponSlot = -1;
-
+	/** [저장소] 현재 장착된 무기 데이터 */
+	UPROPERTY(Replicated)
+	FCBRegisteredWeaponData EquippedWeapon;
+	
+public:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;	
+	
 protected:
 	/**
 	 * 캐릭터의 메쉬를 저장
 	 * 무기를 부착할 때 자주 호출하기 때문에 캐싱
 	 */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	TObjectPtr<USkeletalMeshComponent> CachedOwnerMesh;
 
 	/** 캐릭터의 ASC를 저장 */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	TObjectPtr<UCBAbilitySystemComponent> CachedOwnerASC;
-	
+
 public:
 	/**
-	 * 무기 태그와 무기 인스턴스를 맵에 등록하는 함수.
+	 * [서버 전용] 무기 태그와 무기 인스턴스를 맵에 등록하는 함수.
+	 * UCBCharacterLoadout 에서 호출되어 캐릭터의 무기를 등록하는 데 사용됨.
 	 * @param InWeaponToRegister 등록할 무기 데이터.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Combat")
-	void RegisterWeapon(FCBWeaponData InWeaponToRegister);
+	void Auth_RegisterWeapon(FCBWeaponData InWeaponToRegister);
 
 	/**
 	 * [Getter] 현재 전투 상태 확인 (태그 검사)
 	 * @return 전투 상태면 True, 비전투 상태면 False 반환
 	 */
-	UFUNCTION(BlueprintPure, Category = "Combat")
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
 	bool IsCombatMode();
 
+	/** [Getter] 현재 무기의 장착 몽타주 반환 */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
+	UAnimMontage* GetCurrentEquipMontage() const;
+
+	/** [Getter] 현재 무기의 해제 몽타주 반환 */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
+	UAnimMontage* GetCurrentUnequipMontage() const;
+	
 	/**
 	 * [Setter] 전투 상태 변경 함수
 	 * @param bInCombat true면 전투 상태, false면 비전투 상태
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Combat")
+	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Combat")
 	void SetCombatMode(bool bInCombat);
 
 protected:
 	/**
-	 * 무기를 생성하는 내부 함수
+	 * [서버 전용] 무기를 생성하는 내부 함수
 	 * @param WeaponClass 생성할 무기 클래스.
 	 * @return 무기 인스턴스 반환, 생성 실패 시 nullptr 반환.
 	 */
-	ACBBaseWeapon* SpawnWeapon(TSubclassOf<ACBBaseWeapon> WeaponClass);
+	ACBBaseWeapon* Auth_SpawnWeapon(TSubclassOf<ACBBaseWeapon> WeaponClass);
 
-	/** 무기를 파괴하는 내부 함수 */
-	void DestroyWeapon(ACBBaseWeapon* WeaponToDestroy);
+	/** [서버 전용] 무기를 파괴하는 내부 함수 */
+	void Auth_DestroyWeapon(ACBBaseWeapon* WeaponToDestroy);
 
 	/** [Getter] CachedOwnerMesh */
 	USkeletalMeshComponent* GetCachedOwnerMesh();
 
 	/** [Getter] CachedOwnerASC */
 	UCBAbilitySystemComponent* GetCachedOwnerASC();
-
-	/** [Getter] 현재 장착된 무기의 인덱스 */
-	int32 GetCurrentWeaponSlot();
-
-	/** [Setter] 현재 장착된 무기의 인덱스 */
-	void SetCurrentWeaponSlot(int32 NewSlot);
 	
 	/** 전투 모드로 전환 로직 */
 	virtual void OnEnterCombatMode();
 
 	/** 비전투 모드로 전환 로직 */
 	virtual void OnExitCombatMode();
-
-	/** 무기 교체 함수 */
-	void SwapWeapon(int32 NewWeaponSlot);
-
-	/**
-	 * 무기 상태 리셋 및 복구 함수 (잘못된 예외 상황이거나 초기화가 필요할 때 사용)
-	 * - 모든 무기 (WeaponSlots) 초기화
-	 * - 상태 변수 초기화
-	 */
-	void ResetWeaponState();
 };

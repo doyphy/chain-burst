@@ -37,5 +37,5 @@ private:
 	
 public:
 	/** 어빌리티 시스템 컴포넌트에 어빌리티를 부여하는 함수 (부모 함수 재정의, 추격자 전용) */
-	virtual void GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1) override;
+	virtual void Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1) override;
 };

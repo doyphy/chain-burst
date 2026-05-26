@@ -2,9 +2,8 @@
 #include "Components/Combat/CBCombatComponent.h"
 #include "Items/Weapons/CBBaseWeapon.h"
 #include "Characters/CBBaseCharacter.h"
-#include "AbilitySystem/CBAbilitySystemComponent.h"
-#include "CBGameplayTags.h"
 #include "CBAbilitySystemLibrary.h"
+#include "AbilitySystem/CBAbilitySystemComponent.h"
 
 // engine
 #include "Net/UnrealNetwork.h"
@@ -70,20 +69,8 @@ void UCBCombatComponent::Auth_RegisterWeapon(FCBWeaponData InWeaponToRegister)
 
 bool UCBCombatComponent::IsCombatMode()
 {
-	// Shared_Status_Combat_InCombat 태그를 검사해서 반환
+	// Status_Combat_InCombat 태그를 검사해서 반환
 	return UCBAbilitySystemLibrary::IsCombatMode(GetOwner());
-}
-
-UAnimMontage* UCBCombatComponent::GetCurrentEquipMontage() const
-{
-	if (!EquippedWeapon.IsValid()) return nullptr;
-	return EquippedWeapon.WeaponInstance->GetEquipMontage();
-}
-
-UAnimMontage* UCBCombatComponent::GetCurrentUnequipMontage() const
-{
-	if (!EquippedWeapon.IsValid()) return nullptr;
-	return EquippedWeapon.WeaponInstance->GetUnequipMontage();
 }
 
 void UCBCombatComponent::SetCombatMode(bool bInCombat)
@@ -150,26 +137,26 @@ void UCBCombatComponent::Auth_DestroyWeapon(ACBBaseWeapon* WeaponToDestroy)
 
 USkeletalMeshComponent* UCBCombatComponent::GetCachedOwnerMesh()
 {
-	if (CachedOwnerMesh == nullptr)
+	if (!CachedOwnerMesh.IsValid())
 	{
 		if (ACBBaseCharacter* CharacterOwner = GetOwningPawn<ACBBaseCharacter>())
 		{
 			CachedOwnerMesh = CharacterOwner->GetMesh();
 		}
 	}
-	return CachedOwnerMesh;
+	return CachedOwnerMesh.Get();
 }
 
 UCBAbilitySystemComponent* UCBCombatComponent::GetCachedOwnerASC()
 {
-	if (CachedOwnerASC == nullptr)
+	if (!CachedOwnerASC.IsValid())
 	{
 		if (ACBBaseCharacter* CharacterOwner = GetOwningPawn<ACBBaseCharacter>())
 		{
 			CachedOwnerASC = CharacterOwner->GetCBAbilitySystemComponent();
 		}
 	}
-	return CachedOwnerASC;
+	return CachedOwnerASC.Get();
 }
 
 void UCBCombatComponent::OnEnterCombatMode()

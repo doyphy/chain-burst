@@ -14,11 +14,11 @@ struct FCBChaserAbilitySet
 	GENERATED_BODY()
 
 	/** 어빌리티 입력 태그 (어떤 입력 태그와 연결된 어빌리티인지 구분) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (Categories = "InputTag"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (Categories = "Input"))
 	FGameplayTag InputTag;
 	
 	/** 어빌리티 클래스 (입력 태그로 구분) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (Categories = "InputTag"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	TSubclassOf<UCBGameplayAbility> AbilityToGrant;
 
 	/** InputTag와 AbilityToGrant가 유효한지 확인하는 함수 */

@@ -54,8 +54,8 @@ ACBChaserCharacter::ACBChaserCharacter()
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	// 캐릭터 회전 속도 설정 (Yaw 기준)
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
-	
-	// CBCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CBChaserCombatComponent"));
+
+	CBCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CBCombatComponent"));
 	CBCameraControlComponent = CreateDefaultSubobject<UCBCameraControlComponent>(TEXT("CBCameraControlComponent"));
 	CBCharacterRotationComponent = CreateDefaultSubobject<UCBCharacterRotationComponent>(TEXT("CBCharacterRotationComponent"));
 }
@@ -306,7 +306,7 @@ void ACBChaserCharacter::Auth_InitializeAttributes()
 	if (MovementDataAsset)
 	{
 		// 기본 상태(Run) 속도 가져오기
-		float InitialSpeed = MovementDataAsset->GetSpeedForTag(CBGameplayTags::Shared_Movement_Run);
+		float InitialSpeed = MovementDataAsset->GetSpeedForTag(CBGameplayTags::Movement_Run);
 
 		// 어트리뷰트 기본 값 설정
 		CBAttributeSet->InitMovementSpeed(InitialSpeed);

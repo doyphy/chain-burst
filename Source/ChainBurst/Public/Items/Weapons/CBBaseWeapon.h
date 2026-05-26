@@ -22,6 +22,12 @@ public:
 	
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION(Server, Reliable)
+	void Server_AttachToHand(USceneComponent* TargetMesh);
+
+	UFUNCTION(Server, Reliable)
+	void Server_AttachToSheath(USceneComponent* TargetMesh);
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Weapon|Components")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -58,14 +64,6 @@ protected:
 	/** 비전투 시 실제 부착될 소켓 이름 (SheathSocket 변경 시 자동 설정됨, 필요 시 수동 수정 가능) */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config", meta = (EditCondition = "bRequiresSheathSocketAttachment", EditConditionHides))
 	FName SheathSocketOverride = NAME_None;
-
-	/** 무기 장착 몽타주 **/
-	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config")
-	TObjectPtr<UAnimMontage> EquipMontage = nullptr;
-
-	/** 무기 해제 몽타주 **/
-	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config")
-	TObjectPtr<UAnimMontage> UnequipMontage = nullptr;
 	
 public:
 	/** [전투 상태] 무기를 손에 부착하는 함수 */
@@ -73,10 +71,6 @@ public:
 
 	/** [비전투 상태] 무기를 칼집에 부착하는 함수 */
 	void AttachToSheath(USceneComponent* TargetMesh);
-
-	TObjectPtr<UAnimMontage> GetEquipMontage() const { return EquipMontage; }
-	
-	TObjectPtr<UAnimMontage> GetUnequipMontage() const { return UnequipMontage; }
 	
 #if WITH_EDITOR
 	/** 에디터에서 속성 변경 시 호출되는 함수 */

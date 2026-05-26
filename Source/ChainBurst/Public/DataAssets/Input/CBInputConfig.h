@@ -14,7 +14,7 @@ struct FCBInputActionConfig
 	GENERATED_BODY()
 public:
 	/** 입력 태그 (예: 이동, 시점 등). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (Categories = "InputTag"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (Categories = "Input"))
 	FGameplayTag InputTag;
 
 	/** 입력 액션 객체. */

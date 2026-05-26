@@ -3,14 +3,14 @@
 #include "Components/Movement/CBLocomotionProcessor.h"
 #include "Components/Movement/CBCharacterTrajectoryComponent.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
-#include "CBAbilitySystemLibrary.h"
+#include "Components/Animation/CBActionComponent.h"
 
 ACBBaseCharacter::ACBBaseCharacter()
 {
 	// 이 캐릭터는 매 프레임마다 Tick() 함수를 호출하지 않도록 설정 (Tick 비활성화)
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = false;
 	// 액터가 생성될 때 Tick이 비활성화된 상태로 시작하도록 설정
-	PrimaryActorTick.bStartWithTickEnabled = true;
+	PrimaryActorTick.bStartWithTickEnabled = false;
 
 	// 네트워크 복제 활성화
 	bReplicates = true;
@@ -20,6 +20,7 @@ ACBBaseCharacter::ACBBaseCharacter()
 	
 	CBTrajectoryComponent = CreateDefaultSubobject<UCBCharacterTrajectoryComponent>(TEXT("CBTrajectoryComponent"));
 	CBLocomotionProcessor = CreateDefaultSubobject<UCBLocomotionProcessor>(TEXT("CBLocomotionProcessor"));
+	CBActionComponent = CreateDefaultSubobject<UCBActionComponent>(TEXT("CBActionComponent"));
 }
 
 UAbilitySystemComponent* ACBBaseCharacter::GetAbilitySystemComponent() const
@@ -27,15 +28,26 @@ UAbilitySystemComponent* ACBBaseCharacter::GetAbilitySystemComponent() const
 	return Cast<UAbilitySystemComponent>(CBASC);
 }
 
+// 필요할 때 Tick 설정
 void ACBBaseCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+}
 
-	// 태그 검사
-	FGameplayTag CombatTag = FGameplayTag::RequestGameplayTag(FName("Shared.Status.Combat.InCombat"));
-    
-	// 디버깅 메세지 띄우기
-	UCBAbilitySystemLibrary::DrawTagDebugMessage(this, CombatTag);
+bool ACBBaseCharacter::RequestPlayMontage(const FGameplayTag InActionTag, bool bIsCombo)
+{
+	if (!CBActionComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] ActionComponent 가 없음"), *GetName());
+		return false;
+	}
+
+	if (bIsCombo)
+	{
+		return CBActionComponent->RequestPlayComboMontage(InActionTag);
+	}
+
+	return CBActionComponent->RequestPlaySingleMontage(InActionTag);
 }
 
 void ACBBaseCharacter::HandleCharacterSystemReady()
@@ -48,5 +60,7 @@ void ACBBaseCharacter::HandleCharacterSystemReady()
 
 	// 델리게이트 방송 (구독 중인 컴포넌트 및 애님 인스턴스에 알림)
 	OnCharacterSystemReadyDelegate.Broadcast();
-}
 
+	// Tick 활성화
+	// SetActorTickEnabled(true);
+}

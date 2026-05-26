@@ -42,8 +42,8 @@ void UCBLocomotionProcessor::TickComponent(float DeltaTime, enum ELevelTick Tick
 	// 매 Tick 마다 CMC 의 가속과 감속을 계산하여 적용.
 	if (GetCachedCMC(CachedCMC))
 	{
-		CachedCMC->MaxAcceleration = CalculateMaxAcceleration();
-		CachedCMC->BrakingDecelerationWalking = CalculateBrakingDeceleration();
+		CachedCMC.Get()->MaxAcceleration = CalculateMaxAcceleration();
+		CachedCMC.Get()->BrakingDecelerationWalking = CalculateBrakingDeceleration();
 	}
 }
 
@@ -55,11 +55,11 @@ float UCBLocomotionProcessor::CalculateMaxAcceleration()
 		return RunMaxAcceleration;
 	}
 	
-	if (CachedASC->HasMatchingGameplayTag(CBGameplayTags::Shared_Movement_Sprint))
+	if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
 	{
 		return SprintMaxAcceleration;
 	}
-	else if (CachedASC->HasMatchingGameplayTag(CBGameplayTags::Shared_Movement_Walk))
+	else if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Movement_Walk))
 	{
 		return WalkMaxAcceleration;
 	}
@@ -77,11 +77,11 @@ float UCBLocomotionProcessor::CalculateBrakingDeceleration()
 		return RunBrakingDeceleration;
 	}
 	
-	if (CachedASC->HasMatchingGameplayTag(CBGameplayTags::Shared_Movement_Sprint))
+	if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
 	{
 		return SprintBrakingDeceleration;
 	}
-	else if (CachedASC->HasMatchingGameplayTag(CBGameplayTags::Shared_Movement_Walk))
+	else if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Movement_Walk))
 	{
 		return WalkBrakingDeceleration;
 	}
@@ -105,10 +105,10 @@ void UCBLocomotionProcessor::OnCharacterSystemReady()
 	SetComponentTickEnabled(true);
 }
 
-bool UCBLocomotionProcessor::GetCachedCMC(TObjectPtr<UCharacterMovementComponent>& OutCMC)
+bool UCBLocomotionProcessor::GetCachedCMC(TWeakObjectPtr<UCharacterMovementComponent>& OutCMC)
 {
 	// 캐싱된 CMC가 이미 존재하면 그대로 반환
-	if (OutCMC)
+	if (OutCMC.IsValid())
 	{
 		return true;
 	}
@@ -119,15 +119,15 @@ bool UCBLocomotionProcessor::GetCachedCMC(TObjectPtr<UCharacterMovementComponent
 		OutCMC = OwnerCharacter->GetCharacterMovement();
 
 		// 초기 값 설정
-		if (OutCMC)
+		if (OutCMC.IsValid())
 		{
-			OutCMC->bUseSeparateBrakingFriction = true;
-			OutCMC->MaxAcceleration = 1000.0f;
-			OutCMC->BrakingDecelerationWalking = 1000.0f;
+			OutCMC.Get()->bUseSeparateBrakingFriction = true;
+			OutCMC.Get()->MaxAcceleration = 1000.0f;
+			OutCMC.Get()->BrakingDecelerationWalking = 1000.0f;
 		}
 	}
 	
-	return (OutCMC != nullptr);
+	return OutCMC.IsValid();
 }
 
 

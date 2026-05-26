@@ -67,21 +67,18 @@ private:
 	/** [저장소] 현재 장착된 무기 데이터 */
 	UPROPERTY(Replicated)
 	FCBRegisteredWeaponData EquippedWeapon;
-	
-public:
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;	
-	
+
 protected:
 	/**
 	 * 캐릭터의 메쉬를 저장
 	 * 무기를 부착할 때 자주 호출하기 때문에 캐싱
 	 */
 	UPROPERTY(Transient)
-	TObjectPtr<USkeletalMeshComponent> CachedOwnerMesh;
+	TWeakObjectPtr<USkeletalMeshComponent> CachedOwnerMesh;
 
 	/** 캐릭터의 ASC를 저장 */
 	UPROPERTY(Transient)
-	TObjectPtr<UCBAbilitySystemComponent> CachedOwnerASC;
+	TWeakObjectPtr<UCBAbilitySystemComponent> CachedOwnerASC;
 
 public:
 	/**
@@ -98,14 +95,6 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
 	bool IsCombatMode();
-
-	/** [Getter] 현재 무기의 장착 몽타주 반환 */
-	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
-	UAnimMontage* GetCurrentEquipMontage() const;
-
-	/** [Getter] 현재 무기의 해제 몽타주 반환 */
-	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
-	UAnimMontage* GetCurrentUnequipMontage() const;
 	
 	/**
 	 * [Setter] 전투 상태 변경 함수
@@ -115,6 +104,8 @@ public:
 	void SetCombatMode(bool bInCombat);
 
 protected:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	
 	/**
 	 * [서버 전용] 무기를 생성하는 내부 함수
 	 * @param WeaponClass 생성할 무기 클래스.

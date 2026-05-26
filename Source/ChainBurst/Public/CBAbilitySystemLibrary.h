@@ -48,7 +48,7 @@ public:
 	 * @param OutASC 캐싱할 포인터 변수 (참조)
 	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
 	 */
-	static bool GetCBCachedASC(const AActor* InActor, TObjectPtr<UCBAbilitySystemComponent>& OutASC);
+	static bool GetCBCachedASC(const AActor* InActor, TWeakObjectPtr<UCBAbilitySystemComponent>& OutASC);
 	
 	/**
 	 * 타겟 액터에게 이펙트 적용하는 함수 (C++ 전용)

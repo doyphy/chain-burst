@@ -4,7 +4,6 @@
 // engine
 #include "Abilities/GameplayAbility.h"
 
-
 UCBAbilitySystemComponent::UCBAbilitySystemComponent()
 {
 	SetIsReplicated(true);

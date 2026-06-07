@@ -30,6 +30,28 @@ void UCBCharacterLoadout::Auth_RegisterWeaponsToCombatComponent(UCBCombatCompone
 	InCombatComponent->Auth_RegisterWeapon(WeaponData);
 }
 
+void UCBCharacterLoadout::Auth_ApplyEffectsToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
+{
+	if (InASCToGive && !StartupEffects.IsEmpty())
+	{
+		for (const auto& EffectClass : StartupEffects)
+		{
+			if (EffectClass)
+			{
+				FGameplayEffectContextHandle EffectContext = InASCToGive->MakeEffectContext();
+				EffectContext.AddSourceObject(this);
+				
+				FGameplayEffectSpecHandle SpecHandle = InASCToGive->MakeOutgoingSpec(EffectClass, ApplyLevel, EffectContext);
+				
+				if (SpecHandle.IsValid())
+				{
+					InASCToGive->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+				}
+			}
+		}
+	}
+}
+
 void UCBCharacterLoadout::GrantAbilities(const TArray<TSubclassOf<UCBGameplayAbility>>& InAbilitiesToGive,
                                          UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
 {

@@ -86,8 +86,8 @@ void UCBCharacterAnimInstance::NativeThreadSafeUpdateAnimation(float DeltaSecond
 	// Input [X] -> LocalVelocity [Y]
 	// Input [Y] -> LocalVelocity [X]
 	// 블렌드 스페이스의 X축이 캐릭터 좌우, Y축이 캐릭터 앞뒤에 매핑되어 있기 때문
-	InputX = FMath::FInterpTo(InputX, LocalVelocity.Y, DeltaSeconds, 10.f);
-	InputY = FMath::FInterpTo(InputY, LocalVelocity.X, DeltaSeconds, 10.f);
+	MoveX = FMath::FInterpTo(MoveX, LocalVelocity.Y, DeltaSeconds, 10.f);
+	MoveY = FMath::FInterpTo(MoveY, LocalVelocity.X, DeltaSeconds, 10.f);
 }
 
 void UCBCharacterAnimInstance::UpdateBasicMovementData()

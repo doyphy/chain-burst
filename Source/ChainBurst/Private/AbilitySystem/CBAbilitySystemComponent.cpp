@@ -21,8 +21,11 @@ void UCBAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag& InInpu
 		return;
 	}
 
-	// 현재 눌려있는 입력 태그 모음에 해당 입력 태그 추가
+	// 현재 눌려있는 입력 태그 모음에 해당 입력 태그 추가 (입력감지)
 	HeldInputTags.AddTag(InInputTag);
+
+	// 입력 태그가 눌렸음을 알리는 델리게이트 호출 (입력감지)
+	OnAbilityInputTagPressed.Broadcast(InInputTag);
 	
 	// ASC 내부 배열을 순회할 때 도중에 배열이 수정되는 것을 방지하기 위해 잠금 (잠금 해제는 함수 종료 시 자동으로 이루어짐)
 	ABILITYLIST_SCOPE_LOCK();

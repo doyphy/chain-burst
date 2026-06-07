@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "Interfaces/CBCombatInterface.h"
 #include "CBBaseCharacter.generated.h"
 
 class UCBAbilitySystemComponent;
@@ -18,17 +19,13 @@ class UCBActionComponent;
 DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady)
 
 UCLASS()
-class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface
+class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface, public ICBCombatInterface
 {
 	GENERATED_BODY()
 	
 public:
 	ACBBaseCharacter();
-
-	//~ Begin IAbilitySystemInterface Interface.
-	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
-	//~ End IAbilitySystemInterface Interface.
-
+	
 	virtual void Tick(float DeltaTime) override;
 
 protected:
@@ -43,10 +40,6 @@ protected:
 	TObjectPtr<UCBAttributeSet> CBAttributeSet = nullptr;
 	
 #pragma region Components
-	/** 전투 관련 컴포넌트 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Combat")
-	TObjectPtr<UCBCombatComponent> CBCombatComponent = nullptr;
-
 	/** 궤적 컴포넌트 (무브먼트) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Movement")
 	TObjectPtr<UCBCharacterTrajectoryComponent> CBTrajectoryComponent = nullptr;
@@ -59,9 +52,6 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Animation")
 	TObjectPtr<UCBActionComponent> CBActionComponent = nullptr;
 #pragma endregion
-	
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|CharacterData")
-	TSoftObjectPtr<UCBCharacterLoadout> CharacterLoadout = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|MovementData")
 	TObjectPtr<UCBCharacterMovementData> MovementDataAsset = nullptr;
@@ -69,6 +59,7 @@ protected:
 public:
 	/** 캐릭터 시스템 준비 완료 델리게이트 */
 	FOnCharacterSystemReady OnCharacterSystemReadyDelegate;
+	
 	/** 캐릭터 시스템 준비 완료 여부 (중복 방지 플래그)*/
 	bool bIsCharacterSystemReady = false;
 
@@ -80,10 +71,20 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Action")
 	bool RequestPlayMontage(const FGameplayTag InActionTag, bool bIsCombo = false);
+
+	UFUNCTION(Server, Reliable)
+	void Server_SendGameplayEvent(FGameplayTag EventTag);
+
+	//~ Begin IAbilitySystemInterface Interface.
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	//~ End IAbilitySystemInterface Interface.
+	
+	//~ Begin ICBCombatInterface Interface.
+	virtual UCBCombatComponent* GetCBCombatComponent() const override;
+	//~ End ICBCombatInterface Interface.
 	
 	FORCEINLINE UCBAbilitySystemComponent* GetCBAbilitySystemComponent() const { return CBASC.Get(); }
 	FORCEINLINE UCBAttributeSet* GetCBAttributeSet() const { return CBAttributeSet.Get(); }
-	FORCEINLINE UCBCombatComponent* GetCBCombatComponent() const { return CBCombatComponent.Get(); }
 	FORCEINLINE UCBCharacterMovementData* GetMovementDataAsset() const { return MovementDataAsset.Get(); }
 	FORCEINLINE UCBCharacterTrajectoryComponent* GetCBTrajectoryComponent() const { return CBTrajectoryComponent.Get(); }
 	FORCEINLINE UCBActionComponent* GetCBActionComponent() const { return CBActionComponent.Get(); }

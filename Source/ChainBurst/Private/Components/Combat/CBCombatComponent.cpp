@@ -81,12 +81,12 @@ void UCBCombatComponent::SetCombatMode(bool bInCombat)
 		return;
 	}
 	
-	// 전투 상태로 전환 시
+	// 전투 상태로 전환 시 (무기 부착)
 	if (bInCombat)
 	{
 		OnEnterCombatMode();
 	}
-	// 비전투 상태로 전환 시
+	// 비전투 상태로 전환 시 (무기 부착)
 	else
 	{
 		OnExitCombatMode();

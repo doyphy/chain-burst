@@ -10,10 +10,12 @@ class UCameraComponent;
 class USpringArmComponent;
 class UCBInputConfig;
 struct FInputActionValue;
+class UCBCombatComponent;
 class UCBChaserCombatComponent;
 class UCBCameraControlComponent;
 class UCBCharacterRotationComponent;
 class UCBCharacterAnimInstance;
+class UCBChaserLoadout;
 
 UCLASS()
 class CHAINBURST_API ACBChaserCharacter : public ACBBaseCharacter
@@ -38,15 +40,20 @@ protected:
 	
 protected:
 #pragma region Components
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Camera")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Camera")
 	TObjectPtr<UCameraComponent> CameraComponent;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Camera")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Camera")
 	TObjectPtr<USpringArmComponent> SpringArmComponent;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Camera")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Camera")
 	TObjectPtr<UCBCameraControlComponent> CBCameraControlComponent;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Rotation")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Rotation")
 	TObjectPtr<UCBCharacterRotationComponent> CBCharacterRotationComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Combat")
+	TObjectPtr<UCBChaserCombatComponent> ChaserCombatComponent = nullptr;
 #pragma endregion
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|CharacterData")
+	TSoftObjectPtr<UCBChaserLoadout> ChaserLoadout = nullptr;
 	
 #pragma region Inputs
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|Input")
@@ -59,7 +66,7 @@ protected:
 	void Input_AbilityInputPressed(FGameplayTag InInputTag);
 	void Input_AbilityInputReleased(FGameplayTag InInputTag);
 #pragma endregion
-
+	
 	UPROPERTY(Transient)
 	TObjectPtr<UCBCharacterAnimInstance> CachedAnimInstance;
 	
@@ -89,6 +96,9 @@ protected:
 	void OnMovementSpeedChanged(const FOnAttributeChangeData& Data);
 	
 public:
-	UCBChaserCombatComponent* GetChaserCombatComponent() const;
+	//~ Begin ICBCombatInterface Interface.
+	virtual UCBCombatComponent* GetCBCombatComponent() const override;
+	//~ End ICBCombatInterface Interface.
 	
+	FORCEINLINE UCBChaserCombatComponent* GetChaserCombatComponent() const { return ChaserCombatComponent.Get(); } 
 };

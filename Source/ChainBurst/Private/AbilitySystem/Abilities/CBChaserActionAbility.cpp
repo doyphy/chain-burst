@@ -21,8 +21,15 @@ void UCBChaserActionAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
 	bool bReplicateEndAbility, bool bWasCancelled)
 {
-	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+	if (UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo())
+	{
+		// 입력 델리게이트 구독 해제 (입력 감지)
+		CBASC->OnAbilityInputTagPressed.RemoveDynamic(this, &ThisClass::HandleInputPressed);
+	}
+	
 	UE_LOG(LogTemp, Log, TEXT("Ending Ability"));
+	
+	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 
 void UCBChaserActionAbility::ExecuteAction()
@@ -80,6 +87,25 @@ void UCBChaserActionAbility::OnCheckInput(FGameplayEventData Payload)
 			// 어빌리티 재 활성화
 			CBASC->TryActivateAbility(CurrentSpecHandle);
 		}
+		else
+		{
+			// 입력 델리게이트 구독 (입력 감지)
+			CBASC->OnAbilityInputTagPressed.AddDynamic(this, &ThisClass::HandleInputPressed);
+		}
+	}
+}
+
+void UCBChaserActionAbility::HandleInputPressed(const FGameplayTag& Data)
+{
+	// 같은 입력 태그가 눌렀다면
+	if (Data == BoundInputTag)
+	{
+		// ASC 가져오기
+		UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo();
+		// 어빌리티 종료
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+		// 어빌리티 재 활성화
+		CBASC->TryActivateAbility(CurrentSpecHandle);
 	}
 }
 

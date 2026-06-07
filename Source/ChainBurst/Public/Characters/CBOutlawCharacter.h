@@ -4,6 +4,10 @@
 #include "Characters/CBBaseCharacter.h"
 #include "CBOutlawCharacter.generated.h"
 
+class UCBCombatComponent;
+class UCBOutlawCombatComponent;
+class UCBOutlawLoadout;
+
 UCLASS()
 class CHAINBURST_API ACBOutlawCharacter : public ACBBaseCharacter
 {
@@ -13,20 +17,20 @@ public:
 	ACBOutlawCharacter();
 
 protected:
-	/** [서버] AI 컨트롤러가 빙의될 때 */
+	//~ Begin APawn Interface
 	virtual void PossessedBy(AController* NewController) override;
-	/** [클라이언트] 클라이언트에 액터가 복제된 직후 (BeginPlay 직전)*/
-	virtual void PostNetInit() override;
+	//~ End APawn Interface
 
-	/**
-	 * 서버와 클라이언트 모두에서 호출되는 초기화 진입 함수
-	 * PossessedBy 또는 PostNetInit 에서 호출됨. 
-	 */
-	void InitializeAISystem();
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Combat")
+	TObjectPtr<UCBOutlawCombatComponent> OutlawCombatComponent = nullptr;
 
-	/** 서버 전용 초기화 함수 */
-	void Auth_InitServerData();
-
-	/** 클라이언트 전용 초기화 함수 */
-	void Local_InitClientData();
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|CharacterData")
+	TSoftObjectPtr<UCBOutlawLoadout> OutlawLoadout = nullptr;
+	
+public:
+	//~ Begin ICBCombatInterface Interface.
+	virtual UCBCombatComponent* GetCBCombatComponent() const override;
+	//~ End ICBCombatInterface Interface.
+	
+	FORCEINLINE UCBOutlawCombatComponent* GetOutlawCombatComponent() const { return OutlawCombatComponent.Get(); }
 };

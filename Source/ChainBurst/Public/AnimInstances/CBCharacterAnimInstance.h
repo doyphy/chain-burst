@@ -102,10 +102,10 @@ public:
 	bool IsStopping() const;
 
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
-	float GetInputX() const { return InputX; }
+	float GetMoveX() const { return MoveX; }
 
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
-	float GetInputY() const { return InputY; }
+	float GetMoveY() const { return MoveY; }
 	
 protected:
 	/** 전투 태그 변경 시 호출되는 콜백 함수 */
@@ -140,10 +140,10 @@ protected:
 	// 워커 스레드 변수 (계산에 사용할 데이터, 복사본)
 	// ==========================================
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
-	float InputX = 0.f;
+	float MoveX = 0.f;
 
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
-	float InputY = 0.f;
+	float MoveY = 0.f;
 	
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
 	float CurrentAccelerationSize = 0.f;

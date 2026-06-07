@@ -8,6 +8,7 @@
 class UCBGameplayAbility;
 class UCBAbilitySystemComponent;
 class UCBCombatComponent;
+class UGameplayEffect;
 
 /**
  * 캐릭터(추격자,무법자)의 공통 데이터
@@ -22,6 +23,9 @@ public:
 
 	/** [서버 전용] 컴뱃 컴포넌트에 무기를 등록하는 함수 */
 	virtual void Auth_RegisterWeaponsToCombatComponent(UCBCombatComponent* InCombatComponent);
+
+	/** [서버 전용] 어빌리티 시스템 컴포넌트에 이펙트를 적용하는 함수 */
+	virtual void Auth_ApplyEffectsToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
 	
 protected:
 	// =========================================================
@@ -69,6 +73,8 @@ protected:
 	// =========================================================
 
 	/** 스탯 초기화를 위한 GameplayEffect (GE_InitStats) */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout")
+	TArray<TSubclassOf<UGameplayEffect>> StartupEffects;
 	
 	// =========================================================
 	// 식별자 (Identity)
@@ -79,4 +85,6 @@ protected:
 protected:
 	/** 전달받은 어빌리티 배열을 어빌리티 시스템 컴포넌트에 부여하는 내부 함수 */
 	void GrantAbilities(const TArray<TSubclassOf<UCBGameplayAbility>>& InAbilitiesToGive, UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
+
+	/** 어빌리티 시스템 컴포넌트에 이펙트 적용하는 함수 */
 };

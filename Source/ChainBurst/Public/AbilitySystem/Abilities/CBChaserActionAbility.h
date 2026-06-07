@@ -37,6 +37,10 @@ protected:
 	UFUNCTION()
 	void OnCheckInput(FGameplayEventData Payload);
 
+	/** 입력 델리게이트 바인딩 함수 (입력감지) */
+	UFUNCTION()
+	void HandleInputPressed(const FGameplayTag& Data);
+	
 	/** 타임아웃 시 호출되는 함수 */
 	UFUNCTION()
 	void OnDelayFinished();
@@ -64,5 +68,4 @@ protected:
 private:
 	/** 어빌리티 재시도 타이머 핸들 */
 	FTimerHandle RetryHandle;
-
 };

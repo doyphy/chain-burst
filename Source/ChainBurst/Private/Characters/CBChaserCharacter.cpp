@@ -55,7 +55,7 @@ ACBChaserCharacter::ACBChaserCharacter()
 	// 캐릭터 회전 속도 설정 (Yaw 기준)
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 
-	CBCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CBCombatComponent"));
+	ChaserCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CBChaserCombatComponent"));
 	CBCameraControlComponent = CreateDefaultSubobject<UCBCameraControlComponent>(TEXT("CBCameraControlComponent"));
 	CBCharacterRotationComponent = CreateDefaultSubobject<UCBCharacterRotationComponent>(TEXT("CBCharacterRotationComponent"));
 }
@@ -256,33 +256,37 @@ void ACBChaserCharacter::Auth_InitServerData()
 	Auth_InitializeAttributes();
 	
 	// CharacterLoadout 가져오기 및 유효성 검사
-	ensureMsgf(!CharacterLoadout.IsNull(), TEXT("%s 의 CharacterLoadout 유효하지 않음."), *GetName());
+	ensureMsgf(!ChaserLoadout.IsNull(), TEXT("%s 의 CharacterLoadout 유효하지 않음."), *GetName());
 	
 	// CharacterLoadout 가 유효한 소프트 레퍼런스(SoftObjectPtr)인지 확인
-	if (!CharacterLoadout.IsNull())
+	if (!ChaserLoadout.IsNull())
 	{
 		// 이미 로드되어 있다면 즉시 사용
-		if (CharacterLoadout.IsValid() && CBASC && CBCombatComponent)
+		if (ChaserLoadout.IsValid() && CBASC && ChaserCombatComponent)
 		{
 			// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
-			CharacterLoadout->Auth_GrantAbilitiesToASC(CBASC);
+			ChaserLoadout->Auth_GrantAbilitiesToASC(CBASC);
 			// 로드아웃에 있는 무기 컴뱃 컴포넌트에 등록
-			CharacterLoadout->Auth_RegisterWeaponsToCombatComponent(CBCombatComponent);
+			ChaserLoadout->Auth_RegisterWeaponsToCombatComponent(ChaserCombatComponent);
+			// 로드아웃에 있는 이펙트 모두 어빌리티 시스템에 적용
+			ChaserLoadout->Auth_ApplyEffectsToASC(CBASC);
 		}
 		else
 		{
 			// 비동기 로드 요청
 			// 로드가 완료되기 전에 먼저 어빌리티를 활성화해도 문제 없음 (TryAbility).
 			UAssetManager::GetStreamableManager().RequestAsyncLoad(
-				CharacterLoadout.ToSoftObjectPath(),
+				ChaserLoadout.ToSoftObjectPath(),
 				FStreamableDelegate::CreateWeakLambda(this, [this]()
 				{
-					if (CharacterLoadout.IsValid() && CBASC && CBCombatComponent)
+					if (ChaserLoadout.IsValid() && CBASC && ChaserCombatComponent)
 					{
 						// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
-						CharacterLoadout->Auth_GrantAbilitiesToASC(CBASC);
+						ChaserLoadout->Auth_GrantAbilitiesToASC(CBASC);
 						// 로드아웃에 있는 무기 컴뱃 컴포넌트에 등록
-						CharacterLoadout->Auth_RegisterWeaponsToCombatComponent(CBCombatComponent);
+						ChaserLoadout->Auth_RegisterWeaponsToCombatComponent(ChaserCombatComponent);
+						// 로드아웃에 있는 이펙트 모두 어빌리티 시스템에 적용
+						ChaserLoadout->Auth_ApplyEffectsToASC(CBASC);
 					}
 				})
 			);
@@ -344,7 +348,7 @@ void ACBChaserCharacter::OnMovementSpeedChanged(const FOnAttributeChangeData& Da
 	}
 }
 
-UCBChaserCombatComponent* ACBChaserCharacter::GetChaserCombatComponent() const
+UCBCombatComponent* ACBChaserCharacter::GetCBCombatComponent() const
 {
-	return Cast<UCBChaserCombatComponent>(CBCombatComponent);
+	return ChaserCombatComponent.Get();
 }

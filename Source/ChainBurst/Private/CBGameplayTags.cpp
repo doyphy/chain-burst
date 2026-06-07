@@ -49,4 +49,9 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Skill, "Action.Combat.Skill", "스킬 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_EquipWeapon, "Action.Combat.EquipWeapon", "무기 장착 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_UnequipWeapon, "Action.Combat.UnequipWeapon", "무기 해제 액션 태그")
+
+	/** Test Tags */
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Test_Tag_1, "Test.Tag.1", "테스트 태그 1")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Test_Tag_2, "Test.Tag.2", "테스트 태그 2")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Test_Tag_3, "Test.Tag.3", "테스트 태그 3")
 }

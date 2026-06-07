@@ -5,6 +5,9 @@
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Animation/CBActionComponent.h"
 
+// engine
+#include "AbilitySystemBlueprintLibrary.h"
+
 ACBBaseCharacter::ACBBaseCharacter()
 {
 	// 이 캐릭터는 매 프레임마다 Tick() 함수를 호출하지 않도록 설정 (Tick 비활성화)
@@ -14,6 +17,7 @@ ACBBaseCharacter::ACBBaseCharacter()
 
 	// 네트워크 복제 활성화
 	bReplicates = true;
+	SetReplicateMovement(true);
 	
 	// 캐릭터의 메시가 데칼(총알 자국, 피 등)을 받지 않도록 설정
 	GetMesh()->bReceivesDecals = false;
@@ -48,6 +52,16 @@ bool ACBBaseCharacter::RequestPlayMontage(const FGameplayTag InActionTag, bool b
 	}
 
 	return CBActionComponent->RequestPlaySingleMontage(InActionTag);
+}
+
+UCBCombatComponent* ACBBaseCharacter::GetCBCombatComponent() const
+{
+	return nullptr;
+}
+
+void ACBBaseCharacter::Server_SendGameplayEvent_Implementation(FGameplayTag EventTag)
+{
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, EventTag, FGameplayEventData());
 }
 
 void ACBBaseCharacter::HandleCharacterSystemReady()

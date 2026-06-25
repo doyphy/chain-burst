@@ -3,8 +3,38 @@
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "AbilitySystem/Abilities/CBGameplayAbility.h"
 #include "Components/Combat/CBCombatComponent.h"
+#include "DataAssets/Weapon/CBWeaponData.h"
+#include "AssetManager/CBAssetManager.h"
 
 // engine
+#include "GameFramework/Character.h"
+#include "Components/SkeletalMeshComponent.h"
+
+
+void UCBCharacterLoadout::ApplyMeshToCharacter(ACharacter* InCharacter)
+{
+	// 캐릭터 유효성 검사
+	if (!InCharacter) return;
+
+	// 스켈레탈 메시 소프트 참조 유효성 검사
+	if (SkeletalMesh.IsNull()) return;
+
+	// 비동기 로드
+	UCBAssetManager::Get().LoadAssetAsync<USkeletalMesh>(SkeletalMesh, [InCharacter, this](USkeletalMesh* LoadedMesh)
+	{
+		// 로드된 메시와 캐릭터 유효성 검사
+		if (!LoadedMesh || !IsValid(InCharacter)) return;
+
+		// 캐릭터 메시 설정
+		InCharacter->GetMesh()->SetSkeletalMesh(LoadedMesh);
+
+		// 캐릭터 메시의 애니메이션 블루프린트 클래스 적용
+		if (AnimInstanceClass)
+		{
+			InCharacter->GetMesh()->SetAnimInstanceClass(AnimInstanceClass);
+		}
+	});
+}
 
 void UCBCharacterLoadout::Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
 {
@@ -23,11 +53,54 @@ void UCBCharacterLoadout::Auth_RegisterWeaponsToCombatComponent(UCBCombatCompone
 {
 	check(InCombatComponent);
 
-	// 등록할 무기가 없으면 함수 종료
-	if (!WeaponData.IsValid()) return;
+	// 소프트 참조 유효성 검사
+	if (WeaponData.IsNull())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("캐릭터 로드아웃에 등록된 무기 데이터가 유효하지 않음"));	
+		return;
+	}
 
-	// 컴뱃 컴포넌트에 무기 등록
-	InCombatComponent->Auth_RegisterWeapon(WeaponData);
+	// 무기 데이터 비동기 로드
+	UCBAssetManager::Get().LoadAssetAsync<UCBWeaponData>(WeaponData, [InCombatComponent](UCBWeaponData* LoadedWeaponData)
+	{
+		if (LoadedWeaponData && LoadedWeaponData->HasValidData())
+		{
+			InCombatComponent->Auth_RegisterWeapon(LoadedWeaponData);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("캐릭터 로드아웃의 무기 데이터 로드 실패"));
+		}
+	});
+}
+
+void UCBCharacterLoadout::Auth_ApplyEffectsToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
+{
+	// ASC 및 GE 배열 유효성 검사
+	if (InASCToGive && !StartupEffects.IsEmpty())
+	{
+		// GE 배열 순회
+		for (const auto& EffectClass : StartupEffects)
+		{
+			// 각 GE 유효성 검사
+			if (EffectClass)
+			{
+				// Context 생성
+				FGameplayEffectContextHandle EffectContext = InASCToGive->MakeEffectContext();
+				EffectContext.AddSourceObject(this);
+
+				// SpecHandle 생성
+				FGameplayEffectSpecHandle SpecHandle = InASCToGive->MakeOutgoingSpec(EffectClass, ApplyLevel, EffectContext);
+
+				// SpecHandle 유효성 검사
+				if (SpecHandle.IsValid())
+				{
+					// GE를 ASC에 적용 (자신에게 적용)
+					InASCToGive->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+				}
+			}
+		}
+	}
 }
 
 void UCBCharacterLoadout::GrantAbilities(const TArray<TSubclassOf<UCBGameplayAbility>>& InAbilitiesToGive,

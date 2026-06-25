@@ -28,9 +28,9 @@ void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	}
 
 	// 기존에 적용된 '이동 오버라이드' GE가 있다면 먼저 제거.
-	// Shared.Status.Movement.Overridden 태그를 가진 모든 GE를 찾아서 제거.
+	// Status.Movement.Overridden 태그를 가진 모든 GE를 찾아서 제거.
 	FGameplayTagContainer CleanUpContainer;
-	CleanUpContainer.AddTag(CBGameplayTags::Shared_Status_Movement_Overridden);
+	CleanUpContainer.AddTag(CBGameplayTags::Status_Movement_Overridden);
 	ASC->RemoveActiveEffectsWithGrantedTags(CleanUpContainer);
 
 	// 데이터 에셋에서 태그에 맞는 속도 값 가져오기
@@ -42,7 +42,7 @@ void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	{
 		// SetByCaller를 통해 데이터 설정
 		SpecHandle.Data.Get()->SetSetByCallerMagnitude(
-			CBGameplayTags::Shared_Data_Movement_Speed, 
+			CBGameplayTags::Data_Movement_Speed, 
 			TargetSpeed
 		);
 

@@ -23,11 +23,9 @@ private:
 	float CalculateMaxAcceleration();
 	float CalculateBrakingDeceleration();
 
-	UPROPERTY(Transient)
-	TObjectPtr<UCharacterMovementComponent> CachedCMC;
+	TWeakObjectPtr<UCharacterMovementComponent> CachedCMC;
 	
-	UPROPERTY(Transient)
-	TObjectPtr<UCBAbilitySystemComponent> CachedASC;
+	TWeakObjectPtr<UCBAbilitySystemComponent> CachedASC;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Acceleration")
 	float WalkMaxAcceleration = 1000.0f;
@@ -52,7 +50,7 @@ protected:
 	 * @param OutCMC 캐싱된 CMC 포인터를 참조로 전달. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
 	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환
 	 */
-	bool GetCachedCMC(TObjectPtr<UCharacterMovementComponent>& OutCMC);
+	bool GetCachedCMC(TWeakObjectPtr<UCharacterMovementComponent>& OutCMC);
 
 	/**
 	 * CBLocomotionProcessor 전용 내부 헬퍼 함수. ASC 를 지연 캐싱해서 가져오는 함수.
@@ -61,14 +59,5 @@ protected:
 	FORCEINLINE UCBAbilitySystemComponent* GetASC() { 
 		UCBAbilitySystemLibrary::GetCBCachedASC(GetOwner(), CachedASC); 
 		return CachedASC.Get(); 
-	}
-
-	/**
-	 * CBLocomotionProcessor 전용 내부 헬퍼 함수. CMC 를 지연 캐싱해서 가져오는 함수.
-	 * @return CMC 를 지연 캐싱해서 가져오는 함수. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
-	 */
-	FORCEINLINE UCharacterMovementComponent* GetCMC() { 
-		GetCachedCMC(CachedCMC); 
-		return CachedCMC.Get(); 
 	}
 };

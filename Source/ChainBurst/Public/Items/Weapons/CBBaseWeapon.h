@@ -22,6 +22,12 @@ public:
 	
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION(Server, Reliable)
+	void Server_AttachToHand(USceneComponent* TargetMesh);
+
+	UFUNCTION(Server, Reliable)
+	void Server_AttachToSheath(USceneComponent* TargetMesh);
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Weapon|Components")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -59,14 +65,14 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config", meta = (EditCondition = "bRequiresSheathSocketAttachment", EditConditionHides))
 	FName SheathSocketOverride = NAME_None;
 
-	/** 무기 장착 몽타주 **/
+	/** 무기의 뿌리 소켓 이름 (트레이스에 사용) */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config")
-	TObjectPtr<UAnimMontage> EquipMontage = nullptr;
+	FName WeaponRootSocketName = FName("WeaponRoot");
 
-	/** 무기 해제 몽타주 **/
+	/** 무기의 끝 소켓 이름 (트레이스에 사용) */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config")
-	TObjectPtr<UAnimMontage> UnequipMontage = nullptr;
-	
+	FName WeaponTipSocketName = FName("WeaponTip");
+
 public:
 	/** [전투 상태] 무기를 손에 부착하는 함수 */
 	void AttachToHand(USceneComponent* TargetMesh);
@@ -74,9 +80,11 @@ public:
 	/** [비전투 상태] 무기를 칼집에 부착하는 함수 */
 	void AttachToSheath(USceneComponent* TargetMesh);
 
-	TObjectPtr<UAnimMontage> GetEquipMontage() const { return EquipMontage; }
-	
-	TObjectPtr<UAnimMontage> GetUnequipMontage() const { return UnequipMontage; }
+	/** 무기 뿌리(소켓) 위치를 가져오는 함수 (트레이스에 사용) */
+	FVector GetWeaponRootLocation() const;
+
+	/** 무기 끝(소켓) 위치를 가져오는 함수 (트레이스에 사용) */
+	FVector GetWeaponTipLocation() const;
 	
 #if WITH_EDITOR
 	/** 에디터에서 속성 변경 시 호출되는 함수 */

@@ -36,6 +36,42 @@ void ACBBaseWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACBBaseWeapon, bIsEquipped);
 }
 
+void ACBBaseWeapon::Server_AttachToSheath_Implementation(USceneComponent* TargetMesh)
+{
+	if (!bRequiresSheathSocketAttachment)
+	{
+		AttachToHand(TargetMesh);
+		return;
+	}
+
+	if (!TargetMesh) return;
+
+	// 이미 장착된 상태면 무시 (비전투 상태면)
+	if (!bIsEquipped) return;
+	bIsEquipped = false;
+	
+	// 부착 규칙 (위치/회전/크기 Snap)
+	FAttachmentTransformRules AttachRules(EAttachmentRule::SnapToTarget, true);
+
+	// 무기 부착
+	AttachToComponent(TargetMesh, AttachRules, SheathSocketOverride);
+}
+
+void ACBBaseWeapon::Server_AttachToHand_Implementation(USceneComponent* TargetMesh)
+{
+	if (!TargetMesh) return;
+
+	// 이미 장착된 상태면 무시 (전투 상태면)
+	if (bIsEquipped) return;
+	bIsEquipped = true;
+	
+	// 부착 규칙 (위치/회전/크기 Snap)
+	FAttachmentTransformRules AttachRules(EAttachmentRule::SnapToTarget, true);
+
+	// 무기 부착
+	AttachToComponent(TargetMesh, AttachRules, CombatSocketOverride);
+}
+
 void ACBBaseWeapon::AttachToHand(USceneComponent* TargetMesh)
 {
 	if (!TargetMesh) return;
@@ -49,6 +85,12 @@ void ACBBaseWeapon::AttachToHand(USceneComponent* TargetMesh)
 
 	// 무기 부착
 	AttachToComponent(TargetMesh, AttachRules, CombatSocketOverride);
+
+	// 클라이언트의 내 캐릭터일 경우 서버로 부착 요청
+	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
+	{
+		Server_AttachToHand(TargetMesh);
+	}
 }
 
 void ACBBaseWeapon::AttachToSheath(USceneComponent* TargetMesh)
@@ -70,6 +112,36 @@ void ACBBaseWeapon::AttachToSheath(USceneComponent* TargetMesh)
 
 	// 무기 부착
 	AttachToComponent(TargetMesh, AttachRules, SheathSocketOverride);
+
+	// 클라이언트의 내 캐릭터일 경우 서버로 부착 요청
+	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
+	{
+		Server_AttachToSheath(TargetMesh);
+	}
+}
+
+FVector ACBBaseWeapon::GetWeaponRootLocation() const
+{
+	if (WeaponMesh)
+	{
+		// 소켓 위치(World Space) 가져오기
+		return WeaponMesh->GetSocketLocation(WeaponRootSocketName);
+	}
+    
+	// 만약 메시가 없으면 액터의 중심 위치를 반환 (안전장치)
+	return GetActorLocation(); 
+}
+
+FVector ACBBaseWeapon::GetWeaponTipLocation() const
+{
+	if (WeaponMesh)
+	{
+		// 소켓 위치(World Space) 가져오기
+		return WeaponMesh->GetSocketLocation(WeaponTipSocketName);
+	}
+    
+	// 만약 메시가 없으면 액터의 중심 위치를 반환 (안전장치)
+	return GetActorLocation(); 
 }
 
 void ACBBaseWeapon::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)

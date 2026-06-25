@@ -2,13 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "AnimInstances/CBBaseAnimInstance.h"
-#include "PoseSearch/PoseSearchLibrary.h"
 #include "GameplayTagContainer.h"
 #include "CBCharacterAnimInstance.generated.h"
 
 class ACBBaseCharacter;
 class UCharacterMovementComponent;
 class UCBCharacterTrajectoryComponent;
+class UCBActionMontageData;
 
 UENUM(BlueprintType)
 enum class ECBLocomotionState : uint8
@@ -47,38 +47,44 @@ protected:
 	void UpdateCombatAndAbilityData();
 	
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "References")
-	TObjectPtr<ACBBaseCharacter> CachedCharacter = nullptr;
+	TWeakObjectPtr<ACBBaseCharacter> CachedCharacter = nullptr;
 	
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "References")
-	TObjectPtr<UCharacterMovementComponent> CachedCMC = nullptr;
+	TWeakObjectPtr<UCharacterMovementComponent> CachedCMC = nullptr;
 	
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "References")
-	TObjectPtr<UCBCharacterTrajectoryComponent> CachedTrajectoryComp = nullptr;
+	TWeakObjectPtr<UCBCharacterTrajectoryComponent> CachedTrajectoryComp = nullptr;
 	
 	/**
 	 * CachedCharacter 를 지연 캐싱해서 가져오는 함수.
 	 * @param OutCharacter 캐싱된 캐릭터 포인터를 참조로 전달. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
 	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
 	 */
-	bool GetCachedCharacter(TObjectPtr<ACBBaseCharacter>& OutCharacter);
+	bool GetCachedCharacter(TWeakObjectPtr<ACBBaseCharacter>& OutCharacter);
 
 	/**
 	 * CMC 를 지연 캐싱해서 가져오는 함수.
 	 * @param OutCMC 캐싱된 CharacterMovementComponent 포인터를 참조로 전달. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
 	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
 	 */
-	bool GetCachedCMC(TObjectPtr<UCharacterMovementComponent>& OutCMC);
+	bool GetCachedCMC(TWeakObjectPtr<UCharacterMovementComponent>& OutCMC);
 
 	/**
 	 * CachedTrajectoryComp 를 지연 캐싱해서 가져오는 함수.
 	 * @param OutTrajectoryComp 캐싱된 UCBCharacterTrajectoryComponent 포인터를 참조로 전달. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
 	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
 	 */
-	bool GetCachedTrajectoryComp(TObjectPtr<UCBCharacterTrajectoryComponent>& OutTrajectoryComp);
+	bool GetCachedTrajectoryComp(TWeakObjectPtr<UCBCharacterTrajectoryComponent>& OutTrajectoryComp);
 	
 public:
 	/** 입력 잠금 (피벗 시 일정 시간동안 입력 잠금하기 위함) */
 	bool IsInputLocked() const;
+
+	/**
+	 * 몽타주 재생하는 함수.
+	 * @param MontageToPlay 재생할 몽타주. 액션 컴포넌트에서 태그로 몽타주 검색 후 전달할거임.
+	 */
+	void PlayMontage(UAnimMontage* InMontage);
 	
 	// ==========================================
 	// 워커 스레드에서 계산할 함수 (외부에서 호출 가능)
@@ -96,11 +102,11 @@ public:
 	bool IsStopping() const;
 
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
-	float GetInputX() const { return InputX; }
+	float GetMoveX() const { return MoveX; }
 
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
-	float GetInputY() const { return InputY; }
-
+	float GetMoveY() const { return MoveY; }
+	
 protected:
 	/** 전투 태그 변경 시 호출되는 콜백 함수 */
 	void OnCombatTagChanged(const FGameplayTag InTag, int32 InCount);
@@ -113,6 +119,7 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, Category = "AnimData|LocomotionData")
 	float PivotLockDuration = 0.3f; // 피벗 감지 후 입력 차단 유지 시간
+
 	
 	// ==========================================
 	// 게임 스레드 변수 (원본에서 가져올 데이터)
@@ -128,15 +135,15 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "AnimData|Cached")
 	FRotator CachedActorRotation = FRotator::ZeroRotator;
-
+	
 	// ==========================================
 	// 워커 스레드 변수 (계산에 사용할 데이터, 복사본)
 	// ==========================================
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
-	float InputX = 0.f;
+	float MoveX = 0.f;
 
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
-	float InputY = 0.f;
+	float MoveY = 0.f;
 	
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|LocomotionData")
 	float CurrentAccelerationSize = 0.f;

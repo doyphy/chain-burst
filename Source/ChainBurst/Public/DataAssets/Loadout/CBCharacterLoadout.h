@@ -2,33 +2,41 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "Types/CBStructTypes.h"
 #include "CBCharacterLoadout.generated.h"
 
 class UCBGameplayAbility;
 class UCBAbilitySystemComponent;
 class UCBCombatComponent;
+class UGameplayEffect;
+class UCBWeaponData;
 
 /**
- * 캐릭터(추격자,무법자)의 공통 데이터
+ * 캐릭터의 공통 데이터
  */
 UCLASS()
-class CHAINBURST_API UCBCharacterLoadout : public UDataAsset
+class CHAINBURST_API UCBCharacterLoadout : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
+
 public:
+	/** [공용] 스켈레탈 메쉬와 애니메이션 블루프린트를 캐릭터에 적용하는 함수 */
+	void ApplyMeshToCharacter(ACharacter* InCharacter);
+
 	/** [서버 전용] 어빌리티 시스템 컴포넌트에 어빌리티를 부여하는 함수 */
 	virtual void Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
 
 	/** [서버 전용] 컴뱃 컴포넌트에 무기를 등록하는 함수 */
 	virtual void Auth_RegisterWeaponsToCombatComponent(UCBCombatComponent* InCombatComponent);
+
+	/** [서버 전용] 어빌리티 시스템 컴포넌트에 이펙트를 적용하는 함수 */
+	virtual void Auth_ApplyEffectsToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
 	
 protected:
 	// =========================================================
 	// 무기 데이터 (Weapons) - 캐릭터에 등록할 무기
 	// =========================================================
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout", meta = (TitleProperty = "WeaponTag"))
-	FCBWeaponData WeaponData;
+	TSoftObjectPtr<UCBWeaponData> WeaponData;
 	
 	// =========================================================
 	// 어빌리티 (Abilities) - 역할에 따라 명확히 구분
@@ -61,14 +69,20 @@ protected:
 	// =========================================================
 
 	/** 캐릭터의 외형 (스켈레탈 메쉬) */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals")
+	TSoftObjectPtr<USkeletalMesh> SkeletalMesh;
 
 	/** 사용할 애니메이션 블루프린트 클래스 */
-	
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals")
+	TSubclassOf<UAnimInstance> AnimInstanceClass;
+
 	// =========================================================
 	// 기본 스탯 (Stats & Attributes)
 	// =========================================================
 
 	/** 스탯 초기화를 위한 GameplayEffect (GE_InitStats) */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout")
+	TArray<TSubclassOf<UGameplayEffect>> StartupEffects;
 	
 	// =========================================================
 	// 식별자 (Identity)
@@ -79,4 +93,6 @@ protected:
 protected:
 	/** 전달받은 어빌리티 배열을 어빌리티 시스템 컴포넌트에 부여하는 내부 함수 */
 	void GrantAbilities(const TArray<TSubclassOf<UCBGameplayAbility>>& InAbilitiesToGive, UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
+
+	/** 어빌리티 시스템 컴포넌트에 이펙트 적용하는 함수 */
 };

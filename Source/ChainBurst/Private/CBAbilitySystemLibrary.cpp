@@ -39,10 +39,10 @@ UCBAbilitySystemComponent* UCBAbilitySystemLibrary::GetSafeCBASC(const AActor* I
 	return CBASC;
 }
 
-bool UCBAbilitySystemLibrary::GetCBCachedASC(const AActor* InActor, TObjectPtr<UCBAbilitySystemComponent>& OutASC)
+bool UCBAbilitySystemLibrary::GetCBCachedASC(const AActor* InActor, TWeakObjectPtr<UCBAbilitySystemComponent>& OutASC)
 {
 	// 이미 캐싱된 포인터가 유효한지 확인
-	if (OutASC)
+	if (OutASC.IsValid())
 	{
 		return true;
 	}
@@ -59,7 +59,7 @@ bool UCBAbilitySystemLibrary::GetCBCachedASC(const AActor* InActor, TObjectPtr<U
 		OutASC = Cast<UCBAbilitySystemComponent>(GetASC(InActor));
 	}
 	
-	return (OutASC != nullptr);
+	return OutASC.IsValid();
 }
 
 FActiveGameplayEffectHandle UCBAbilitySystemLibrary::NativeApplyEffectSpecHandleToTarget(AActor* TargetActor,
@@ -166,5 +166,5 @@ void UCBAbilitySystemLibrary::DrawTagDebugMessage(const AActor* InActor, const F
 
 bool UCBAbilitySystemLibrary::IsCombatMode(const AActor* InActor)
 {
-	return HasGameplayTag(InActor, CBGameplayTags::Shared_Status_Combat_InCombat);
+	return HasGameplayTag(InActor, CBGameplayTags::Status_Combat_InCombat);
 }

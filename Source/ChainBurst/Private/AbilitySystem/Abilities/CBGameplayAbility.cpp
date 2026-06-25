@@ -85,3 +85,12 @@ UCBAbilitySystemComponent* UCBGameplayAbility::GetCBAbilitySystemComponentFromAc
 {
 	return Cast<UCBAbilitySystemComponent>(CurrentActorInfo->AbilitySystemComponent);
 }
+
+UCBActionComponent* UCBGameplayAbility::GetCBActionComponentFromActorInfo() const
+{
+	if (ACBBaseCharacter* BaseChar = Cast<ACBBaseCharacter>(GetAvatarActorFromActorInfo()))
+	{
+		return BaseChar->GetCBActionComponent();
+	}
+	return nullptr;
+}

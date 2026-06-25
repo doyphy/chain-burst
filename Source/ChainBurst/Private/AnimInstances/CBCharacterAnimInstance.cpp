@@ -8,6 +8,7 @@
 
 // engine
 #include "GameFramework/CharacterMovementComponent.h"
+#include "PoseSearch/PoseSearchLibrary.h"
 
 void UCBCharacterAnimInstance::NativeInitializeAnimation()
 {
@@ -15,7 +16,7 @@ void UCBCharacterAnimInstance::NativeInitializeAnimation()
 
 	if (GetCachedCharacter(CachedCharacter))
 	{
-		if (CachedCharacter->bIsCharacterSystemReady)
+		if (CachedCharacter.Get()->bIsCharacterSystemReady)
 		{
 			// 이미 시스템이 준비된 상태라면 즉시 초기화 함수 실행
 			this->OnCharacterSystemReady();
@@ -23,7 +24,7 @@ void UCBCharacterAnimInstance::NativeInitializeAnimation()
 		else
 		{
 			// 캐릭터 시스템 준비 완료 델리게이트에 바인딩
-			CachedCharacter->OnCharacterSystemReadyDelegate.AddUObject(this, &ThisClass::OnCharacterSystemReady);
+			CachedCharacter.Get()->OnCharacterSystemReadyDelegate.AddUObject(this, &ThisClass::OnCharacterSystemReady);
 		}
 	}
 }
@@ -85,22 +86,22 @@ void UCBCharacterAnimInstance::NativeThreadSafeUpdateAnimation(float DeltaSecond
 	// Input [X] -> LocalVelocity [Y]
 	// Input [Y] -> LocalVelocity [X]
 	// 블렌드 스페이스의 X축이 캐릭터 좌우, Y축이 캐릭터 앞뒤에 매핑되어 있기 때문
-	InputX = FMath::FInterpTo(InputX, LocalVelocity.Y, DeltaSeconds, 10.f);
-	InputY = FMath::FInterpTo(InputY, LocalVelocity.X, DeltaSeconds, 10.f);
+	MoveX = FMath::FInterpTo(MoveX, LocalVelocity.Y, DeltaSeconds, 10.f);
+	MoveY = FMath::FInterpTo(MoveY, LocalVelocity.X, DeltaSeconds, 10.f);
 }
 
 void UCBCharacterAnimInstance::UpdateBasicMovementData()
 {
 	if (GetCachedCharacter(CachedCharacter) && GetCachedCMC(CachedCMC))
 	{
-		CachedVelocity = CachedCharacter->GetVelocity();
-		CachedAcceleration = CachedCMC->GetCurrentAcceleration();
-		CachedActorRotation = CachedCharacter->GetActorRotation();
+		CachedVelocity = CachedCharacter.Get()->GetVelocity();
+		CachedAcceleration = CachedCMC.Get()->GetCurrentAcceleration();
+		CachedActorRotation = CachedCharacter.Get()->GetActorRotation();
 	}
 	
 	if (GetCachedTrajectoryComp(CachedTrajectoryComp))
 	{
-		UPoseSearchTrajectoryLibrary::GetTrajectoryVelocity(CachedTrajectoryComp->GetTrajectory(), 0.3, 0.5, CachedFutureVelocity, false);
+		UPoseSearchTrajectoryLibrary::GetTrajectoryVelocity(CachedTrajectoryComp.Get()->GetTrajectory(), 0.3, 0.5, CachedFutureVelocity, false);
 	}
 }
 
@@ -108,15 +109,15 @@ void UCBCharacterAnimInstance::UpdateCombatAndAbilityData()
 {
 	if (!GetCachedCharacter(CachedCharacter)) return;
 	
-	UCBAbilitySystemComponent* ASC = CachedCharacter->GetCBAbilitySystemComponent();
+	UCBAbilitySystemComponent* ASC = CachedCharacter.Get()->GetCBAbilitySystemComponent();
 	
 	if (ASC)
 	{
-		if (ASC->HasMatchingGameplayTag(CBGameplayTags::Shared_Movement_Sprint))
+		if (ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
 		{
 			CurrentLocomotionGait = ECBLocomotionGait::Sprint;
 		}
-		else if (ASC->HasMatchingGameplayTag(CBGameplayTags::Shared_Movement_Walk))
+		else if (ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Walk))
 		{
 			CurrentLocomotionGait = ECBLocomotionGait::Walk;
 		}
@@ -128,10 +129,10 @@ void UCBCharacterAnimInstance::UpdateCombatAndAbilityData()
 	}
 }
 
-bool UCBCharacterAnimInstance::GetCachedCharacter(TObjectPtr<ACBBaseCharacter>& OutCharacter)
+bool UCBCharacterAnimInstance::GetCachedCharacter(TWeakObjectPtr<ACBBaseCharacter>& OutCharacter)
 {
 	// 캐싱된 Character가 이미 존재하면 그대로 반환
-	if (OutCharacter)
+	if (OutCharacter.IsValid())
 	{
 		return true;
 	}
@@ -139,13 +140,13 @@ bool UCBCharacterAnimInstance::GetCachedCharacter(TObjectPtr<ACBBaseCharacter>& 
 	// 유효하지 않다면 캐싱 시도
 	OutCharacter = Cast<ACBBaseCharacter>(TryGetPawnOwner());
 	
-	return (OutCharacter != nullptr);
+	return OutCharacter.IsValid();
 }
 
-bool UCBCharacterAnimInstance::GetCachedCMC(TObjectPtr<UCharacterMovementComponent>& OutCMC)
+bool UCBCharacterAnimInstance::GetCachedCMC(TWeakObjectPtr<UCharacterMovementComponent>& OutCMC)
 {
 	// 캐싱된 CMC가 이미 존재하면 그대로 반환
-	if (OutCMC)
+	if (OutCMC.IsValid())
 	{
 		return true;
 	}
@@ -153,16 +154,16 @@ bool UCBCharacterAnimInstance::GetCachedCMC(TObjectPtr<UCharacterMovementCompone
 	// 유효하지 않다면 캐싱 시도
 	if (GetCachedCharacter(CachedCharacter))
 	{
-		OutCMC = CachedCharacter->GetCharacterMovement();
+		OutCMC = CachedCharacter.Get()->GetCharacterMovement();
 	}
 	
-	return (OutCMC != nullptr);
+	return OutCMC.IsValid();
 }
 
-bool UCBCharacterAnimInstance::GetCachedTrajectoryComp(TObjectPtr<UCBCharacterTrajectoryComponent>& OutTrajectoryComp)
+bool UCBCharacterAnimInstance::GetCachedTrajectoryComp(TWeakObjectPtr<UCBCharacterTrajectoryComponent>& OutTrajectoryComp)
 {
 	// 캐싱된 CMC가 이미 존재하면 그대로 반환
-	if (OutTrajectoryComp)
+	if (OutTrajectoryComp.IsValid())
 	{
 		return true;
 	}
@@ -170,10 +171,10 @@ bool UCBCharacterAnimInstance::GetCachedTrajectoryComp(TObjectPtr<UCBCharacterTr
 	// 유효하지 않다면 캐싱 시도
 	if (GetCachedCharacter(CachedCharacter))
 	{
-		OutTrajectoryComp = CachedCharacter->GetCBTrajectoryComponent();
+		OutTrajectoryComp = CachedCharacter.Get()->GetCBTrajectoryComponent();
 	}
 	
-	return (OutTrajectoryComp != nullptr);
+	return OutTrajectoryComp.IsValid();
 }
 
 bool UCBCharacterAnimInstance::IsStarting() const
@@ -218,6 +219,13 @@ bool UCBCharacterAnimInstance::IsInputLocked() const
 	return bIsPivoting || PivotLockTimer > 0.f;
 }
 
+void UCBCharacterAnimInstance::PlayMontage(UAnimMontage* InMontage)
+{
+	if (!InMontage) return;
+
+	Montage_Play(InMontage);
+}
+
 void UCBCharacterAnimInstance::OnCombatTagChanged(const FGameplayTag InTag, int32 InCount)
 {
 	bIsCombatMode = (InCount > 0);
@@ -228,7 +236,7 @@ void UCBCharacterAnimInstance::OnCharacterSystemReady()
 	// 델리게이트 구독 해제 (중복 실행 방지)
 	if (GetCachedCharacter(CachedCharacter))
 	{
-		CachedCharacter->OnCharacterSystemReadyDelegate.RemoveAll(this);
+		CachedCharacter.Get()->OnCharacterSystemReadyDelegate.RemoveAll(this);
 	}
 
 	// 애니메이션 데이터 초기화 (ASC 준비 완료)
@@ -244,11 +252,11 @@ void UCBCharacterAnimInstance::InitAnimData()
 	}
 	
 	// 초기 값 설정
-	if (auto* MoveData = CachedCharacter->GetMovementDataAsset())
+	if (auto* MoveData = CachedCharacter.Get()->GetMovementDataAsset())
 	{
-		WalkMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Shared_Movement_Walk);
-		RunMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Shared_Movement_Run);
-		SprintMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Shared_Movement_Sprint);
+		WalkMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Movement_Walk);
+		RunMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Movement_Run);
+		SprintMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Movement_Sprint);
 	}
 
 	// 델리게이트 설정
@@ -256,7 +264,7 @@ void UCBCharacterAnimInstance::InitAnimData()
 	{
 		// 전투 모드 태그 변경 시 OnCombatTagChanged 함수 호출
 		ASC->RegisterGameplayTagEvent(
-			CBGameplayTags::Shared_Status_Combat_InCombat,
+			CBGameplayTags::Status_Combat_InCombat,
 			EGameplayTagEventType::NewOrRemoved)
 		.AddUObject(this, &UCBCharacterAnimInstance::OnCombatTagChanged);
 		

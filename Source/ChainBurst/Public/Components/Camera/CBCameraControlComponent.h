@@ -50,7 +50,7 @@ public:
 	
 protected:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Camera|References")
-	TObjectPtr<ACBChaserCharacter> CachedCharacter;
+	TWeakObjectPtr<ACBChaserCharacter> CachedCharacter;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera|Components")
 	TObjectPtr<USpringArmComponent> SpringArm;
@@ -81,7 +81,7 @@ protected:
 	 * @param OutCharacter 캐싱된 캐릭터 포인터를 참조로 전달. 이미 유효한 포인터가 있으면 그대로 반환, 그렇지 않으면 캐싱 시도 후 반환.
 	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
 	 */
-	bool GetCachedCharacter(TObjectPtr<ACBChaserCharacter>& OutCharacter);
+	bool GetCachedCharacter(TWeakObjectPtr<ACBChaserCharacter>& OutCharacter);
 	
 private:
 	FVector DefaultSocketOffset = FVector(0.f, 0.f, 0.f);

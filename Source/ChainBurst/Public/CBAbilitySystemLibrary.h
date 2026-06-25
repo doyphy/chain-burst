@@ -48,7 +48,7 @@ public:
 	 * @param OutASC 캐싱할 포인터 변수 (참조)
 	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환.
 	 */
-	static bool GetCBCachedASC(const AActor* InActor, TObjectPtr<UCBAbilitySystemComponent>& OutASC);
+	static bool GetCBCachedASC(const AActor* InActor, TWeakObjectPtr<UCBAbilitySystemComponent>& OutASC);
 	
 	/**
 	 * 타겟 액터에게 이펙트 적용하는 함수 (C++ 전용)
@@ -95,7 +95,10 @@ public:
 	 */
 	static void DrawTagDebugMessage(const AActor* InActor, const FGameplayTag& InTag);
 	
-private:
-	/** InActor 로부터 ASC 를 안전하게 가져오는 내부 헬퍼 함수 */
+	/**
+	 * 액터로부터 ASC 를 가져오는 함수 (C++ 전용)
+	 * @param InActor ASC를 가져올 액터
+	 * @return ASC 반환. 실패 시 nullptr 반환.
+	 */
 	static UAbilitySystemComponent* GetASC(const AActor* InActor);
 };

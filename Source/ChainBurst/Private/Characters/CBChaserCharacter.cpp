@@ -9,8 +9,7 @@
 #include "Components/Movement/CBCharacterRotationComponent.h"
 #include "AnimInstances/CBCharacterAnimInstance.h"
 #include "PlayerState/CBPlayerState.h"
-#include "DataAssets/Movement/CBCharacterMovementData.h"
-#include "AbilitySystem/CBAttributeSet.h"
+#include "AssetManager/CBAssetManager.h"
 
 // engine
 #include "Components/CapsuleComponent.h"
@@ -19,8 +18,6 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
-#include "Engine/AssetManager.h"
-#include "Engine/StreamableManager.h"
 
 
 ACBChaserCharacter::ACBChaserCharacter()
@@ -54,8 +51,9 @@ ACBChaserCharacter::ACBChaserCharacter()
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	// 캐릭터 회전 속도 설정 (Yaw 기준)
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
-	
-	// CBCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CBChaserCombatComponent"));
+
+	// 컴포넌트 생성
+	ChaserCombatComponent = CreateDefaultSubobject<UCBChaserCombatComponent>(TEXT("CBChaserCombatComponent"));
 	CBCameraControlComponent = CreateDefaultSubobject<UCBCameraControlComponent>(TEXT("CBCameraControlComponent"));
 	CBCharacterRotationComponent = CreateDefaultSubobject<UCBCharacterRotationComponent>(TEXT("CBCharacterRotationComponent"));
 }
@@ -96,6 +94,7 @@ void ACBChaserCharacter::PostInitializeComponents()
 	}
 }
 
+// [공용] 게임 시작 시 호출되는 함수. BeginPlay()는 액터가 게임 세계에 스폰되고 초기화된 후에 한 번만 호출됨.
 void ACBChaserCharacter::BeginPlay()
 {
 	Super::BeginPlay();
@@ -137,6 +136,9 @@ void ACBChaserCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 
 void ACBChaserCharacter::Input_Move(const FInputActionValue& InputActionValue)
 {
+	// 입력 잠금	여부 확인
+	if (bIsInputLocked) return;
+
 	// 피벗 중이면 이동 입력 무시
 	// if (GetCachedAnimInstance(CachedAnimInstance) && CachedAnimInstance->IsInputLocked()) return;
 	
@@ -248,46 +250,33 @@ void ACBChaserCharacter::InitializePlayerSystem()
 
 	// 캐릭터 시스템이 완료되었음을 알림.
 	HandleCharacterSystemReady();
+
+	// 입력 잠금 해제
+	bIsInputLocked = false;
 }
 
 void ACBChaserCharacter::Auth_InitServerData()
 {
-	// 어트리뷰트 초기화
-	Auth_InitializeAttributes();
-	
 	// CharacterLoadout 가져오기 및 유효성 검사
-	ensureMsgf(!CharacterLoadout.IsNull(), TEXT("%s 의 CharacterLoadout 유효하지 않음."), *GetName());
-	
-	// CharacterLoadout 가 유효한 소프트 레퍼런스(SoftObjectPtr)인지 확인
-	if (!CharacterLoadout.IsNull())
+	ensureMsgf(!ChaserLoadout.IsNull(), TEXT("%s 의 CharacterLoadout 유효하지 않음."), *GetName());
+
+	// 비동기 로드
+	UCBAssetManager::Get().LoadAssetAsync<UCBCharacterLoadout>(ChaserLoadout, [this](UCBCharacterLoadout* LoadedLoadout)
 	{
-		// 이미 로드되어 있다면 즉시 사용
-		if (CharacterLoadout.IsValid() && CBASC && CBCombatComponent)
+		if (LoadedLoadout)
 		{
 			// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
-			CharacterLoadout->Auth_GrantAbilitiesToASC(CBASC);
+			LoadedLoadout->Auth_GrantAbilitiesToASC(CBASC);
 			// 로드아웃에 있는 무기 컴뱃 컴포넌트에 등록
-			CharacterLoadout->Auth_RegisterWeaponsToCombatComponent(CBCombatComponent);
+			LoadedLoadout->Auth_RegisterWeaponsToCombatComponent(ChaserCombatComponent);
+			// 로드아웃에 있는 이펙트 모두 어빌리티 시스템에 적용
+			LoadedLoadout->Auth_ApplyEffectsToASC(CBASC);
 		}
 		else
 		{
-			// 비동기 로드 요청
-			// 로드가 완료되기 전에 먼저 어빌리티를 활성화해도 문제 없음 (TryAbility).
-			UAssetManager::GetStreamableManager().RequestAsyncLoad(
-				CharacterLoadout.ToSoftObjectPath(),
-				FStreamableDelegate::CreateWeakLambda(this, [this]()
-				{
-					if (CharacterLoadout.IsValid() && CBASC && CBCombatComponent)
-					{
-						// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
-						CharacterLoadout->Auth_GrantAbilitiesToASC(CBASC);
-						// 로드아웃에 있는 무기 컴뱃 컴포넌트에 등록
-						CharacterLoadout->Auth_RegisterWeaponsToCombatComponent(CBCombatComponent);
-					}
-				})
-			);
+			UE_LOG(LogTemp, Warning, TEXT("%s 의 캐릭터 로드아웃 로드 실패"), *GetName());
 		}
-	}
+	});
 }
 
 void ACBChaserCharacter::Local_InitClientData()
@@ -295,56 +284,7 @@ void ACBChaserCharacter::Local_InitClientData()
 	// 로컬 전용 초기화 로직 (예: 카메라 설정, 입력 설정 등)
 }
 
-/**
- * [서버 전용] 캐릭터의 어트리뷰트를 초기화하는 함수.
- * PossessedBy() 함수에서 호출.
- */
-void ACBChaserCharacter::Auth_InitializeAttributes()
+UCBCombatComponent* ACBChaserCharacter::GetCBCombatComponent() const
 {
-	if (!CBAttributeSet) return;
-	
-	if (MovementDataAsset)
-	{
-		// 기본 상태(Run) 속도 가져오기
-		float InitialSpeed = MovementDataAsset->GetSpeedForTag(CBGameplayTags::Shared_Movement_Run);
-
-		// 어트리뷰트 기본 값 설정
-		CBAttributeSet->InitMovementSpeed(InitialSpeed);
-		
-		// 이동속도 수동으로 값 초기화
-		if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
-		{
-			MoveComp->MaxWalkSpeed = InitialSpeed;
-		}
-
-		// 중복 방지를 위해 기존 바인딩 제거 (네트워크 재접속, 초기화 로직 재실행 등)
-		GetAbilitySystemComponent()->GetGameplayAttributeValueChangeDelegate(CBAttributeSet->GetMovementSpeedAttribute())
-			.RemoveAll(this);
-
-		// 이동 속도 변경 시 실행되는 델리게이트에 함수 바인딩
-		GetAbilitySystemComponent()->GetGameplayAttributeValueChangeDelegate(CBAttributeSet->GetMovementSpeedAttribute())
-		.AddUObject(this, &ACBChaserCharacter::OnMovementSpeedChanged);
-	}
-
-	// [TODO] 기타 속성 초기화 로직 (데이터 에셋에 Health/Mana 등 추가 후 구현)
-}
-
-/**
- * @param Data 어트리뷰트 변경 시 전달되는 데이터 구조체. NewValue 필드에 변경된 이동 속도 값이 포함되어 있음.
- * 이동 속도가 변경될 때마다 호출되는 함수. (델리게이트 함수 바인딩)
- * InitializeAttributes() 함수에서 사용
- */
-void ACBChaserCharacter::OnMovementSpeedChanged(const FOnAttributeChangeData& Data)
-{
-	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
-	{
-		// 0보다 작은 값이 들어오지 않도록 안전장치 추가
-		const float NewSpeed = FMath::Max(Data.NewValue, 0.0f);
-		MoveComp->MaxWalkSpeed = NewSpeed;
-	}
-}
-
-UCBChaserCombatComponent* ACBChaserCharacter::GetChaserCombatComponent() const
-{
-	return Cast<UCBChaserCombatComponent>(CBCombatComponent);
+	return ChaserCombatComponent.Get();
 }

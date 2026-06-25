@@ -4,6 +4,7 @@
 #include "Abilities/GameplayAbility.h"
 #include "CBGameplayAbility.generated.h"
 
+class UCBActionComponent;
 class UCBCombatComponent;
 class UCBAbilitySystemComponent;
 
@@ -51,6 +52,9 @@ protected:
 
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Ability")
 	UCBAbilitySystemComponent* GetCBAbilitySystemComponentFromActorInfo() const;
+
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Ability")
+	UCBActionComponent* GetCBActionComponentFromActorInfo() const;
 	
 protected:
 	/** 어빌리티의 활성화 정책 (기본값 : OnTrigger) */

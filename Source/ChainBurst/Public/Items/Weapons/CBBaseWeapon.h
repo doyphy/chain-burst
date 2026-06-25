@@ -64,13 +64,27 @@ protected:
 	/** 비전투 시 실제 부착될 소켓 이름 (SheathSocket 변경 시 자동 설정됨, 필요 시 수동 수정 가능) */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config", meta = (EditCondition = "bRequiresSheathSocketAttachment", EditConditionHides))
 	FName SheathSocketOverride = NAME_None;
-	
+
+	/** 무기의 뿌리 소켓 이름 (트레이스에 사용) */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config")
+	FName WeaponRootSocketName = FName("WeaponRoot");
+
+	/** 무기의 끝 소켓 이름 (트레이스에 사용) */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config")
+	FName WeaponTipSocketName = FName("WeaponTip");
+
 public:
 	/** [전투 상태] 무기를 손에 부착하는 함수 */
 	void AttachToHand(USceneComponent* TargetMesh);
 
 	/** [비전투 상태] 무기를 칼집에 부착하는 함수 */
 	void AttachToSheath(USceneComponent* TargetMesh);
+
+	/** 무기 뿌리(소켓) 위치를 가져오는 함수 (트레이스에 사용) */
+	FVector GetWeaponRootLocation() const;
+
+	/** 무기 끝(소켓) 위치를 가져오는 함수 (트레이스에 사용) */
+	FVector GetWeaponTipLocation() const;
 	
 #if WITH_EDITOR
 	/** 에디터에서 속성 변경 시 호출되는 함수 */

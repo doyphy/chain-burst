@@ -22,7 +22,6 @@ class CHAINBURST_API UCBActionComponent : public UCBExtensionComponent
 public:
 	UCBActionComponent();
 
-	
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|MontageData")
 	TObjectPtr<UCBActionMontageData> MontageData = nullptr;
@@ -58,17 +57,15 @@ public:
 	bool RequestPlayComboMontage(const FGameplayTag& InActionTag);
 
 	/** 현재 재생 중인 몽타주 강제 중단 */
-	void StopMontage(float BlendOutTime = 0.25f);
+	void StopMontage(float BlendOutTime = 0.25f, bool IsResetCombo = false);
 	
 	/** 현재 콤보 인덱스 반환 */
 	int32 GetCurrentComboIndex() const { return CurrentComboIndex; }
 
-	/** 콤보 인덱스 초기화 */
-	void ResetComboIndex();
-
 	/** 현재 액션(몽타주) 재생 시간 반환 (기본 값 5초) */
 	float GetCurrentActionDuration() const { return CurrentActionDuration > 0.f ? CurrentActionDuration : 5.f; }
-	
+
+	/** 액션 몽타주 데이터 에셋 반환 */
 	FORCEINLINE UCBActionMontageData* GetActionMontageDataAsset() const { return MontageData.Get(); }
 	
 protected:
@@ -93,4 +90,20 @@ protected:
 
 	/** 애님 인스턴스 지연 캐싱 */
 	bool GetCachedAnimInstance(TWeakObjectPtr<UCBCharacterAnimInstance>& OutAnimInstance);
+
+	/** 타이머 시작 함수 (몽타주 재생 시 호출) */
+	void StartComboResetTimer(float MontageDuration);
+
+	/** 타이머 취소 함수 (콤보가 이어지거나 강제 취소될 때 호출) */
+	void CancelComboResetTimer();
+
+	/** 콤보 초기화 함수 */
+	void ResetComboIndex();
+
+private:
+	/** 콤보 초기화 타이머에서 호출될 콜백 함수 */
+	void OnComboTimeout();
+
+	/** 콤보 초기화 타이머 핸들 */
+	FTimerHandle ComboResetTimerHandle;
 };

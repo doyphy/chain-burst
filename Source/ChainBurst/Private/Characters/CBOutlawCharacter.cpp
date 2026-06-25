@@ -4,11 +4,10 @@
 #include "AbilitySystem/CBAttributeSet.h"
 #include "DataAssets/Loadout/CBOutlawLoadout.h"
 #include "Components/Combat/CBOutlawCombatComponent.h"
+#include "AssetManager/CBAssetManager.h"
 
 // engine
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Engine/StreamableManager.h"
-#include "Engine/AssetManager.h"
 
 ACBOutlawCharacter::ACBOutlawCharacter()
 {
@@ -50,35 +49,27 @@ void ACBOutlawCharacter::PossessedBy(AController* NewController)
 
 	if (CBASC)
 	{
-		if (!OutlawLoadout.IsNull())
+		// 로드아웃 비동기 로드
+		UCBAssetManager::Get().LoadAssetAsync<UCBCharacterLoadout>(OutlawLoadout, [this](UCBCharacterLoadout* LoadedLoadout)
 		{
-			// 이미 로드되어 있다면 즉시 사용
-			if (OutlawLoadout.IsValid() && CBASC && OutlawCombatComponent)
+			if (LoadedLoadout)
 			{
-				OutlawLoadout->Auth_GrantAbilitiesToASC(CBASC);
-				OutlawLoadout->Auth_RegisterWeaponsToCombatComponent(OutlawCombatComponent);
-				OutlawLoadout->Auth_ApplyEffectsToASC(CBASC);
+				// 로드아웃에 있는 어빌리티 모두 어빌리티 시스템에 등록
+				LoadedLoadout->Auth_GrantAbilitiesToASC(CBASC);
+				// 로드아웃에 있는 무기 컴뱃 컴포넌트에 등록
+				LoadedLoadout->Auth_RegisterWeaponsToCombatComponent(OutlawCombatComponent);
+				// 로드아웃에 있는 이펙트 모두 어빌리티 시스템에 적용
+				LoadedLoadout->Auth_ApplyEffectsToASC(CBASC);
 			}
 			else
 			{
-				// 비동기 로드 요청
-				UAssetManager::GetStreamableManager().RequestAsyncLoad(
-					OutlawLoadout.ToSoftObjectPath(),
-					FStreamableDelegate::CreateWeakLambda(this, [this]()
-					{
-						if (OutlawLoadout.IsValid() && CBASC && OutlawCombatComponent)
-						{
-							OutlawLoadout->Auth_GrantAbilitiesToASC(CBASC);
-							OutlawLoadout->Auth_RegisterWeaponsToCombatComponent(OutlawCombatComponent);
-							OutlawLoadout->Auth_ApplyEffectsToASC(CBASC);
-						}
-					})
-				);
+				UE_LOG(LogTemp, Warning, TEXT("%s 의 캐릭터 로드아웃 로드 실패"), *GetName());
 			}
-		}
-		// AbilitySystemComponent에 이 캐릭터(Actor)와 소유자 정보를 초기화하여 어빌리티 시스템이 올바르게 동작하도록 설정
-		CBASC->InitAbilityActorInfo(this, this);
+		});
 	}
+	
+	// AbilitySystemComponent에 이 캐릭터(Actor)와 소유자 정보를 초기화하여 어빌리티 시스템이 올바르게 동작하도록 설정
+	CBASC->InitAbilityActorInfo(this, this);
 }
 
 UCBCombatComponent* ACBOutlawCharacter::GetCBCombatComponent() const

@@ -22,6 +22,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Ability")
 	ACBChaserController* GetChaserControllerFromActorInfo();
+
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Ability")
+	FGameplayEffectSpecHandle MakeDamageEffectSpecHandle(TSubclassOf<UGameplayEffect> EffectClass, float InDamage, FGameplayTag InAttackTag, int32 InComboCount);
 	
 private:
 	TWeakObjectPtr<ACBChaserCharacter> CachedChaserCharacter;

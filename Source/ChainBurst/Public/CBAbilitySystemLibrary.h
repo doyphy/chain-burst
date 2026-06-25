@@ -95,7 +95,10 @@ public:
 	 */
 	static void DrawTagDebugMessage(const AActor* InActor, const FGameplayTag& InTag);
 	
-private:
-	/** InActor 로부터 ASC 를 안전하게 가져오는 내부 헬퍼 함수 */
+	/**
+	 * 액터로부터 ASC 를 가져오는 함수 (C++ 전용)
+	 * @param InActor ASC를 가져올 액터
+	 * @return ASC 반환. 실패 시 nullptr 반환.
+	 */
 	static UAbilitySystemComponent* GetASC(const AActor* InActor);
 };

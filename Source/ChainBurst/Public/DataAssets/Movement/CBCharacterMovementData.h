@@ -10,13 +10,13 @@ class CHAINBURST_API UCBCharacterMovementData : public UDataAsset
 {
 	GENERATED_BODY()
 	
-public:
+protected:
 	/** 
 	 * GameplayTag에 따른 이동 속도 매핑
-	 * Key: Shared.Movement.Run -> Value: 550.0f
-	 * Key: Shared.Movement.Sprint -> Value: 700.0f
+	 * Key: Movement.Run -> Value: 550.0f
+	 * Key: Movement.Sprint -> Value: 700.0f
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement|Speeds")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement|Speeds", meta = (Categories = "Movement"))
 	TMap<FGameplayTag, float> MovementSpeedMap;
 	
 public:

@@ -28,7 +28,7 @@ void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	}
 
 	// 기존에 적용된 '이동 오버라이드' GE가 있다면 먼저 제거.
-	// Shared.Status.Movement.Overridden 태그를 가진 모든 GE를 찾아서 제거.
+	// Status.Movement.Overridden 태그를 가진 모든 GE를 찾아서 제거.
 	FGameplayTagContainer CleanUpContainer;
 	CleanUpContainer.AddTag(CBGameplayTags::Status_Movement_Overridden);
 	ASC->RemoveActiveEffectsWithGrantedTags(CleanUpContainer);

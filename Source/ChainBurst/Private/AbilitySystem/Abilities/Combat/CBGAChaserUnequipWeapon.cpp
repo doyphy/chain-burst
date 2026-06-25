@@ -1,6 +1,7 @@
 // project
 #include "AbilitySystem/Abilities/Combat/CBGAChaserUnequipWeapon.h"
 #include "Components/Combat/CBCombatComponent.h"
+#include "CBGameplayTags.h"
 
 // engine
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
@@ -20,14 +21,32 @@ void UCBGAChaserUnequipWeapon::ActivateAbility(const FGameplayAbilitySpecHandle 
 
 	if (ASC && CombatComp)
 	{
-		// 현재 비전투 상태인지 확인 (이미 비전투 상태라면 장착 해제 이벤트 대기 없이 바로 종료)
-		if (!CombatComp->IsCombatMode())
+		// 컴뱃 컴포넌트의 무기 유효성 검사 (무기 없으면 장착 해제 못함)
+		if (CombatComp->HasValidWeapon() == false)
 		{
+			EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 			return;
 		}
 		
+		// 현재 비전투 상태인지 확인 (이미 비전투 상태라면 장착 해제 이벤트 대기 없이 바로 종료)
+		if (CombatComp->IsCombatMode() == false)
+		{
+			EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+			return;
+		}
+
+		// 몽타주 재생 가능인지 확인
+		if (!bCanPlayMontage)
+		{
+			EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+			return;
+		}
+		
+		// 몽타주 재생
+		PlayActionMontage();
+		
 		// 무기 장착 해제 이벤트 대기 (애님노티파이 이벤트 수신 후 장착 해제 로직 실행)
-		FGameplayTag UnequipEventTag = FGameplayTag::RequestGameplayTag("Event.Combat.UnequipWeapon");
+		FGameplayTag UnequipEventTag = CBGameplayTags::Event_Combat_UnequipWeapon;
 		UnequipEventTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
 			this, UnequipEventTag, nullptr, true);
 		UnequipEventTask->EventReceived.AddDynamic(this, &ThisClass::OnUnequipEvent);
@@ -51,12 +70,12 @@ void UCBGAChaserUnequipWeapon::OnUnequipEvent(FGameplayEventData Payload)
 	CombatComp->SetCombatMode(false);
 	
 	// 태그 제거 (로컬 적용)
-	ASC->RemoveLooseGameplayTag(FGameplayTag::RequestGameplayTag(FName("Status.Combat.InCombat")));
+	ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
 	
 	// 서버인지 확인
 	if (GetCurrentActorInfo()->IsNetAuthority())
 	{
 		// 태그 제거 (클라이언트에 복제)
-		ASC->RemoveReplicatedLooseGameplayTag(FGameplayTag::RequestGameplayTag(FName("Status.Combat.InCombat")));
+		ASC->RemoveReplicatedLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
 	}
 }

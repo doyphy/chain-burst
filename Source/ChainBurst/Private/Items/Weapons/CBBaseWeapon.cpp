@@ -120,6 +120,30 @@ void ACBBaseWeapon::AttachToSheath(USceneComponent* TargetMesh)
 	}
 }
 
+FVector ACBBaseWeapon::GetWeaponRootLocation() const
+{
+	if (WeaponMesh)
+	{
+		// 소켓 위치(World Space) 가져오기
+		return WeaponMesh->GetSocketLocation(WeaponRootSocketName);
+	}
+    
+	// 만약 메시가 없으면 액터의 중심 위치를 반환 (안전장치)
+	return GetActorLocation(); 
+}
+
+FVector ACBBaseWeapon::GetWeaponTipLocation() const
+{
+	if (WeaponMesh)
+	{
+		// 소켓 위치(World Space) 가져오기
+		return WeaponMesh->GetSocketLocation(WeaponTipSocketName);
+	}
+    
+	// 만약 메시가 없으면 액터의 중심 위치를 반환 (안전장치)
+	return GetActorLocation(); 
+}
+
 void ACBBaseWeapon::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);

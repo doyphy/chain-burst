@@ -1,34 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameplayTagContainer.h"
 #include "Types/CBEnumTypes.h"
 #include "CBStructTypes.generated.h"
-
-class ACBBaseWeapon;
-class UAnimMontage;
-
-/**
- * 무기 데이터 구조체
- * 무기 태그, 무기 클래스, 무기 전투 타입을 포함
- * CBCombatComponent 에서 사용
- */
-USTRUCT(BlueprintType)
-struct FCBWeaponData
-{
-	GENERATED_BODY()
-
-	/** 무기 식별 태그 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	FGameplayTag WeaponTag;
-	
-	/** 무기 클래스 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	TSubclassOf<ACBBaseWeapon> WeaponClass;
-	
-	bool IsValid() const;
-};
-
 
 /**
  * 무기 타입별 소켓 부착 정보 구조체

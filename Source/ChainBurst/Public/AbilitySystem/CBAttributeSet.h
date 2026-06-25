@@ -21,23 +21,37 @@ class CHAINBURST_API UCBAttributeSet : public UAttributeSet
 	
 public:
 	/** 속성 값이 변경된 후 실행되는 함수 */
-	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
+	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 	
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, MovementSpeed)
 
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, MaxHealth)
 
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, CurrentHealth)
+
+	ATTRIBUTE_ACCESSORS(UCBAttributeSet, AttackPower)
+
+	ATTRIBUTE_ACCESSORS(UCBAttributeSet, DefensePower)
 	
-protected:
+	/** 캐릭터 시스템 준비 완료 시 캐릭터에서 호출되는 함수 (초기화 작업) */
+	void OnCharacterSystemReady();
+	
+public:
 	UPROPERTY(BlueprintReadOnly, Category = "Movement", ReplicatedUsing = OnRep_MovementSpeed)
 	FGameplayAttributeData MovementSpeed;
-	
+
 	UPROPERTY(BlueprintReadOnly, Category = "Health", ReplicatedUsing = OnRep_MaxHealth)
 	FGameplayAttributeData MaxHealth;
-	
+
 	UPROPERTY(BlueprintReadOnly, Category = "Health", ReplicatedUsing = OnRep_CurrentHealth)
 	FGameplayAttributeData CurrentHealth;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_AttackPower)
+	FGameplayAttributeData AttackPower;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_DefensePower)
+	FGameplayAttributeData DefensePower;
+	
 	
 	/** 리플리케이션 설정 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -50,4 +64,13 @@ protected:
 	
 	UFUNCTION()
 	virtual void OnRep_CurrentHealth(const FGameplayAttributeData& OldCurrentHealth);
+
+	UFUNCTION()
+	virtual void OnRep_AttackPower(const FGameplayAttributeData& OldAttackPower);
+
+	UFUNCTION()
+	virtual void OnRep_DefensePower(const FGameplayAttributeData& OldDefensePower);
+	
+	void UpdateMovementSpeed(float NewValue);
+
 };

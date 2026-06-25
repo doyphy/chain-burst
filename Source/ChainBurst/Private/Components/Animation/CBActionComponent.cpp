@@ -7,6 +7,7 @@
 
 // engine
 #include "Net/UnrealNetwork.h"
+#include "TimerManager.h"
 
 UCBActionComponent::UCBActionComponent()
 {
@@ -15,58 +16,72 @@ UCBActionComponent::UCBActionComponent()
 
 bool UCBActionComponent::RequestPlaySingleMontage(const FGameplayTag& InActionTag)
 {
+	// 태그 유효성 검사
 	if (!InActionTag.IsValid()) return false;
 
+	// 몽타주 데이터 에셋 유효성 검사
 	if (!MontageData)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[%s] MontageData 가 없음"), *GetOwner()->GetName());
 		return false;
 	}
-	
+
+	// 싱글 몽타주 가져오기
 	UAnimMontage* Montage = MontageData->FindSingleMontage(InActionTag);
 	if (!Montage) return false;
 
 	// 현재 액션 정보 업데이트
 	CurrentActionTag = InActionTag;
 	CurrentActionDuration = Montage->GetPlayLength();
-	
+
+	// 콤보 초기화
 	ResetComboIndex();
 
+	// 몽타주 재생
 	return PlayMontage(Montage);
 }
 
 bool UCBActionComponent::RequestPlayComboMontage(const FGameplayTag& InActionTag)
 {
+	// 태그 유효성 검사
 	if (!InActionTag.IsValid()) return false;
 
+	// 몽타주 데이터 에셋 유효성 검사
 	if (!MontageData)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[%s] MontageData 가 없음"), *GetOwner()->GetName());
 		return false;
 	}
 
-	// 다른 액션 태그로 전환 시 인덱스 초기화
+	// 다른 액션 태그로 전환 시 콤보 초기화
 	if (CurrentActionTag != InActionTag)
 	{
+		// 콤보 초기화 타이머 취소
+		CancelComboResetTimer();
+		// 콤보 초기화
 		ResetComboIndex();
 	}
 
-	// 인덱스가 최대 콤보 수를 초과하면 초기화
+	// 인덱스가 최대 콤보 수를 초과하면 콤보 초기화
 	const int32 ComboCount = MontageData->GetComboCount(InActionTag);
 	if (CurrentComboIndex >= ComboCount)
 	{
-		CurrentComboIndex = 0;
+		ResetComboIndex();
 	}
 	
 	// 콤보 카운트에 맞는 몽타주 찾기
 	UAnimMontage* Montage = MontageData->FindComboMontage(InActionTag, CurrentComboIndex);
 	if (!Montage) return false;
 
+	// 몽타주 재생
 	if (!PlayMontage(Montage)) return false;
 
 	// 현재 액션 정보 업데이트
 	CurrentActionTag = InActionTag;
 	CurrentActionDuration = Montage->GetPlayLength();
+
+	// 콤보 초기화 타이머 설정
+	StartComboResetTimer(CurrentActionDuration);
 	
 	// 다음 콤보 단계로 진행
 	CurrentComboIndex++;
@@ -74,18 +89,20 @@ bool UCBActionComponent::RequestPlayComboMontage(const FGameplayTag& InActionTag
 	return true;
 }
 
-void UCBActionComponent::StopMontage(float BlendOutTime)
+void UCBActionComponent::StopMontage(float BlendOutTime /* = 0.25 */, bool IsResetCombo /* = false */)
 {
 	if (GetCachedAnimInstance(CachedAnimInstance))
 	{
+		// 현재 재생중인 몽타주 중지
 		CachedAnimInstance->Montage_Stop(BlendOutTime);
 	}
-	ResetComboIndex();
-}
-
-void UCBActionComponent::ResetComboIndex()
-{
-	CurrentComboIndex = 0;
+	if (IsResetCombo)
+	{
+		// 콤보 초기화 타이머 취소
+		CancelComboResetTimer();
+		// 콤보 초기화
+		ResetComboIndex();
+	}
 }
 
 void UCBActionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -176,3 +193,42 @@ bool UCBActionComponent::GetCachedAnimInstance(TWeakObjectPtr<UCBCharacterAnimIn
 
 	return OutAnimInstance.IsValid();
 }
+
+void UCBActionComponent::StartComboResetTimer(float MontageDuration)
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	// 만약 이미 돌고 있는 콤보 타이머가 있다면 즉시 취소
+	CancelComboResetTimer();
+
+	// 타이머 설정
+	World->GetTimerManager().SetTimer(
+		ComboResetTimerHandle,		// 타이머 핸들
+		this,							// 함수가 속한 객체
+		&UCBActionComponent::OnComboTimeout, // 실행할 콜백 함수
+		MontageDuration,				// 대기 시간 (초)
+		false							// 반복 실행 여부 (false = 1번만 실행)
+	);
+}
+
+void UCBActionComponent::CancelComboResetTimer()
+{
+	UWorld* World = GetWorld();
+	if (World && ComboResetTimerHandle.IsValid())
+	{
+		// 타이머 강제 종료
+		World->GetTimerManager().ClearTimer(ComboResetTimerHandle);
+	}
+}
+
+void UCBActionComponent::ResetComboIndex()
+{
+	CurrentComboIndex = 0;
+}
+
+void UCBActionComponent::OnComboTimeout()
+{
+	ResetComboIndex();
+}
+

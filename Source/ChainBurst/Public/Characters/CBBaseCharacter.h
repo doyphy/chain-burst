@@ -30,12 +30,16 @@ public:
 
 protected:
 	/**
-	 * 자식에서 캐싱
+	 * CBASC는 자식에서 캐싱
 	 * [플레이어]는 PlayerState에서 [AI]는 Character에서 ASC와 AttributeSet을 가져오는 방식으로 구현
 	 */
 	UPROPERTY()
 	TObjectPtr<UCBAbilitySystemComponent> CBASC = nullptr;
 
+	/**
+	 * CBAttributeSet는 자식에서 캐싱
+	 * [플레이어]는 PlayerState에서 [AI]는 Character에서 ASC와 AttributeSet을 가져오는 방식으로 구현
+	 */
 	UPROPERTY()
 	TObjectPtr<UCBAttributeSet> CBAttributeSet = nullptr;
 	
@@ -63,6 +67,9 @@ public:
 	/** 캐릭터 시스템 준비 완료 여부 (중복 방지 플래그)*/
 	bool bIsCharacterSystemReady = false;
 
+	/** 캐릭터 이동 속도 변경 시 호출하는 함수 */
+	void OnMovementSpeedChanged(float NewSpeed);
+	
 	/**
 	 * 외부(어빌리티, 게임플레이 큐 등)에서 몽타주 재생을 요청하는 함수
 	 * @param InActionTag  재생할 몽타주 식별 태그
@@ -73,7 +80,7 @@ public:
 	bool RequestPlayMontage(const FGameplayTag InActionTag, bool bIsCombo = false);
 
 	UFUNCTION(Server, Reliable)
-	void Server_SendGameplayEvent(FGameplayTag EventTag);
+	void Server_SendGameplayEvent(AActor* Actor, FGameplayTag EventTag, FGameplayEventData Payload);
 
 	//~ Begin IAbilitySystemInterface Interface.
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
@@ -92,4 +99,7 @@ public:
 protected:
 	/** 통합 초기화 함수 (캐릭터 시스템이 완료되면 델리게이트를 방송) */
 	virtual void HandleCharacterSystemReady();
+
+	/** 어트리뷰트 초기화 함수 */
+	virtual void InitializeAttributes();
 };

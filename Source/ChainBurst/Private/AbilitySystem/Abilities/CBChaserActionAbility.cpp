@@ -2,6 +2,7 @@
 #include "AbilitySystem/Abilities/CBChaserActionAbility.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Animation/CBActionComponent.h"
+#include "CBGameplayTags.h"
 
 // engine
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
@@ -13,62 +14,88 @@ void UCBChaserActionAbility::ActivateAbility(const FGameplayAbilitySpecHandle Ha
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	// 액션 실행
-	ExecuteAction();
+	// 액션 컴포넌트 가져오기
+	UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo();
+
+	// 유효성 검사
+	if (!ActionComp)
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+	
+	// 액션 태그가 유효하다면 (재생할 몽타주가 있다면)
+	if (BoundActionTag.IsValid())
+	{
+		// 몽타주 재생 가능 (몽타주 재생 함수는 자식 클래스에서 호출, 재생 조건 검사 하기 위함)
+		bCanPlayMontage = true;
+
+		// 입력 상태 설정 (입력 누르면 true, 입력 떼면 false)
+		bIsInputHeld = true;
+	}
 }
 
 void UCBChaserActionAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
 	bool bReplicateEndAbility, bool bWasCancelled)
 {
-	if (UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo())
-	{
-		// 입력 델리게이트 구독 해제 (입력 감지)
-		CBASC->OnAbilityInputTagPressed.RemoveDynamic(this, &ThisClass::HandleInputPressed);
-	}
-	
+	bIsInputHeld = false;
+	bWaitingForInput = false;
+
 	UE_LOG(LogTemp, Log, TEXT("Ending Ability"));
-	
+
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 
-void UCBChaserActionAbility::ExecuteAction()
+void UCBChaserActionAbility::PlayActionMontage()
 {
-	if (UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo())
+	UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo();
+
+	// 게임플레이 큐 데이터 만들기
+	FGameplayCueParameters CueParams;
+
+	// 재생할 액션(몽타주) 태그 담기
+	CueParams.AggregatedSourceTags.AddTag(BoundActionTag);
+
+	// 액션(몽타주)의 콤보 여부 태그 담기
+	if (IsCombo)
 	{
-		// 액션 태그가 유효하다면 (재생할 몽타주가 있다면)
-		if (BoundActionGameplayCueTag.IsValid())
-		{
-			// 게임플레이 큐 실행 (몽타주 재생)
-			CBASC->ExecuteGameplayCue(BoundActionGameplayCueTag);
-
-			// 입력 가능 구간 시작 이벤트 대기 (애님노티파이 이벤트 수신 후 입력 체크 시작)
-			FGameplayTag CheckInputTag = FGameplayTag::RequestGameplayTag("Event.Action.CheckInput");
-			CheckInputTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
-				this, CheckInputTag, nullptr, true);
-			CheckInputTask->EventReceived.AddDynamic(this, &ThisClass::OnCheckInput);
-			CheckInputTask->ReadyForActivation();
-			
-			// 몽타주 끝남 이벤트 대기 (애님노티파이 이벤트 수신 후 어빌리티 종료)
-			FGameplayTag EndActionTag = FGameplayTag::RequestGameplayTag("Event.Action.EndAbility");
-			EndActionTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, EndActionTag, nullptr, true);
-			EndActionTask->EventReceived.AddDynamic(this, &UCBChaserActionAbility::OnActionEnded);
-			EndActionTask->ReadyForActivation();
-
-			// 타임 아웃 (애님노티파이 이벤트가 없는 경우, 몽타주 완전히 끝난 후 어빌리티 종료)
-			DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, CurrentActionDuration());
-			DelayTask->OnFinish.AddDynamic(this, &UCBChaserActionAbility::OnDelayFinished);
-			DelayTask->ReadyForActivation();
-		}
+		CueParams.AggregatedSourceTags.AddTag(CBGameplayTags::Context_Action_IsCombo);
 	}
+
+	// 액션 재생 게임플레이 큐 실행 (몽타주 재생)
+	CBASC->ExecuteGameplayCue(CBGameplayTags::GameplayCue_PlayAction, CueParams);
+
+	// 내 컴퓨터의 내가 조종하고 있는 캐릭터인지 확인
+	APawn* OwnerPawn = Cast<APawn>(GetAvatarActorFromActorInfo());
+	if (OwnerPawn && OwnerPawn->IsLocallyControlled())
+	{
+		// 입력 가능 구간 시작 이벤트 대기 (애님노티파이 이벤트 수신 후 입력 체크 시작)
+		FGameplayTag CheckInputTag = CBGameplayTags::Event_Action_CheckInput;
+		CheckInputTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
+			this, CheckInputTag, nullptr, true);
+		CheckInputTask->EventReceived.AddDynamic(this, &ThisClass::OnCheckInput);
+		CheckInputTask->ReadyForActivation();
+	}
+			
+	// 몽타주 끝남 이벤트 대기 (애님노티파이 이벤트 수신 후 어빌리티 종료)
+	FGameplayTag EndActionTag = CBGameplayTags::Event_Action_EndAbility;
+	EndActionTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, EndActionTag, nullptr, true);
+	EndActionTask->EventReceived.AddDynamic(this, &UCBChaserActionAbility::OnActionEnded);
+	EndActionTask->ReadyForActivation();
+	
+	// 타임 아웃 (애님노티파이 이벤트가 없는 경우, 몽타주 완전히 끝난 후 어빌리티 종료)
+	DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, CurrentActionDuration());
+	DelayTask->OnFinish.AddDynamic(this, &UCBChaserActionAbility::OnDelayFinished);
+	DelayTask->ReadyForActivation();
 }
 
 void UCBChaserActionAbility::OnActionEnded(FGameplayEventData Payload)
 {
-	// 콤보 초기화
+	// 몽타주 중지 및 콤보 인덱스 초기화 여부 결정
 	if (UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo())
 	{
-		ActionComp->ResetComboIndex();
+		ActionComp->StopMontage(0.25f, IsCombo);
 	}
 	
 	// 어빌리티 종료 (bWasCancelled = false, 정상 종료 처리)
@@ -77,47 +104,43 @@ void UCBChaserActionAbility::OnActionEnded(FGameplayEventData Payload)
 
 void UCBChaserActionAbility::OnCheckInput(FGameplayEventData Payload)
 {
-	if (UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo())
+	if (bIsInputHeld)
 	{
-		// 아직도 입력중이라면 (예: 플레이어가 공격 버튼을 계속 누르고 있다면)
-		if (BoundInputTag.IsValid() && CBASC->HeldInputTags.HasTagExact(BoundInputTag))
-		{
-			EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
-			
-			// 어빌리티 재 활성화
-			CBASC->TryActivateAbility(CurrentSpecHandle);
-		}
-		else
-		{
-			// 입력 델리게이트 구독 (입력 감지)
-			CBASC->OnAbilityInputTagPressed.AddDynamic(this, &ThisClass::HandleInputPressed);
-		}
+		// 아직도 입력 중이라면 즉시 재활성화
+		UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+		ASC->TryActivateAbility(CurrentSpecHandle);
+	}
+	else
+	{
+		// 입력 대기 윈도우 열기
+		bWaitingForInput = true;
 	}
 }
 
-void UCBChaserActionAbility::HandleInputPressed(const FGameplayTag& Data)
+void UCBChaserActionAbility::InputPressed(const FGameplayAbilitySpecHandle Handle,
+	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
-	// 같은 입력 태그가 눌렀다면
-	if (Data == BoundInputTag)
+	bIsInputHeld = true;
+
+	if (bWaitingForInput)
 	{
-		// ASC 가져오기
-		UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo();
-		// 어빌리티 종료
+		bWaitingForInput = false;
+		UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
-		// 어빌리티 재 활성화
-		CBASC->TryActivateAbility(CurrentSpecHandle);
+		ASC->TryActivateAbility(CurrentSpecHandle);
 	}
+}
+
+void UCBChaserActionAbility::InputReleased(const FGameplayAbilitySpecHandle Handle,
+	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
+{
+	bIsInputHeld = false;
 }
 
 void UCBChaserActionAbility::OnDelayFinished()
 {
-	// 콤보 초기화
-	if (UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo())
-	{
-		ActionComp->ResetComboIndex();
-	}
-	
-	// 어빌리티 종료 (bWasCancelled = true, 타임아웃으로 인한 취소 처리)
+	// 어빌리티 종료
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
 

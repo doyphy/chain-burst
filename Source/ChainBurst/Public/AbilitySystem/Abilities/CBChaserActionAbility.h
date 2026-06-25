@@ -24,11 +24,46 @@ protected:
 	//~ Begin UGameplayAbility Interface
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
+	virtual void InputPressed(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) override;
+	virtual void InputReleased(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) override;
 	//~ End UGameplayAbility Interface
 
-	/** 액션 실행 로직 */
-	void ExecuteAction();
+	/** 액션 몽타주 재생 함수 (자식에서 호출) */
+	void PlayActionMontage();
 	
+	/** 현재 재생중인 액션의 재생 시간 반환 */
+	float CurrentActionDuration() const;
+	
+	/** 이 어빌리티와 연결된 입력 태그 (입력 감지) */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst", meta = (Categories = "Input"))
+	FGameplayTag BoundInputTag;
+
+	/** 이 어빌리티와 연결된 액션(몽타주) 태그 */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst", meta = (Categories = "Action"))
+	FGameplayTag BoundActionTag;
+
+	/** 이 어빌리티와 연결된 액션(몽타주)의 콤보 여부 */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst")
+	bool IsCombo;
+
+	/** 몽타주 재생 가능 여부 */
+	bool bCanPlayMontage = false;
+private:
+	/** 현재 입력 홀드 여부 */
+	bool bIsInputHeld = false;
+
+	/** 입력 대기 중 여부 (CheckInput 윈도우가 열린 상태) */
+	bool bWaitingForInput = false;
+
+	UPROPERTY()
+	TObjectPtr<UAbilityTask_WaitGameplayEvent> CheckInputTask;
+
+	UPROPERTY()
+	TObjectPtr<UAbilityTask_WaitGameplayEvent> EndActionTask;
+
+	UPROPERTY()
+	TObjectPtr<UAbilityTask_WaitDelay> DelayTask;
+
 	/** 액션 종료 시 호출되는 함수 (태그 이벤트 대기) */
 	UFUNCTION()
 	void OnActionEnded(FGameplayEventData Payload);
@@ -37,35 +72,7 @@ protected:
 	UFUNCTION()
 	void OnCheckInput(FGameplayEventData Payload);
 
-	/** 입력 델리게이트 바인딩 함수 (입력감지) */
-	UFUNCTION()
-	void HandleInputPressed(const FGameplayTag& Data);
-	
 	/** 타임아웃 시 호출되는 함수 */
 	UFUNCTION()
 	void OnDelayFinished();
-	
-	/** 현재 재생중인 액션의 재생 시간 반환 */
-	float CurrentActionDuration() const;
-	
-	/** 이 어빌리티와 연결된 입력 태그 (입력 감지) */
-	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Ability", meta = (Categories = "Input"))
-	FGameplayTag BoundInputTag;
-
-	/** 이 어빌리티와 연결된 액션 게임플레이 큐 태그 (몽타주 재생) */
-	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Action", meta = (Categories = "GameplayCue"))
-	FGameplayTag BoundActionGameplayCueTag;
-
-	UPROPERTY()
-	TObjectPtr<UAbilityTask_WaitGameplayEvent> CheckInputTask;
-	
-	UPROPERTY()
-	TObjectPtr<UAbilityTask_WaitGameplayEvent> EndActionTask;
-
-	UPROPERTY()
-	TObjectPtr<UAbilityTask_WaitDelay> DelayTask;
-
-private:
-	/** 어빌리티 재시도 타이머 핸들 */
-	FTimerHandle RetryHandle;
 };

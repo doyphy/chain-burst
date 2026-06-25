@@ -88,17 +88,15 @@ protected:
 
 	/** 클라이언트 전용 초기화 함수 */
 	void Local_InitClientData();
-
-	/** [서버 전용] 캐릭터의 초기 속성 값을 설정하는 함수 */
-	void Auth_InitializeAttributes();
-
-	/** 이동 속도 변경 시 실행되는 함수 */
-	void OnMovementSpeedChanged(const FOnAttributeChangeData& Data);
 	
 public:
 	//~ Begin ICBCombatInterface Interface.
 	virtual UCBCombatComponent* GetCBCombatComponent() const override;
 	//~ End ICBCombatInterface Interface.
 	
-	FORCEINLINE UCBChaserCombatComponent* GetChaserCombatComponent() const { return ChaserCombatComponent.Get(); } 
+	FORCEINLINE UCBChaserCombatComponent* GetChaserCombatComponent() const { return ChaserCombatComponent.Get(); }
+
+private:
+	/** 입력 잠금 여부 */
+	bool bIsInputLocked = true;
 };

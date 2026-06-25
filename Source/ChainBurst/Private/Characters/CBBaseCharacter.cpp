@@ -4,9 +4,11 @@
 #include "Components/Movement/CBCharacterTrajectoryComponent.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Animation/CBActionComponent.h"
+#include "AbilitySystem/CBAttributeSet.h"
 
 // engine
 #include "AbilitySystemBlueprintLibrary.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 ACBBaseCharacter::ACBBaseCharacter()
 {
@@ -38,6 +40,15 @@ void ACBBaseCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 }
 
+void ACBBaseCharacter::OnMovementSpeedChanged(float NewSpeed)
+{
+	if (GetCharacterMovement())
+	{
+		const float ClampedSpeed = FMath::Max(NewSpeed, 0.0f);
+		GetCharacterMovement()->MaxWalkSpeed = ClampedSpeed;
+	}
+}
+
 bool ACBBaseCharacter::RequestPlayMontage(const FGameplayTag InActionTag, bool bIsCombo)
 {
 	if (!CBActionComponent)
@@ -59,9 +70,9 @@ UCBCombatComponent* ACBBaseCharacter::GetCBCombatComponent() const
 	return nullptr;
 }
 
-void ACBBaseCharacter::Server_SendGameplayEvent_Implementation(FGameplayTag EventTag)
+void ACBBaseCharacter::Server_SendGameplayEvent_Implementation(AActor* Actor, FGameplayTag EventTag, FGameplayEventData Payload)
 {
-	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, EventTag, FGameplayEventData());
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(Actor, EventTag, Payload);
 }
 
 void ACBBaseCharacter::HandleCharacterSystemReady()
@@ -75,6 +86,17 @@ void ACBBaseCharacter::HandleCharacterSystemReady()
 	// 델리게이트 방송 (구독 중인 컴포넌트 및 애님 인스턴스에 알림)
 	OnCharacterSystemReadyDelegate.Broadcast();
 
-	// Tick 활성화
+	// 어트리뷰트 초기화
+	InitializeAttributes();
+	
+	// Tick 활성화 (필요할 때)
 	// SetActorTickEnabled(true);
+}
+
+void ACBBaseCharacter::InitializeAttributes()
+{
+	if (CBAttributeSet)
+	{
+		CBAttributeSet->OnCharacterSystemReady();
+	}
 }

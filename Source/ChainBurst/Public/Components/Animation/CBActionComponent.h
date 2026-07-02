@@ -85,8 +85,11 @@ protected:
 	 */
 	int32 GetActionPriority(FGameplayTag InTag);
 
-	/** 애님 인스턴스에 몽타주 재생 전달 */
-	bool PlayMontage(UAnimMontage* InMontage);
+	/**
+	 * 애님 인스턴스에 몽타주 재생 전달
+	 * @param bAffectedByAttackSpeed true면 AttackSpeed 어트리뷰트를 PlayRate에 반영, false면 기본 속도(1.0)로 재생
+	 */
+	bool PlayMontage(UAnimMontage* InMontage, bool bAffectedByAttackSpeed);
 
 	/** 애님 인스턴스 지연 캐싱 */
 	bool GetCachedAnimInstance(TWeakObjectPtr<UCBCharacterAnimInstance>& OutAnimInstance);

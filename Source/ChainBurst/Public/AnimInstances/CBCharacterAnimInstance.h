@@ -82,9 +82,10 @@ public:
 
 	/**
 	 * 몽타주 재생하는 함수.
-	 * @param MontageToPlay 재생할 몽타주. 액션 컴포넌트에서 태그로 몽타주 검색 후 전달할거임.
+	 * @param InMontage 재생할 몽타주. 액션 컴포넌트에서 태그로 몽타주 검색 후 전달.
+	 * @param PlayRate 재생 속도 배율 (1.0 = 기본). 공격 속도 어트리뷰트를 반영해 UCBActionComponent에서 계산 후 전달.
 	 */
-	void PlayMontage(UAnimMontage* InMontage);
+	void PlayMontage(UAnimMontage* InMontage, float PlayRate = 1.f);
 	
 	// ==========================================
 	// 워커 스레드에서 계산할 함수 (외부에서 호출 가능)

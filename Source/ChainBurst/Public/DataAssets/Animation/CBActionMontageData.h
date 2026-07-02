@@ -15,10 +15,14 @@ struct FCBSingleMontageData
 	/** 싱글 몽타주 액션 태그 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite);
 	FGameplayTag SingleActionTag;
-	
+
 	/** 싱글 몽타주 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	TObjectPtr<UAnimMontage> Montage;
+
+	/** 공격 속도(AttackSpeed) 어트리뷰트의 영향을 받아 재생 속도가 조절되는지 여부 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
+	bool bAffectedByAttackSpeed = false;
 
 	bool IsValid() const { return Montage != nullptr; }
 };
@@ -36,6 +40,10 @@ struct FCBComboMontageData
 	/** 콤보 순서대로 나열된 몽타주 배열 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	TArray<TObjectPtr<UAnimMontage>> Montages;
+
+	/** 공격 속도(AttackSpeed) 어트리뷰트의 영향을 받아 재생 속도가 조절되는지 여부 (콤보 전체에 공통 적용) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
+	bool bAffectedByAttackSpeed = false;
 
 	bool IsValid() const { return !Montages.IsEmpty(); }
 };
@@ -75,16 +83,18 @@ protected:
 public:
 	/**
 	 * 단일 몽타주 조회
+	 * @param bOutAffectedByAttackSpeed 해당 몽타주가 공격 속도 영향을 받는지 여부를 반환
 	 * @return 없으면 nullptr
 	 */
-	UAnimMontage* FindSingleMontage(const FGameplayTag& InTag) const;
+	UAnimMontage* FindSingleMontage(const FGameplayTag& InTag, bool& bOutAffectedByAttackSpeed) const;
 
 	/**
 	 * 콤보 몽타주 조회
 	 * @param InComboIndex 현재 콤보 단계 (0부터 시작)
+	 * @param bOutAffectedByAttackSpeed 해당 콤보가 공격 속도 영향을 받는지 여부를 반환
 	 * @return 없거나 인덱스 초과 시 nullptr
 	 */
-	UAnimMontage* FindComboMontage(const FGameplayTag& InTag, int32 InComboIndex) const;
+	UAnimMontage* FindComboMontage(const FGameplayTag& InTag, int32 InComboIndex, bool& bOutAffectedByAttackSpeed) const;
 
 	/** 해당 태그의 콤보 최대 단계 수 반환 */
 	int32 GetComboCount(const FGameplayTag& InTag) const;

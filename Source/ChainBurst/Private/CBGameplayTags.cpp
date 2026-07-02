@@ -25,6 +25,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_TraceStart, "Event.Combat.TraceStart", "트레이스 시작 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_TraceEnd, "Event.Combat.TraceEnd", "트레이스 종료 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_Attack_Hit, "Event.Combat.Attack.Hit", "공격 적중 이벤트")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_HitReact, "Event.Combat.HitReact", "피격 반응 트리거 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Action_EndAbility, "Event.Action.EndAbility", "액션 어빌리티 종료 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Action_CheckInput, "Event.Action.CheckInput", "액션 입력 확인 이벤트")
 
@@ -48,16 +49,20 @@ namespace CBGameplayTags
 	/** Action Tags. (액션에 맞는 몽타주 재생에 사용) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action, "Action", "액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat, "Action.Combat", "전투 액션 태그")
+	
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Attack, "Action.Combat.Attack", "공격 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Attack_Basic, "Action.Combat.Attack.Basic", "기본 공격 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Block, "Action.Combat.Block", "방어 액션 태그")
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Hit, "Action.Combat.Hit", "피격 액션 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_HitReact, "Action.Combat.HitReact", "피격 반응 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Skill, "Action.Combat.Skill", "스킬 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_EquipWeapon, "Action.Combat.EquipWeapon", "무기 장착 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_UnequipWeapon, "Action.Combat.UnequipWeapon", "무기 해제 액션 태그")
 
 	/** Context Tags. (컨텍스트에 담는 태그) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_Action_IsCombo, "Context.Action.IsCombo", "현재 액션이 콤보인지 여부 (컨텍스트에 담는 태그)")
+
+	/** Effect Tags. (GE의 동작 의도를 선언하는 태그) */
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Effect_HitReact, "Effect.HitReact", "이 GE가 피격 반응을 유발함을 선언하는 태그 (Opt-in)")
 
 	/** GameplayCue Tags. */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_PlayAction, "GameplayCue.PlayAction", "액션 재생 GameplayCue 태그")

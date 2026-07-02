@@ -1,7 +1,9 @@
 #include "DataAssets/Animation/CBActionMontageData.h"
 
-UAnimMontage* UCBActionMontageData::FindSingleMontage(const FGameplayTag& InTag) const
+UAnimMontage* UCBActionMontageData::FindSingleMontage(const FGameplayTag& InTag, bool& bOutAffectedByAttackSpeed) const
 {
+	bOutAffectedByAttackSpeed = false;
+
 	if (!InTag.IsValid()) return nullptr;
 
 	// 태그에 맞는 단일 몽타주 찾기
@@ -13,11 +15,14 @@ UAnimMontage* UCBActionMontageData::FindSingleMontage(const FGameplayTag& InTag)
 		return nullptr;
 	}
 
+	bOutAffectedByAttackSpeed = FoundMontageData->bAffectedByAttackSpeed;
 	return FoundMontageData->Montage.Get();
 }
 
-UAnimMontage* UCBActionMontageData::FindComboMontage(const FGameplayTag& InTag, int32 InComboIndex) const
+UAnimMontage* UCBActionMontageData::FindComboMontage(const FGameplayTag& InTag, int32 InComboIndex, bool& bOutAffectedByAttackSpeed) const
 {
+	bOutAffectedByAttackSpeed = false;
+
 	if (!InTag.IsValid()) return nullptr;
 
 	// 태그에 맞는 콤보 몽타주 찾기
@@ -43,6 +48,7 @@ UAnimMontage* UCBActionMontageData::FindComboMontage(const FGameplayTag& InTag, 
 		return nullptr;
 	}
 
+	bOutAffectedByAttackSpeed = FoundCombo->bAffectedByAttackSpeed;
 	return Montage;
 }
 

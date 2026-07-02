@@ -4,6 +4,7 @@
 #include "DataAssets/Animation/CBActionMontageData.h"
 #include "AnimInstances/CBCharacterAnimInstance.h"
 #include "Characters/CBBaseCharacter.h"
+#include "AbilitySystem/CBAttributeSet.h"
 
 // engine
 #include "Net/UnrealNetwork.h"
@@ -27,7 +28,8 @@ bool UCBActionComponent::RequestPlaySingleMontage(const FGameplayTag& InActionTa
 	}
 
 	// 싱글 몽타주 가져오기
-	UAnimMontage* Montage = MontageData->FindSingleMontage(InActionTag);
+	bool bAffectedByAttackSpeed = false;
+	UAnimMontage* Montage = MontageData->FindSingleMontage(InActionTag, bAffectedByAttackSpeed);
 	if (!Montage) return false;
 
 	// 현재 액션 정보 업데이트
@@ -38,7 +40,7 @@ bool UCBActionComponent::RequestPlaySingleMontage(const FGameplayTag& InActionTa
 	ResetComboIndex();
 
 	// 몽타주 재생
-	return PlayMontage(Montage);
+	return PlayMontage(Montage, bAffectedByAttackSpeed);
 }
 
 bool UCBActionComponent::RequestPlayComboMontage(const FGameplayTag& InActionTag)
@@ -70,11 +72,12 @@ bool UCBActionComponent::RequestPlayComboMontage(const FGameplayTag& InActionTag
 	}
 	
 	// 콤보 카운트에 맞는 몽타주 찾기
-	UAnimMontage* Montage = MontageData->FindComboMontage(InActionTag, CurrentComboIndex);
+	bool bAffectedByAttackSpeed = false;
+	UAnimMontage* Montage = MontageData->FindComboMontage(InActionTag, CurrentComboIndex, bAffectedByAttackSpeed);
 	if (!Montage) return false;
 
 	// 몽타주 재생
-	if (!PlayMontage(Montage)) return false;
+	if (!PlayMontage(Montage, bAffectedByAttackSpeed)) return false;
 
 	// 현재 액션 정보 업데이트
 	CurrentActionTag = InActionTag;
@@ -143,7 +146,7 @@ FGameplayTag UCBActionComponent::SelectBestActionTag(const FGameplayTagContainer
 
 int32 UCBActionComponent::GetActionPriority(FGameplayTag InTag)
 {
-	if (InTag.MatchesTag(CBGameplayTags::Action_Combat_Hit))
+	if (InTag.MatchesTag(CBGameplayTags::Action_Combat_HitReact))
 		return 100;
 
 	if (InTag.MatchesTag(CBGameplayTags::Action_Combat_Block))
@@ -158,7 +161,7 @@ int32 UCBActionComponent::GetActionPriority(FGameplayTag InTag)
 	return 0;
 }
 
-bool UCBActionComponent::PlayMontage(UAnimMontage* InMontage)
+bool UCBActionComponent::PlayMontage(UAnimMontage* InMontage, bool bAffectedByAttackSpeed)
 {
 	if (!InMontage) return false;
 
@@ -168,7 +171,21 @@ bool UCBActionComponent::PlayMontage(UAnimMontage* InMontage)
 		return false;
 	}
 
-	CachedAnimInstance.Get()->PlayMontage(InMontage);
+	float PlayRate = 1.f;
+
+	// 공격 속도 영향을 받는 몽타주만 AttackSpeed 어트리뷰트를 PlayRate에 반영
+	if (bAffectedByAttackSpeed)
+	{
+		if (ACBBaseCharacter* Owner = GetOwningPawn<ACBBaseCharacter>())
+		{
+			if (const UCBAttributeSet* AttributeSet = Owner->GetCBAttributeSet())
+			{
+				PlayRate = AttributeSet->GetAttackSpeed();
+			}
+		}
+	}
+
+	CachedAnimInstance.Get()->PlayMontage(InMontage, PlayRate);
 	return true;
 }
 

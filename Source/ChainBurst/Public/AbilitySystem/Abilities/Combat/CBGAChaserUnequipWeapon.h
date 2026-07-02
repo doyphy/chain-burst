@@ -1,13 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "AbilitySystem/Abilities/CBChaserActionAbility.h"
+#include "AbilitySystem/Abilities/CBInputActionAbility.h"
 #include "CBGAChaserUnequipWeapon.generated.h"
 
 class UAbilityTask_WaitGameplayEvent;
 
 UCLASS()
-class CHAINBURST_API UCBGAChaserUnequipWeapon : public UCBChaserActionAbility
+class CHAINBURST_API UCBGAChaserUnequipWeapon : public UCBInputActionAbility
 {
 	GENERATED_BODY()
 	

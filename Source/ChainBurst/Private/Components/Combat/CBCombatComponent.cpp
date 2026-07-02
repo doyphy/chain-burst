@@ -230,6 +230,15 @@ void UCBCombatComponent::StopWeaponTrace()
 	APawn* OwnerPawn = Cast<APawn>(GetOwner());
 	if (!OwnerPawn || !OwnerPawn->IsLocallyControlled()) return;
 
+	// 마지막 Tick ~ NotifyEnd(트레이스 종료 시점) 사이의 누락 구간을 한 번 더 보정 트레이스.
+	// 트레이스가 프레임(Tick) 단위로 샘플링되어, 마지막 Tick 이후 NotifyEnd 까지의 휘두름 구간이 누락된다.
+	// 재생 속도가 빠를수록 이 누락 구간(호)이 커지므로 종료 직전에 마지막 위치까지 한 번 더 트레이스한다.
+	// bIsTracing 가드: EndAbility 의 안전장치 호출 등으로 이미 종료된 뒤 재호출 시 stale 한 PrevLoc 으로 중복 트레이스되는 것을 방지.
+	if (bIsTracing)
+	{
+		TickWeaponTrace();
+	}
+	
 	// 남은 히트 즉시 처리
 	FlushPendingHits();
 

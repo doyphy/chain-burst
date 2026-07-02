@@ -20,8 +20,11 @@ class CHAINBURST_API UCBAttributeSet : public UAttributeSet
 	UCBAttributeSet();
 	
 public:
-	/** 속성 값이 변경된 후 실행되는 함수 */
+	/** [서버/클라] 어트리뷰트 값이 최종 확정된 후 호출.*/
 	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
+
+	/** [서버] GE가 어트리뷰트에 적용된 직후 호출. */
+	virtual void PostGameplayEffectExecute(const struct FGameplayEffectModCallbackData& Data) override;
 	
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, MovementSpeed)
 
@@ -32,7 +35,9 @@ public:
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, AttackPower)
 
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, DefensePower)
-	
+
+	ATTRIBUTE_ACCESSORS(UCBAttributeSet, AttackSpeed)
+
 	/** 캐릭터 시스템 준비 완료 시 캐릭터에서 호출되는 함수 (초기화 작업) */
 	void OnCharacterSystemReady();
 	
@@ -51,8 +56,12 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_DefensePower)
 	FGameplayAttributeData DefensePower;
-	
-	
+
+	/** 공격 속도 배율 (1.0 = 기본) */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_AttackSpeed)
+	FGameplayAttributeData AttackSpeed;
+
+
 	/** 리플리케이션 설정 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	
@@ -70,7 +79,10 @@ public:
 
 	UFUNCTION()
 	virtual void OnRep_DefensePower(const FGameplayAttributeData& OldDefensePower);
-	
+
+	UFUNCTION()
+	virtual void OnRep_AttackSpeed(const FGameplayAttributeData& OldAttackSpeed);
+
 	void UpdateMovementSpeed(float NewValue);
 
 };

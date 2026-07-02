@@ -1,7 +1,7 @@
 // project
 #include "AbilitySystem/Abilities/Combat/CBChaserAttackAbility.h"
 #include "CBGameplayTags.h"
-#include "Components/Combat/CBChaserCombatComponent.h"
+#include "Components/Combat/CBCombatComponent.h"
 #include "CBAbilitySystemLibrary.h"
 
 // engine
@@ -14,8 +14,8 @@ void UCBChaserAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Ha
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	// 컴뱃 컴포넌트 가져오기
-	if (UCBChaserCombatComponent* CombatComp = GetChaserCombatComponentFromActorInfo())
+	// 컴뱃 컴포넌트 가져오기 (베이스 UCBCombatComponent 멤버만 사용하므로 캐스팅 불필요)
+	if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
 	{
 		// 무기 유효성 검사 (무기 없으면 공격 못함)
 		if (CombatComp->HasValidWeapon() == false)
@@ -93,7 +93,7 @@ void UCBChaserAttackAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 	
 	// 혹시 트레이스가 아직 활성화 중이라면 강제 종료
-	if (UCBChaserCombatComponent* CombatComp = GetChaserCombatComponentFromActorInfo())
+	if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
 	{
 		CombatComp->StopWeaponTrace();
 	}
@@ -101,7 +101,7 @@ void UCBChaserAttackAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 
 void UCBChaserAttackAbility::OnTraceStart(FGameplayEventData Payload)
 {
-	if (UCBChaserCombatComponent* CombatComp = GetChaserCombatComponentFromActorInfo())
+	if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
 	{
 		CombatComp->StartWeaponTrace();
 	}
@@ -109,7 +109,7 @@ void UCBChaserAttackAbility::OnTraceStart(FGameplayEventData Payload)
 
 void UCBChaserAttackAbility::OnTraceEnd(FGameplayEventData Payload)
 {
-	if (UCBChaserCombatComponent* CombatComp = GetChaserCombatComponentFromActorInfo())
+	if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
 	{
 		CombatComp->StopWeaponTrace();
 	}

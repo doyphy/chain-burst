@@ -9,6 +9,8 @@
 // engine
 #include "GameFramework/CharacterMovementComponent.h"
 #include "PoseSearch/PoseSearchLibrary.h"
+#include "Animation/AnimMontage.h"
+#include "AlphaBlend.h"
 
 void UCBCharacterAnimInstance::NativeInitializeAnimation()
 {
@@ -219,11 +221,21 @@ bool UCBCharacterAnimInstance::IsInputLocked() const
 	return bIsPivoting || PivotLockTimer > 0.f;
 }
 
-void UCBCharacterAnimInstance::PlayMontage(UAnimMontage* InMontage)
+void UCBCharacterAnimInstance::PlayMontage(UAnimMontage* InMontage, float PlayRate)
 {
 	if (!InMontage) return;
 
-	Montage_Play(InMontage);
+	// 블렌드 인 시간을 재생 속도로 스케일(BlendIn ÷ PlayRate).
+	// 블렌드 웨이트는 실제 시간(초) 기준이라, 재생 속도가 빠르면 같은 실시간 블렌드가 몽타주 구간을
+	// 더 많이 잠식해 초반 포즈가 뭉개진다(공격 속도가 높을수록 스윙 초반 트레이스 누락 등 문제 발생).
+	// 재생 속도로 나눠 몽타주 시간 축에 맞추면 배속과 무관하게 항상 같은 비율만 블렌드한다. (PlayRate=1이면 원래 값 유지)
+	FAlphaBlendArgs BlendInArgs = InMontage->GetBlendInArgs();
+	if (PlayRate > 0.f)
+	{
+		BlendInArgs.BlendTime /= PlayRate;
+	}
+
+	Montage_PlayWithBlendIn(InMontage, BlendInArgs, PlayRate);
 }
 
 void UCBCharacterAnimInstance::OnCombatTagChanged(const FGameplayTag InTag, int32 InCount)

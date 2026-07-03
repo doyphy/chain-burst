@@ -34,7 +34,7 @@ void UCBActionAbility::PlayActionMontage()
 
 	// 게임플레이 큐 실행 (몽타주 재생, 전 클라 동기화)
 	CBASC->ExecuteGameplayCue(CBGameplayTags::GameplayCue_PlayAction, CueParams);
-
+	
 	// 몽타주 종료 이벤트 대기 (애님노티파이 수신 시 어빌리티 종료)
 	EndActionTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
 		this, CBGameplayTags::Event_Action_EndAbility, nullptr, true);

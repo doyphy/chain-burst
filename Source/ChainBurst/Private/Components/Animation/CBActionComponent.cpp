@@ -39,6 +39,10 @@ bool UCBActionComponent::RequestPlaySingleMontage(const FGameplayTag& InActionTa
 	// 콤보 초기화
 	ResetComboIndex();
 
+	// [디버그] 어떤 액션 태그의 싱글 몽타주를 재생하는지 로그
+	UE_LOG(LogTemp, Log, TEXT("[ActionComp][%s] 싱글 몽타주 재생: 태그 '%s' / 몽타주 '%s'"),
+		*GetOwner()->GetName(), *InActionTag.ToString(), *Montage->GetName());
+
 	// 몽타주 재생
 	return PlayMontage(Montage, bAffectedByAttackSpeed);
 }
@@ -82,6 +86,10 @@ bool UCBActionComponent::RequestPlayComboMontage(const FGameplayTag& InActionTag
 	// 현재 액션 정보 업데이트
 	CurrentActionTag = InActionTag;
 	CurrentActionDuration = Montage->GetPlayLength();
+
+	// [디버그] 어떤 액션 태그의 콤보 몽타주(어느 단계)를 재생하는지 로그
+	UE_LOG(LogTemp, Log, TEXT("[ActionComp][%s] 콤보 몽타주 재생: 태그 '%s' / 콤보 인덱스 %d / 몽타주 '%s'"),
+		*GetOwner()->GetName(), *InActionTag.ToString(), CurrentComboIndex, *Montage->GetName());
 
 	// 콤보 초기화 타이머 설정
 	StartComboResetTimer(CurrentActionDuration);

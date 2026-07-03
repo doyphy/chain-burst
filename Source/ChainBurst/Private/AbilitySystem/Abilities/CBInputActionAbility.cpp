@@ -7,6 +7,13 @@
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "GameFramework/Pawn.h"
 
+UCBInputActionAbility::UCBInputActionAbility()
+{
+	// 입력 트리거 어빌리티는 보통 로컬에서 발동되므로 예측 실행이 기본값
+	// (구체 자식 클래스에서 필요에 따라 명시적으로 재설정)
+	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+}
+
 void UCBInputActionAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)

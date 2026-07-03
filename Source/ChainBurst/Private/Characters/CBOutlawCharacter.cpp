@@ -42,6 +42,25 @@ ACBOutlawCharacter::ACBOutlawCharacter()
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 180.0f, 0.0f);
 }
 
+// [공용] 서버와 클라이언트 모두에서 호출됨. 전 인스턴스 공용 데이터(메쉬/이동/몽타주) 적용.
+void ACBOutlawCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// 로드아웃 소프트 참조 유효성 검사
+	if (OutlawLoadout.IsNull()) return;
+
+	// 비동기 로드
+	UCBAssetManager::Get().LoadAssetAsync<UCBOutlawLoadout>(OutlawLoadout, [this](UCBOutlawLoadout* LoadedLoadout)
+	{
+		// 전 인스턴스 공용 데이터 적용 (메쉬·애님BP·이동 데이터·몽타주 데이터)
+		if (LoadedLoadout)
+		{
+			LoadedLoadout->ApplyToCharacter(this);
+		}
+	});
+}
+
 // [서버] 컨트롤러가 이 캐릭터를 소유할 때 호출되는 함수. 어빌리티 시스템 초기화 및 로드아웃 적용 로직 포함.
 void ACBOutlawCharacter::PossessedBy(AController* NewController)
 {

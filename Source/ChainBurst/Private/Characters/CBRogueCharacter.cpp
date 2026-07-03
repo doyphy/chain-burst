@@ -44,10 +44,10 @@ void ACBRogueCharacter::BeginPlay()
 	// 비동기 로드
 	UCBAssetManager::Get().LoadAssetAsync<UCBRogueLoadout>(RogueLoadout, [this](UCBRogueLoadout* LoadedLoadout)
 	{
-		// 스켈레탈 메시와 애니메이션 블루프린트 적용
+		// 전 인스턴스 공용 데이터 적용 (메쉬·애님BP·이동 데이터·몽타주 데이터)
 		if (LoadedLoadout)
 		{
-			LoadedLoadout->ApplyMeshToCharacter(this);
+			LoadedLoadout->ApplyToCharacter(this);
 		}
 	});
 }

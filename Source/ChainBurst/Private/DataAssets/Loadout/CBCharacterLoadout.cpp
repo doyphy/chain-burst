@@ -3,6 +3,8 @@
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "AbilitySystem/Abilities/CBGameplayAbility.h"
 #include "Components/Combat/CBCombatComponent.h"
+#include "Components/Animation/CBActionComponent.h"
+#include "Characters/CBBaseCharacter.h"
 #include "DataAssets/Weapon/CBWeaponData.h"
 #include "AssetManager/CBAssetManager.h"
 
@@ -11,15 +13,24 @@
 #include "Components/SkeletalMeshComponent.h"
 
 
-void UCBCharacterLoadout::ApplyMeshToCharacter(ACharacter* InCharacter)
+void UCBCharacterLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 {
 	// 캐릭터 유효성 검사
 	if (!InCharacter) return;
 
+	// 이동 데이터 캐릭터에 적용 (하드 참조라 로드아웃 로드 시점에 이미 resolve됨)
+	InCharacter->SetMovementDataAsset(MovementData);
+
+	// 액션 몽타주 데이터를 액션 컴포넌트에 적용
+	if (UCBActionComponent* ActionComponent = InCharacter->GetCBActionComponent())
+	{
+		ActionComponent->SetMontageData(MontageData);
+	}
+
 	// 스켈레탈 메시 소프트 참조 유효성 검사
 	if (SkeletalMesh.IsNull()) return;
 
-	// 비동기 로드
+	// 스켈레탈 메시 비동기 로드 후 메시·애님BP 적용
 	UCBAssetManager::Get().LoadAssetAsync<USkeletalMesh>(SkeletalMesh, [InCharacter, this](USkeletalMesh* LoadedMesh)
 	{
 		// 로드된 메시와 캐릭터 유효성 검사

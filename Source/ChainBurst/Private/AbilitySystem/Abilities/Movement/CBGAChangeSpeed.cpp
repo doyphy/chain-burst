@@ -12,6 +12,10 @@ UCBGAChangeSpeed::UCBGAChangeSpeed()
 {
 	// 어빌리티 인스턴싱 정책 설정
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
+
+	// 입력(질주/걷기 홀드)으로 발동되므로 예측 실행이 기본값
+	// (BP 엣지 클래스 GA_Sprint / GA_Walk에서 필요 시 재설정)
+	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
 }
 
 void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)

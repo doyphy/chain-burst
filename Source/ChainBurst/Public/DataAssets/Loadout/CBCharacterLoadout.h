@@ -9,6 +9,9 @@ class UCBAbilitySystemComponent;
 class UCBCombatComponent;
 class UGameplayEffect;
 class UCBWeaponData;
+class UCBCharacterMovementData;
+class UCBActionMontageData;
+class ACBBaseCharacter;
 
 /**
  * 캐릭터의 공통 데이터
@@ -19,8 +22,11 @@ class CHAINBURST_API UCBCharacterLoadout : public UPrimaryDataAsset
 	GENERATED_BODY()
 
 public:
-	/** [공용] 스켈레탈 메쉬와 애니메이션 블루프린트를 캐릭터에 적용하는 함수 */
-	void ApplyMeshToCharacter(ACharacter* InCharacter);
+	/**
+	 * [공용] 전 인스턴스(서버·클라)에서 필요한 데이터를 캐릭터에 일괄 적용하는 함수
+	 * 스켈레탈 메쉬·애님BP(비동기), 이동 데이터, 액션 몽타주 데이터를 적용한다.
+	 */
+	void ApplyToCharacter(ACBBaseCharacter* InCharacter);
 
 	/** [서버 전용] 어빌리티 시스템 컴포넌트에 어빌리티를 부여하는 함수 */
 	virtual void Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
@@ -75,6 +81,18 @@ protected:
 	/** 사용할 애니메이션 블루프린트 클래스 */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals")
 	TSubclassOf<UAnimInstance> AnimInstanceClass;
+
+	// =========================================================
+	// 캐릭터 데이터 (Data) - 전 인스턴스에서 필요한 데이터 에셋
+	// =========================================================
+
+	/** 이동 데이터 (속도 등). ACBBaseCharacter에 캐싱되어 애님/어트리뷰트/이동 어빌리티에서 사용 */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Data")
+	TObjectPtr<UCBCharacterMovementData> MovementData = nullptr;
+
+	/** 액션 몽타주 데이터. UCBActionComponent에 캐싱되어 태그 기반 몽타주 재생에 사용 */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Data")
+	TObjectPtr<UCBActionMontageData> MontageData = nullptr;
 
 	// =========================================================
 	// 기본 스탯 (Stats & Attributes)

@@ -57,7 +57,8 @@ protected:
 	TObjectPtr<UCBActionComponent> CBActionComponent = nullptr;
 #pragma endregion
 
-	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|MovementData")
+	/** 이동 데이터. 로드아웃(UCBCharacterLoadout)에서 주입되는 런타임 캐시 */
+	UPROPERTY()
 	TObjectPtr<UCBCharacterMovementData> MovementDataAsset = nullptr;
 	
 public:
@@ -95,6 +96,9 @@ public:
 	FORCEINLINE UCBCharacterMovementData* GetMovementDataAsset() const { return MovementDataAsset.Get(); }
 	FORCEINLINE UCBCharacterTrajectoryComponent* GetCBTrajectoryComponent() const { return CBTrajectoryComponent.Get(); }
 	FORCEINLINE UCBActionComponent* GetCBActionComponent() const { return CBActionComponent.Get(); }
+	
+	/** 로드아웃에서 이동 데이터를 주입하는 세터 */
+	FORCEINLINE void SetMovementDataAsset(UCBCharacterMovementData* InMovementData) { MovementDataAsset = InMovementData; }
 	
 protected:
 	/** 통합 초기화 함수 (캐릭터 시스템이 완료되면 델리게이트를 방송) */

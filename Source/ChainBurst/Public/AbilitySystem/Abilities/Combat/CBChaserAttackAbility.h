@@ -9,6 +9,9 @@ class CHAINBURST_API UCBChaserAttackAbility : public UCBInputActionAbility
 {
 	GENERATED_BODY()
 
+public:
+	UCBChaserAttackAbility();
+
 protected:
 	//~ Begin UGameplayAbility Interface
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;

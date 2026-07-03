@@ -11,6 +11,9 @@ class CHAINBURST_API UCBGAChaserEquipWeapon : public UCBInputActionAbility
 {
 	GENERATED_BODY()
 
+public:
+	UCBGAChaserEquipWeapon();
+
 protected:
 	//~ Begin UGameplayAbility Interface
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;

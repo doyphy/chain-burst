@@ -17,6 +17,10 @@ public:
 	ACBOutlawCharacter();
 
 protected:
+	//~ Begin AActor Interface
+	virtual void BeginPlay() override;
+	//~ End AActor Interface
+
 	//~ Begin APawn Interface
 	virtual void PossessedBy(AController* NewController) override;
 	//~ End APawn Interface

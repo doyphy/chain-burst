@@ -101,15 +101,36 @@ void ACBChaserCharacter::BeginPlay()
 }
 
 /**
+ * [소유 클라이언트 전용] 폰이 로컬에서 입력을 받게 될 때(빙의/재시작 시) 엔진이 호출하는 함수.
  * @param PlayerInputComponent 캐릭터에 입력 컴포넌트를 설정하는 함수.
  * Enhanced Input 시스템을 사용하여 입력 액션과 태그를 바인딩.
  */
 void ACBChaserCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
-	// 입력 설정 데이터 에셋이 유효한지 확인 (nullptr일 경우 에러 발생)
-	checkf(InputConfig, TEXT("%s 의 Input Config 유효하지 않음."), *GetName());
 
+	// 입력 컴포넌트가 준비된 지금, 나머지 전제조건(InputConfig)이 갖춰졌으면 바인딩되도록 지연 시도만 한다.
+	Local_TrySetupInput();
+}
+
+void ACBChaserCharacter::Local_TrySetupInput()
+{
+	// 이미 바인딩이 완료되었으면 종료 (중복 방지)
+	if (bInputBindingsSetup) return;
+
+	// 입력 설정(로드아웃 주입)과 입력 컴포넌트(SetupPlayerInputComponent)가 모두 준비되어야 함
+	if (!InputConfig || !InputComponent) return;
+
+	// 매핑 컨텍스트 등록을 위해 로컬 플레이어 컨트롤러가 필요
+	if (!GetController<APlayerController>()) return;
+
+	// 전제조건 충족 → 실제 바인딩 수행
+	Local_SetupInputBindings();
+	bInputBindingsSetup = true;
+}
+
+void ACBChaserCharacter::Local_SetupInputBindings()
+{
 	// 현재 컨트롤러에서 로컬 플레이어 객체를 가져옴
 	ULocalPlayer* LocalPlayer = GetController<APlayerController>()->GetLocalPlayer();
 
@@ -123,15 +144,23 @@ void ACBChaserCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	Subsystem->AddMappingContext(InputConfig->DefaultMappingContext, 0);
 
 	// 입력 컴포넌트를 UCBInputComponent 타입으로 캐스팅 (실패 시 에디터에서 에러 발생)
-	UCBInputComponent* CBInputComponent = CastChecked<UCBInputComponent>(PlayerInputComponent);
+	UCBInputComponent* CBInputComponent = CastChecked<UCBInputComponent>(InputComponent);
 
 	// Input 태그에 해당하는 Input Action을 바인딩
 	CBInputComponent->BindNativeInputAction(InputConfig, CBGameplayTags::Input_Action_Move, ETriggerEvent::Triggered, this, &ThisClass::Input_Move);
 	CBInputComponent->BindNativeInputAction(InputConfig, CBGameplayTags::Input_Action_Look, ETriggerEvent::Triggered, this, &ThisClass::Input_Look);
 	CBInputComponent->BindNativeInputAction(InputConfig, CBGameplayTags::Input_Action_Camera_Zoom, ETriggerEvent::Triggered, this, &ThisClass::Input_Camera_Zoom);
-	
+
 	// InputConfig 의 Ability Input Actions 배열의 모든 액션을 바인딩 (Input_AbilityInputPressed, Input_AbilityInputReleased 함수와 연결)
 	CBInputComponent->BindAbilityInputAction(InputConfig, this, &ThisClass::Input_AbilityInputPressed, &ThisClass::Input_AbilityInputReleased);
+}
+
+void ACBChaserCharacter::SetInputConfig(UCBInputConfig* InInputConfig)
+{
+	InputConfig = InInputConfig;
+
+	// 입력 설정이 주입되었으니 나머지 전제조건이 갖춰졌으면 바인딩되도록 지연 시도
+	Local_TrySetupInput();
 }
 
 void ACBChaserCharacter::Input_Move(const FInputActionValue& InputActionValue)
@@ -210,28 +239,8 @@ void ACBChaserCharacter::InitializePlayerSystem()
 	// ==========================================
 	// 공통 로직 (Common)
 	// ==========================================
-	
-	// Player State 가져오기
-	ACBPlayerState* PS = GetPlayerState<ACBPlayerState>();
-	checkf(PS, TEXT("%s 의 PlayerState 유효하지 않음."), *GetName());
-	
-	if (PS)
-	{
-		// CB ASC 가져오기
-		CBASC = PS->GetCBAbilitySystemComponent();
-		checkf(CBASC, TEXT("%s 의 AbilitySystemComponent 유효하지 않음."), *GetName());
+	InitCommonData();
 
-		// CB AttributeSet 가져오기
-		CBAttributeSet = PS->GetCBAttributeSet();
-		checkf(CBAttributeSet, TEXT("%s 의 AttributeSet 유효하지 않음."), *GetName());
-		
-		if (CBASC)
-		{
-			// AbilitySystemComponent에 이 캐릭터(Actor)와 소유자 정보를 초기화하여 어빌리티 시스템이 올바르게 동작하도록 설정
-			CBASC->InitAbilityActorInfo(PS, this);
-		}
-	}
-	
 	// ==========================================
 	// 서버 로직 (Authority Only)
 	// ==========================================
@@ -253,6 +262,44 @@ void ACBChaserCharacter::InitializePlayerSystem()
 
 	// 입력 잠금 해제
 	bIsInputLocked = false;
+}
+
+void ACBChaserCharacter::InitCommonData()
+{
+	// Player State 가져오기
+	ACBPlayerState* PS = GetPlayerState<ACBPlayerState>();
+	checkf(PS, TEXT("%s 의 PlayerState 유효하지 않음."), *GetName());
+
+	if (PS)
+	{
+		// CB ASC 가져오기
+		CBASC = PS->GetCBAbilitySystemComponent();
+		checkf(CBASC, TEXT("%s 의 AbilitySystemComponent 유효하지 않음."), *GetName());
+
+		// CB AttributeSet 가져오기
+		CBAttributeSet = PS->GetCBAttributeSet();
+		checkf(CBAttributeSet, TEXT("%s 의 AttributeSet 유효하지 않음."), *GetName());
+
+		if (CBASC)
+		{
+			// AbilitySystemComponent에 이 캐릭터(Actor)와 소유자 정보를 초기화하여 어빌리티 시스템이 올바르게 동작하도록 설정
+			CBASC->InitAbilityActorInfo(PS, this);
+		}
+	}
+
+	// 전 인스턴스(서버·소유 클라·시뮬 프록시) 공용 데이터 적용 (메쉬/이동/몽타주)
+	// 어빌리티/무기/이펙트 등 서버 권위 처리는 Auth_InitServerData 에서 별도 수행
+	if (!ChaserLoadout.IsNull())
+	{
+		UCBAssetManager::Get().LoadAssetAsync<UCBChaserLoadout>(ChaserLoadout, [this](UCBChaserLoadout* LoadedLoadout)
+		{
+			if (LoadedLoadout)
+			{
+				// 전 인스턴스 공용 데이터 적용 (메쉬·애님BP·이동 데이터·몽타주 데이터)
+				LoadedLoadout->ApplyToCharacter(this);
+			}
+		});
+	}
 }
 
 void ACBChaserCharacter::Auth_InitServerData()
@@ -281,7 +328,22 @@ void ACBChaserCharacter::Auth_InitServerData()
 
 void ACBChaserCharacter::Local_InitClientData()
 {
-	// 로컬 전용 초기화 로직 (예: 카메라 설정, 입력 설정 등)
+	// 로드아웃 소프트 참조 유효성 검사
+	if (ChaserLoadout.IsNull()) return;
+
+	// 비동기 로드
+	UCBAssetManager::Get().LoadAssetAsync<UCBChaserLoadout>(ChaserLoadout, [this](UCBChaserLoadout* LoadedLoadout)
+	{
+		// 소유 클라이언트 전용 데이터 적용 (입력 설정)
+		if (LoadedLoadout)
+		{
+			LoadedLoadout->Local_ApplyToCharacter(this);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%s 의 캐릭터 로드아웃 로드 실패"), *GetName());
+		}
+	});
 }
 
 UCBCombatComponent* ACBChaserCharacter::GetCBCombatComponent() const

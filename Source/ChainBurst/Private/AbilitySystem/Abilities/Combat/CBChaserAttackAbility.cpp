@@ -8,6 +8,12 @@
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "AbilitySystemComponent.h"
 
+UCBChaserAttackAbility::UCBChaserAttackAbility()
+{
+	// 로컬 입력으로 발동되어 즉시 반응해야 하므로 예측 실행
+	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+}
+
 void UCBChaserAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
                                              const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
                                              const FGameplayEventData* TriggerEventData)

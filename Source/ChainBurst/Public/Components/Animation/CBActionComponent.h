@@ -23,7 +23,8 @@ public:
 	UCBActionComponent();
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|MontageData")
+	/** 액션 몽타주 데이터. 로드아웃(UCBCharacterLoadout)에서 주입되는 런타임 캐시 */
+	UPROPERTY()
 	TObjectPtr<UCBActionMontageData> MontageData = nullptr;
 
 	TWeakObjectPtr<UCBCharacterAnimInstance> CachedAnimInstance;
@@ -67,6 +68,9 @@ public:
 
 	/** 액션 몽타주 데이터 에셋 반환 */
 	FORCEINLINE UCBActionMontageData* GetActionMontageDataAsset() const { return MontageData.Get(); }
+
+	/** 로드아웃에서 액션 몽타주 데이터를 주입하는 세터 */
+	FORCEINLINE void SetMontageData(UCBActionMontageData* InMontageData) { MontageData = InMontageData; }
 	
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

@@ -49,7 +49,7 @@ void ACBBaseCharacter::OnMovementSpeedChanged(float NewSpeed)
 	}
 }
 
-bool ACBBaseCharacter::RequestPlayMontage(const FGameplayTag InActionTag, bool bIsCombo)
+bool ACBBaseCharacter::RequestPlayMontage(const FGameplayTag InActionTag, int32 ComboIndex /* = 0 */)
 {
 	if (!CBActionComponent)
 	{
@@ -57,12 +57,7 @@ bool ACBBaseCharacter::RequestPlayMontage(const FGameplayTag InActionTag, bool b
 		return false;
 	}
 
-	if (bIsCombo)
-	{
-		return CBActionComponent->RequestPlayComboMontage(InActionTag);
-	}
-
-	return CBActionComponent->RequestPlaySingleMontage(InActionTag);
+	return CBActionComponent->RequestPlayMontage(InActionTag, ComboIndex);
 }
 
 UCBCombatComponent* ACBBaseCharacter::GetCBCombatComponent() const

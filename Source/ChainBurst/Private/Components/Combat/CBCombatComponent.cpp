@@ -30,6 +30,37 @@ void UCBCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(UCBCombatComponent, EquippedWeapon);
 }
 
+int32 UCBCombatComponent::AdvanceCombo(const FGameplayTag& InActionTag, int32 MaxComboCount)
+{
+	// 다른 액션 태그로 전환되면 콤보 리셋
+	if (CurrentComboActionTag != InActionTag)
+	{
+		ResetCombo();
+	}
+
+	// 인덱스가 최대 콤보 수 이상이면 순환 리셋
+	if (CurrentComboIndex >= MaxComboCount)
+	{
+		ResetCombo();
+	}
+
+	// 이번에 재생할 인덱스 (전진 전 값)
+	const int32 PlayIndex = CurrentComboIndex;
+
+	// 현재 콤보 태그 갱신 + 다음 단계로 전진
+	CurrentComboActionTag = InActionTag;
+	CurrentComboIndex++;
+
+	return PlayIndex;
+}
+
+void UCBCombatComponent::ResetCombo()
+{
+	// 콤보 인덱스와 액션 태그 초기화
+	CurrentComboIndex = 0;
+	CurrentComboActionTag = FGameplayTag::EmptyTag;
+}
+
 void UCBCombatComponent::TickComponent(float DeltaTime, enum ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction)
 {

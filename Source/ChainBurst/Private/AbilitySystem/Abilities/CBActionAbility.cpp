@@ -2,6 +2,7 @@
 #include "AbilitySystem/Abilities/CBActionAbility.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Animation/CBActionComponent.h"
+#include "Components/Combat/CBCombatComponent.h"
 #include "CBGameplayTags.h"
 
 // engine
@@ -18,16 +19,33 @@ void UCBActionAbility::PlayActionMontage()
 		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
 		return;
 	}
+	
+	int32 ComboIndex = 0;
 
-	// 게임플레이 큐 파라미터 구성 (재생할 액션 태그 담기)
-	FGameplayCueParameters CueParams;
-	CueParams.AggregatedSourceTags.AddTag(BoundActionTag);
-
-	// 콤보 액션이면 콤보 여부 태그를 담아 콤보 몽타주가 선택되도록 함
+	// 콤보 액션이면
 	if (IsCombo)
 	{
-		CueParams.AggregatedSourceTags.AddTag(CBGameplayTags::Context_Action_IsCombo);
+		// 컴뱃 컴포넌트 가져오기
+		if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
+		{
+			int32 MaxComboCount = 0;
+
+			// 액션 컴포넌트 가져오기
+			if (UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo())
+			{
+				// 최대 콤보 수 가져오기 (몽타주 개수)
+				MaxComboCount = ActionComp->GetMontageCount(BoundActionTag);
+			}
+
+			// 콤보 인덱스 증가 및 이번에 재생할 콤보 인덱스 가져오기
+			ComboIndex = CombatComp->AdvanceCombo(BoundActionTag, MaxComboCount);
+		}
 	}
+
+	// 게임플레이 큐 파라미터 구성 (재생할 액션 태그 + 콤보 인덱스)
+	FGameplayCueParameters CueParams;
+	CueParams.AggregatedSourceTags.AddTag(BoundActionTag);
+	CueParams.RawMagnitude = static_cast<float>(ComboIndex);
 
 	// 자식이 그 외 추가 태그를 붙일 수 있도록 훅 호출
 	BuildActionCueParameters(CueParams);
@@ -50,20 +68,28 @@ void UCBActionAbility::PlayActionMontage()
 	OnActionMontageStarted();
 }
 
+// 몽타주 종료 이벤트 대기 콜백 함수 (애님노티파이 수신 시 어빌리티 종료)
 void UCBActionAbility::OnActionEnded(FGameplayEventData Payload)
 {
-	// 몽타주 정리 (블렌드 아웃 및 콤보 초기화 여부 결정)
+	// 몽타주 블렌드 아웃
 	if (UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo())
 	{
-		ActionComp->StopMontage(0.25f, ShouldResetComboOnEnd());
+		ActionComp->StopMontage(0.25f);
 	}
+
+	// 콤보 리셋 (몽타주가 끝까지 재생됨 → 체인 종료)
+	TryResetComboOnEnd();
 
 	// 어빌리티 정상 종료
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
 
+// 폴백 타임아웃 콜백 함수 (애님노티파이가 없는 경우, 몽타주 길이만큼 대기 후 종료)
 void UCBActionAbility::OnDelayFinished()
 {
+	// 콤보 리셋 (몽타주 길이만큼 지남 = 몽타주 끝까지 재생됨 → 체인 종료)
+	TryResetComboOnEnd();
+
 	// 어빌리티 종료
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
@@ -76,4 +102,30 @@ float UCBActionAbility::CurrentActionDuration() const
 		return ActionComp->GetCurrentActionDuration();
 	}
 	return 5.f;
+}
+
+void UCBActionAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
+	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
+	bool bReplicateEndAbility, bool bWasCancelled)
+{
+	// 캔슬로 끊긴 경우 콤보 리셋 (정상 종료 리셋은 OnActionEnded/OnDelayFinished가 담당,
+	// 콤보 이어가기는 bWasCancelled=false로 종료되므로 여기에 안 걸림)
+	if (bWasCancelled)
+	{
+		TryResetComboOnEnd();
+	}
+
+	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
+void UCBActionAbility::TryResetComboOnEnd()
+{
+	// 콤보 액션일 때만 CombatComponent에 콤보 리셋 요청
+	if (ShouldResetComboOnEnd())
+	{
+		if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
+		{
+			CombatComp->ResetCombo();
+		}
+	}
 }

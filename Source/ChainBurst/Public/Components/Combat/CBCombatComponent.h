@@ -24,7 +24,7 @@ struct FCBRegisteredWeaponData
 	/** 무기 식별 태그 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FGameplayTag WeaponTag = FGameplayTag::EmptyTag;
-	
+
 	/** 스폰된 무기 인스턴스 */
 	UPROPERTY()
 	TObjectPtr<ACBBaseWeapon> WeaponInstance = nullptr;
@@ -37,7 +37,7 @@ struct FCBRegisteredWeaponData
 	bool IsValid() const { return WeaponTag.IsValid() && WeaponInstance != nullptr; };
 
 	FCBRegisteredWeaponData() = default;
-	
+
 	FCBRegisteredWeaponData(FGameplayTag InWeaponTag, TObjectPtr<ACBBaseWeapon> InWeaponInstance)
 		: WeaponTag(InWeaponTag)
 		, WeaponInstance(InWeaponInstance) {}
@@ -46,7 +46,7 @@ struct FCBRegisteredWeaponData
 		: WeaponTag(InWeaponData->WeaponTag)
 		, WeaponInstance(InWeaponInstance)
 		, WeaponDamage(InWeaponData->WeaponDamage) {}
-	
+
 	/**
 	 * operator== 정의
 	 * FCBWeaponData 와 비교 연산
@@ -61,6 +61,7 @@ struct FCBRegisteredWeaponData
 /**
  * [공용] 전투 컴포넌트의 부모 클래스.
  * 무기 장착, 데미지 처리, 전투 상태(태그) 등 추격자와 무법자가 공유하는 로직을 담당.
+ * 콤보 카운트 및 초기화 관리 담당
  */
 UCLASS(Abstract)
 class CHAINBURST_API UCBCombatComponent : public UCBExtensionComponent
@@ -69,18 +70,34 @@ class CHAINBURST_API UCBCombatComponent : public UCBExtensionComponent
 
 public:
 	UCBCombatComponent();
-	
-private:
-	/** [저장소] 현재 장착된 무기 데이터 */
-	UPROPERTY(Replicated)
-	FCBRegisteredWeaponData EquippedWeapon;
 
-	/** 무기 AttackPower GE 핸들 (무기 해제 시 GE 제거에 사용) */
-	FActiveGameplayEffectHandle WeaponAttackPowerEffectHandle;
-
+#pragma region Core
+	/** 컴포넌트 수명 주기 / 복제 / 오너 캐싱 */
 protected:
 	virtual void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-	
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** [Getter] CachedOwnerMesh */
+	USkeletalMeshComponent* GetCachedOwnerMesh();
+
+	/** [Getter] CachedOwnerASC */
+	UCBAbilitySystemComponent* GetCachedOwnerASC();
+
+	/**
+	 * 캐릭터의 메쉬를 저장
+	 * 무기를 부착할 때 자주 호출하기 때문에 캐싱
+	 */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<USkeletalMeshComponent> CachedOwnerMesh;
+
+	/** 캐릭터의 ASC를 저장 */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UCBAbilitySystemComponent> CachedOwnerASC;
+#pragma endregion
+
+#pragma region Weapon
+	/** 무기 등록 / 스폰·파괴 / AttackPower GE */
 public:
 	/**
 	 * [서버 전용] 무기 태그와 무기 인스턴스를 맵에 등록하는 함수.
@@ -96,14 +113,43 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
 	bool HasValidWeapon() const { return EquippedWeapon.IsValid(); }
-	
+
+protected:
+	/**
+	 * [서버 전용] 무기를 생성하는 내부 함수
+	 * @param WeaponClass 생성할 무기 클래스.
+	 * @return 무기 인스턴스 반환, 생성 실패 시 nullptr 반환.
+	 */
+	ACBBaseWeapon* Auth_SpawnWeapon(TSubclassOf<ACBBaseWeapon> WeaponClass);
+
+	/** [서버 전용] 무기를 파괴하는 내부 함수 */
+	void Auth_DestroyWeapon(ACBBaseWeapon* WeaponToDestroy);
+
+	/** [서버 전용] 무기 AttackPower GE를 ASC에 적용하는 함수 */
+	void Auth_ApplyWeaponAttackPowerEffect(UCBWeaponData* InWeaponData);
+
+	/** [서버 전용] 무기 AttackPower GE를 ASC에서 제거하는 함수 */
+	void Auth_RemoveWeaponAttackPowerEffect();
+
+private:
+	/** [저장소] 현재 장착된 무기 데이터 */
+	UPROPERTY(Replicated)
+	FCBRegisteredWeaponData EquippedWeapon;
+
+	/** 무기 AttackPower GE 핸들 (무기 해제 시 GE 제거에 사용) */
+	FActiveGameplayEffectHandle WeaponAttackPowerEffectHandle;
+#pragma endregion
+
+#pragma region CombatState
+	/** 전투 모드(태그) 진입/이탈 */
+public:
 	/**
 	 * [Getter] 현재 전투 상태 확인 (태그 검사)
 	 * @return 전투 상태면 True, 비전투 상태면 False 반환
 	 */
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
 	bool IsCombatMode();
-	
+
 	/**
 	 * [Setter] 전투 상태 변경 함수
 	 * @param bInCombat true면 전투 상태, false면 비전투 상태
@@ -111,6 +157,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Combat")
 	void SetCombatMode(bool bInCombat);
 
+protected:
+	/** 전투 모드로 전환 로직 */
+	virtual void OnEnterCombatMode();
+
+	/** 비전투 모드로 전환 로직 */
+	virtual void OnExitCombatMode();
+#pragma endregion
+
+#pragma region WeaponTrace
+	/** 무기 트레이스 / 히트 감지·배칭·검증 */
+public:
 	/** 무기 트레이스 시작 함수 */
 	void StartWeaponTrace();
 
@@ -125,50 +182,12 @@ public:
 	void Server_NotifyAttackHit(const FGameplayAbilityTargetDataHandle& TargetDataHandle);
 
 protected:
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	
-	/**
-	 * [서버 전용] 무기를 생성하는 내부 함수
-	 * @param WeaponClass 생성할 무기 클래스.
-	 * @return 무기 인스턴스 반환, 생성 실패 시 nullptr 반환.
-	 */
-	ACBBaseWeapon* Auth_SpawnWeapon(TSubclassOf<ACBBaseWeapon> WeaponClass);
-
-	/** [서버 전용] 무기를 파괴하는 내부 함수 */
-	void Auth_DestroyWeapon(ACBBaseWeapon* WeaponToDestroy);
-
-	/** [Getter] CachedOwnerMesh */
-	USkeletalMeshComponent* GetCachedOwnerMesh();
-
-	/** [Getter] CachedOwnerASC */
-	UCBAbilitySystemComponent* GetCachedOwnerASC();
-	
-	/** 전투 모드로 전환 로직 */
-	virtual void OnEnterCombatMode();
-
-	/** 비전투 모드로 전환 로직 */
-	virtual void OnExitCombatMode();
-
-	/** [서버 전용] 무기 AttackPower GE를 ASC에 적용하는 함수 */
-	void Auth_ApplyWeaponAttackPowerEffect(UCBWeaponData* InWeaponData);
-
-	/** [서버 전용] 무기 AttackPower GE를 ASC에서 제거하는 함수 */
-	void Auth_RemoveWeaponAttackPowerEffect();
-
 	/** 트레이스 충돌 결과를 처리하는 함수 */
 	void ProcessHit(const FGameplayAbilityTargetDataHandle& TargetDataHandle);
 
-	/**
-	 * 캐릭터의 메쉬를 저장
-	 * 무기를 부착할 때 자주 호출하기 때문에 캐싱
-	 */
-	UPROPERTY(Transient)
-	TWeakObjectPtr<USkeletalMeshComponent> CachedOwnerMesh;
+	/** 누적된 히트를 한 번에 처리하는 함수 */
+	void FlushPendingHits();
 
-	/** 캐릭터의 ASC를 저장 */
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UCBAbilitySystemComponent> CachedOwnerASC;
-	
 	/** 트레이스 범위 (구형 트레이스 반지름) */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Trace")
 	float TraceRadius = 20.0f;
@@ -184,9 +203,6 @@ protected:
 	// 트레이스 분할 개수 (기본값 : 3)
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Trace")
 	int32 TraceSubdivisions = 3;
-	
-	/** 누적된 히트를 한 번에 처리하는 함수 */
-	void FlushPendingHits();
 
 private:
 	/** 트레이스 충돌 결과 저장 배열 (중복 방지) */
@@ -214,4 +230,33 @@ private:
 
 	/** 이전 프레임의 무기 끝 위치*/
 	FVector PrevTipLoc;
+#pragma endregion
+
+#pragma region Combo
+	/**
+	 * 콤보 (서버 권위 + 소유 클라 예측).
+	 */
+public:
+	/**
+	 * 콤보를 한 단계 전진시키고 이번에 재생할 인덱스를 반환.
+	 * 다른 액션 태그로 전환되거나 인덱스가 최대치 이상이면 리셋 후 진행.
+	 * @param InActionTag   콤보 액션 태그
+	 * @param MaxComboCount 이 액션의 최대 콤보 수(몽타주 개수). 인덱스가 이 값 이상이면 리셋.
+	 * @return 이번에 재생할 콤보 인덱스
+	 */
+	int32 AdvanceCombo(const FGameplayTag& InActionTag, int32 MaxComboCount);
+
+	/** 콤보 인덱스·액션 태그 초기화 (어빌리티 종료/캔슬 시 호출) */
+	void ResetCombo();
+
+	/** 현재 콤보 인덱스 반환 */
+	int32 GetCurrentComboIndex() const { return CurrentComboIndex; }
+
+private:
+	/** 현재 콤보 단계 (0부터 시작) */
+	int32 CurrentComboIndex = 0;
+
+	/** 현재 콤보가 진행 중인 액션 태그 (태그 전환 시 리셋 판단용) */
+	FGameplayTag CurrentComboActionTag;
+#pragma endregion
 };

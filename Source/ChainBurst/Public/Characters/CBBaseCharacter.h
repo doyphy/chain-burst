@@ -74,11 +74,11 @@ public:
 	/**
 	 * 외부(어빌리티, 게임플레이 큐 등)에서 몽타주 재생을 요청하는 함수
 	 * @param InActionTag  재생할 몽타주 식별 태그
-	 * @param bIsCombo     콤보 몽타주 여부
+	 * @param ComboIndex   재생할 몽타주 인덱스 (콤보 단계 또는 랜덤 변형 인덱스. 단일 액션은 0)
 	 * @return             재생 성공 여부
 	 */
 	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Action")
-	bool RequestPlayMontage(const FGameplayTag InActionTag, bool bIsCombo = false);
+	bool RequestPlayMontage(const FGameplayTag InActionTag, int32 ComboIndex = 0);
 
 	UFUNCTION(Server, Reliable)
 	void Server_SendGameplayEvent(AActor* Actor, FGameplayTag EventTag, FGameplayEventData Payload);

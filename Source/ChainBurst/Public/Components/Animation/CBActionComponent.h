@@ -10,7 +10,6 @@ class UCBCharacterAnimInstance;
 
 /**
  * 액션(몽타주) 관련 처리 컴포넌트
- * 단일 몽타주, 콤보 몽타주 재생 및 콤보 단계 관리
  * 몽타주 데이터는 UCBActionMontageData 데이터 에셋에서 관리
  * 캐릭터의 애님 인스턴스에 몽타주 재생 요청
  */
@@ -29,45 +28,32 @@ protected:
 
 	TWeakObjectPtr<UCBCharacterAnimInstance> CachedAnimInstance;
 
-	/** 현재 콤보 단계 (0부터 시작) */
-	UPROPERTY(Replicated)
-	int32 CurrentComboIndex = 0;
-
-	/** 현재 재생 중인 액션 태그 (다른 액션으로 전환 시 콤보 인덱스 초기화 판단용) */
-	UPROPERTY(Replicated)
-	FGameplayTag CurrentActionTag = FGameplayTag::EmptyTag;
-
 	/** 현재 재생 중인 액션의 지속 시간 */
 	UPROPERTY(Replicated)
 	float CurrentActionDuration = 0.f;
 	
 public:
 	/**
-	 * 단일 몽타주 재생 요청
+	 * 몽타주 재생 요청
+	 * 콤보/랜덤 여부와 무관하게 인덱스로 몽타주를 선택해 재생한다. (인덱스 의미는 호출자가 결정)
 	 * @param InActionTag 재생할 몽타주 식별 태그
+	 * @param InIndex     재생할 몽타주 인덱스 (단일 액션은 0)
 	 * @return 재생 성공 여부
 	 */
-	bool RequestPlaySingleMontage(const FGameplayTag& InActionTag);
-
-	/**
-	 * 콤보 몽타주 재생 요청
-	 * 내부적으로 현재 콤보 인덱스를 기반으로 몽타주 선택
-	 * @param InActionTag 재생할 콤보 몽타주 식별 태그
-	 * @return 재생 성공 여부
-	 */
-	bool RequestPlayComboMontage(const FGameplayTag& InActionTag);
+	bool RequestPlayMontage(const FGameplayTag& InActionTag, int32 InIndex = 0);
 
 	/** 현재 재생 중인 몽타주 강제 중단 */
-	void StopMontage(float BlendOutTime = 0.25f, bool IsResetCombo = false);
-	
-	/** 현재 콤보 인덱스 반환 */
-	int32 GetCurrentComboIndex() const { return CurrentComboIndex; }
+	void StopMontage(float BlendOutTime = 0.25f);
 
 	/** 현재 액션(몽타주) 재생 시간 반환 (기본 값 5초) */
 	float GetCurrentActionDuration() const { return CurrentActionDuration > 0.f ? CurrentActionDuration : 5.f; }
 
-	/** 액션 몽타주 데이터 에셋 반환 */
-	FORCEINLINE UCBActionMontageData* GetActionMontageDataAsset() const { return MontageData.Get(); }
+	/**
+	 * 액션 태그에 등록된 몽타주 개수 반환 (콤보 단계 수).
+	 * 몽타주 데이터 에셋 접근을 컴포넌트 뒤로 캡슐화한다 — 외부(어빌리티 등)는 데이터 에셋 대신 이 함수를 사용.
+	 * @return 몽타주 개수. 데이터 에셋이 없거나 태그가 없으면 0.
+	 */
+	int32 GetMontageCount(const FGameplayTag& InActionTag) const;
 
 	/** 로드아웃에서 액션 몽타주 데이터를 주입하는 세터 */
 	FORCEINLINE void SetMontageData(UCBActionMontageData* InMontageData) { MontageData = InMontageData; }
@@ -97,20 +83,4 @@ protected:
 
 	/** 애님 인스턴스 지연 캐싱 */
 	bool GetCachedAnimInstance(TWeakObjectPtr<UCBCharacterAnimInstance>& OutAnimInstance);
-
-	/** 타이머 시작 함수 (몽타주 재생 시 호출) */
-	void StartComboResetTimer(float MontageDuration);
-
-	/** 타이머 취소 함수 (콤보가 이어지거나 강제 취소될 때 호출) */
-	void CancelComboResetTimer();
-
-	/** 콤보 초기화 함수 */
-	void ResetComboIndex();
-
-private:
-	/** 콤보 초기화 타이머에서 호출될 콜백 함수 */
-	void OnComboTimeout();
-
-	/** 콤보 초기화 타이머 핸들 */
-	FTimerHandle ComboResetTimerHandle;
 };

@@ -27,6 +27,10 @@ class CHAINBURST_API UCBActionAbility : public UCBGameplayAbility
 	GENERATED_BODY()
 
 protected:
+	//~ Begin UGameplayAbility Interface
+	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
+	//~ End UGameplayAbility Interface
+
 	/** 액션 몽타주 재생 및 종료 처리 등록 (자식에서 호출) */
 	void PlayActionMontage();
 
@@ -53,12 +57,15 @@ protected:
 	UFUNCTION()
 	virtual void OnDelayFinished();
 
+	/** 콤보 종료/캔슬 시 리셋 (ShouldResetComboOnEnd()면 CombatComponent에 리셋 요청) */
+	void TryResetComboOnEnd();
+
 protected:
 	/** 이 어빌리티와 연결된 액션(몽타주) 태그 */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst", meta = (Categories = "Action"))
 	FGameplayTag BoundActionTag;
 
-	/** 이 어빌리티와 연결된 액션(몽타주)의 콤보 여부 (싱글/콤보 몽타주 요청에 사용) */
+	/** 이 어빌리티와 연결된 액션(몽타주)의 콤보 여부 (콤보 액션 사용) */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst")
 	bool IsCombo = false;
 

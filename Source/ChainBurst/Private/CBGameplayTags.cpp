@@ -58,9 +58,6 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_EquipWeapon, "Action.Combat.EquipWeapon", "무기 장착 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_UnequipWeapon, "Action.Combat.UnequipWeapon", "무기 해제 액션 태그")
 
-	/** Context Tags. (컨텍스트에 담는 태그) */
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_Action_IsCombo, "Context.Action.IsCombo", "현재 액션이 콤보인지 여부 (컨텍스트에 담는 태그)")
-
 	/** Effect Tags. (GE의 동작 의도를 선언하는 태그) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Effect_HitReact, "Effect.HitReact", "이 GE가 피격 반응을 유발함을 선언하는 태그 (Opt-in)")
 

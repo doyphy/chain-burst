@@ -48,6 +48,7 @@ void UCBInputActionAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 
+// 몽타주 재생 시작 직후 후처리 훅 (자식이 추가 작업을 수행)
 void UCBInputActionAbility::OnActionMontageStarted()
 {
 	// 내가 조종하는 로컬 캐릭터에서만 입력 윈도우 대기 (입력 감지는 로컬에서)

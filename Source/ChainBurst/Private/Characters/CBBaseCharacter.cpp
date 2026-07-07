@@ -1,7 +1,6 @@
 // project
 #include "Characters/CBBaseCharacter.h"
 #include "Components/Movement/CBLocomotionProcessor.h"
-#include "Components/Movement/CBCharacterTrajectoryComponent.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Animation/CBActionComponent.h"
 #include "AbilitySystem/CBAttributeSet.h"
@@ -24,7 +23,6 @@ ACBBaseCharacter::ACBBaseCharacter()
 	// 캐릭터의 메시가 데칼(총알 자국, 피 등)을 받지 않도록 설정
 	GetMesh()->bReceivesDecals = false;
 	
-	CBTrajectoryComponent = CreateDefaultSubobject<UCBCharacterTrajectoryComponent>(TEXT("CBTrajectoryComponent"));
 	CBLocomotionProcessor = CreateDefaultSubobject<UCBLocomotionProcessor>(TEXT("CBLocomotionProcessor"));
 	CBActionComponent = CreateDefaultSubobject<UCBActionComponent>(TEXT("CBActionComponent"));
 }
@@ -70,20 +68,33 @@ void ACBBaseCharacter::Server_SendGameplayEvent_Implementation(AActor* Actor, FG
 	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(Actor, EventTag, Payload);
 }
 
+bool ACBBaseCharacter::StartSystemInitialization()
+{
+	// 이미 초기화가 시작/완료되었으면 재진입 방지 (PossessedBy/OnRep_PlayerState 중복 호출 대비)
+	if (SystemState != ECBSystemState::Uninitialized)
+	{
+		return false;
+	}
+
+	// 초기화 진행 상태로 전환. 완료는 공용 데이터 로드 콜백에서 HandleCharacterSystemReady로 통지된다.
+	SystemState = ECBSystemState::Initializing;
+	return true;
+}
+
 void ACBBaseCharacter::HandleCharacterSystemReady()
 {
 	// 이미 시스템이 준비되었으면 중복 실행 방지
-	if (bIsCharacterSystemReady) return;
+	if (SystemState == ECBSystemState::Ready) return;
 
-	// 시스템 준비 완료 플래그 설정
-	bIsCharacterSystemReady = true;
+	// 시스템 준비 완료 상태로 전환
+	SystemState = ECBSystemState::Ready;
 
 	// 델리게이트 방송 (구독 중인 컴포넌트 및 애님 인스턴스에 알림)
 	OnCharacterSystemReadyDelegate.Broadcast();
 
-	// 어트리뷰트 초기화
+	// 어트리뷰트 초기화 (모든 비동기 로드 완료 후 실행되므로 MovementData 등 준비 완료 상태)
 	InitializeAttributes();
-	
+
 	// Tick 활성화 (필요할 때)
 	// SetActorTickEnabled(true);
 }

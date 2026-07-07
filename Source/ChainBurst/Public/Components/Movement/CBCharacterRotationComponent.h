@@ -20,7 +20,6 @@ public:
 	UCBCharacterRotationComponent();
 
 protected:
-	virtual void BeginPlay() override;
 	virtual void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	
 	UPROPERTY(Transient)
@@ -50,8 +49,8 @@ private:
 	FRotator SmoothedTargetRotation = FRotator::ZeroRotator;
 
 protected:
-	/** 캐릭터 시스템이 완료되었을 때 실행될 초기화 함수 */
-	void OnCharacterSystemReady();
+	/** 캐릭터 시스템이 완료되었을 때 실행될 초기화 함수 (Tick 활성화) */
+	virtual void OnCharacterSystemReady() override;
 	
 	/**
 	 * Character 를 지연 캐싱해서 가져오는 함수.

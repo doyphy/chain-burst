@@ -11,27 +11,8 @@ UCBLocomotionProcessor::UCBLocomotionProcessor()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	
-	// 처음에는 Tick 비활성화 (OnPlayerSystemReady 함수에서 활성화)
+	// 처음에는 Tick 비활성화 (OnCharacterSystemReady 함수에서 활성화)
 	PrimaryComponentTick.bStartWithTickEnabled = false;
-}
-
-void UCBLocomotionProcessor::BeginPlay()
-{
-	Super::BeginPlay();
-
-	if (ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>())
-	{
-		if (OwnerCharacter->bIsCharacterSystemReady)
-		{
-			// 이미 시스템이 준비된 상태라면 즉시 초기화 함수 실행
-			this->OnCharacterSystemReady();
-		}
-		else
-		{
-			// 캐릭터 시스템 준비 완료 델리게이트에 바인딩
-			OwnerCharacter->OnCharacterSystemReadyDelegate.AddUObject(this, &ThisClass::OnCharacterSystemReady);
-		}
-	}
 }
 
 void UCBLocomotionProcessor::TickComponent(float DeltaTime, enum ELevelTick TickType,
@@ -93,14 +74,8 @@ float UCBLocomotionProcessor::CalculateBrakingDeceleration()
 
 void UCBLocomotionProcessor::OnCharacterSystemReady()
 {
-	// 델리게이트 구독 해제 (중복 실행 방지)
-	if (ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>())
-	{
-		OwnerCharacter->OnCharacterSystemReadyDelegate.RemoveAll(this);
-	}
-
 	// CachedCMC 는 지연 캐싱으로 초기화.
-	
+
 	// Tick 활성화
 	SetComponentTickEnabled(true);
 }

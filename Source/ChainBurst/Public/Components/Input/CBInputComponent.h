@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "EnhancedInputComponent.h"
-#include "DataAssets\Input\CBInputConfig.h"
+#include "DataAssets/Input/CBInputConfig.h"
 #include "CBInputComponent.generated.h"
 
 UCLASS()
@@ -12,17 +12,17 @@ class CHAINBURST_API UCBInputComponent : public UEnhancedInputComponent
 	
 public:
 	/**
-	 * 기본 입력 액션을 바인딩하는 템플릿 함수
-	 * @tparam UserObject 
-	 * @tparam CallbackFunc 
+	 * 기본 입력 액션을 바인딩하는 템플릿 함수.
+	 * 트리거 이벤트(ETriggerEvent)는 InputConfig 데이터에서 태그별로 지정된 값을 사용한다.
+	 * @tparam UserObject
+	 * @tparam CallbackFunc
 	 * @param InInputConfig 검색할 입력 데이터 에셋
 	 * @param InInputTag  검색할 입력 태그
-	 * @param TriggerEvent 입력 트리거 이벤트 종류 (ETriggerEvent)
-	 * @param ContextObject 바인딩할 객체 
+	 * @param ContextObject 바인딩할 객체
 	 * @param Func 바인딩할 콜백 함수
 	 */
 	template<class UserObject, typename CallbackFunc>
-	void BindNativeInputAction(const UCBInputConfig* InInputConfig, const FGameplayTag& InInputTag, ETriggerEvent TriggerEvent, UserObject* ContextObject, CallbackFunc Func);
+	void BindNativeInputAction(const UCBInputConfig* InInputConfig, const FGameplayTag& InInputTag, UserObject* ContextObject, CallbackFunc Func);
 
 	/**
 	 * 어빌리티 입력 액션을 바인딩하는 템플릿 함수
@@ -40,22 +40,21 @@ public:
 
 // BindNativeInputAction 구현부
 template<class UserObject, typename CallbackFunc>
-inline void UCBInputComponent::BindNativeInputAction(const UCBInputConfig* InInputConfig, const FGameplayTag& InInputTag, ETriggerEvent TriggerEvent, UserObject* ContextObject, CallbackFunc Func)
+void UCBInputComponent::BindNativeInputAction(const UCBInputConfig* InInputConfig, const FGameplayTag& InInputTag, UserObject* ContextObject, CallbackFunc Func)
 {
 	// InInputConfig가 유효한지 확인
-	checkf(InInputConfig, TEXT("In Input config 데이터 에셋이 유효하지 않음."));
+	checkf(InInputConfig, TEXT("InputConfig 데이터 에셋이 유효하지 않음."));
 
-	// 데이터 에셋에서 InputTag에 맞는 InputAction을 검색
-	if (UInputAction* FoundAction = InInputConfig->FindNativeInputActionByTag(InInputTag))
+	// 데이터 에셋에서 InputTag에 맞는 일반 입력 설정(액션+트리거)을 검색
+	if (const FCBInputActionConfig* Config = InInputConfig->FindNativeInputConfigByTag(InInputTag))
 	{
-		// 찾은 InputAction을 해당 트리거 이벤트와 객체, 함수에 바인딩
-		// FInputActionValue 매개 변수는 자동으로 추가해줌
-		BindAction(FoundAction, TriggerEvent, ContextObject, Func);
+		// 데이터에 지정된 트리거 이벤트로 바인딩 (FInputActionValue 매개 변수는 자동으로 추가됨)
+		BindAction(Config->InputAction, Config->TriggerEvent, ContextObject, Func);
 	}
 	else
 	{
-		// 입력 태그에 해당하는 액션이 없을 경우 경고 로그 출력
-		UE_LOG(LogTemp, Warning, TEXT("%s 태그에 해당하는 Input Action 이 %s 에 없음."), *InInputTag.ToString(), *InInputConfig->GetName());
+		// 입력 태그에 해당하는 설정이 없을 경우 경고 로그 출력
+		UE_LOG(LogTemp, Warning, TEXT("%s 태그에 해당하는 Native Input 설정이 %s 에 없음."), *InInputTag.ToString(), *InInputConfig->GetName());
 	}
 }
 
@@ -63,7 +62,7 @@ template <class UserObject, typename CallbackFunc>
 void UCBInputComponent::BindAbilityInputAction(const UCBInputConfig* InInputConfig, UserObject* ContextObject,
 	CallbackFunc InputPressedFunc, CallbackFunc InputReleasedFunc)
 {
-	checkf(InInputConfig, TEXT("In Input config 데이터 에셋이 유효하지 않음."));
+	checkf(InInputConfig, TEXT("InputConfig 데이터 에셋이 유효하지 않음."));
 	// 입력 설정 데이터에서 능력 관련 입력 액션들을 가져옴
 	for (const FCBInputActionConfig& AbilityInputActionConfig : InInputConfig->AbilityInputActions)
 	{

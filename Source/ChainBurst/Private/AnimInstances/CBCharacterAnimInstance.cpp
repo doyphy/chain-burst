@@ -2,92 +2,61 @@
 #include "AnimInstances/CBCharacterAnimInstance.h"
 #include "Characters/CBBaseCharacter.h"
 #include "CBGameplayTags.h"
-#include "Components/Movement/CBCharacterTrajectoryComponent.h"
-#include "DataAssets/Movement/CBCharacterMovementData.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 
 // engine
 #include "GameFramework/CharacterMovementComponent.h"
-#include "PoseSearch/PoseSearchLibrary.h"
 #include "Animation/AnimMontage.h"
 #include "AlphaBlend.h"
 
-void UCBCharacterAnimInstance::NativeInitializeAnimation()
-{
-	Super::NativeInitializeAnimation();
-
-	if (GetCachedCharacter(CachedCharacter))
-	{
-		if (CachedCharacter.Get()->bIsCharacterSystemReady)
-		{
-			// 이미 시스템이 준비된 상태라면 즉시 초기화 함수 실행
-			this->OnCharacterSystemReady();
-		}
-		else
-		{
-			// 캐릭터 시스템 준비 완료 델리게이트에 바인딩
-			CachedCharacter.Get()->OnCharacterSystemReadyDelegate.AddUObject(this, &ThisClass::OnCharacterSystemReady);
-		}
-	}
-}
-
+// 게임 스레드에서 실행되는 업데이트 함수 (UObject 접근 가능)
 void UCBCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
 
+	// 움직임 데이터 가져오기 (캐싱)
 	UpdateBasicMovementData();
-	
+
+	// 어빌리티/컴뱃 관련 데이터 가져오기 (캐싱)
 	UpdateCombatAndAbilityData();
-	
-	// 피벗 감지 시 타이머 리셋 (입력 잠금 시간)
-	if (bIsPivoting)
-	{
-		PivotLockTimer = PivotLockDuration;
-	}
-	else if (PivotLockTimer > 0.f)
-	{
-		PivotLockTimer -= DeltaSeconds;
-	}
 }
 
+// 워커 스레드에서 실행되는 업데이트 함수 (UObject 접근 불가 (외부 접근 불가, 내부 데이터로만), 매우 빠름)
 void UCBCharacterAnimInstance::NativeThreadSafeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeThreadSafeUpdateAnimation(DeltaSeconds);
-	
-	if(!GetCachedCharacter(CachedCharacter) || !GetCachedCMC(CachedCMC) || !GetCachedTrajectoryComp(CachedTrajectoryComp))
+
+	if (!GetCachedCharacter(CachedCharacter) || !GetCachedCMC(CachedCMC))
 	{
 		return;
 	}
 
-	// 데이터 업데이트
+	// 데이터 업데이트 (내부 데이터 복사)
 	CurrentVelocity = CachedVelocity;
 	CurrentVelocitySize = CurrentVelocity.Size2D();
-	
+
 	CurrentAccelerationSize = CachedAcceleration.Size2D();
 
-	FutureVelocity = CachedFutureVelocity;
-	FutureVelocitySize = CachedFutureVelocity.Size2D();
-	
 	// 상태 업데이트
 	bHasAcceleration = CurrentAccelerationSize > KINDA_SMALL_NUMBER;
-	bIsPivoting = IsPivoting();
-	
-	
+
 	// 로컬 속도 계산 (캐릭터의 회전에 따라 월드 속도를 로컬 속도로 변환)
-	// 로컬 X = 항상 캐릭터 앞뒤
-	// 로컬 Y = 항상 캐릭터 좌우
+	// 월드 속도를 캐릭터 회전의 역으로 돌려 로컬 속도로 만듦.
+	// LocalVelocity.X = 항상 캐릭터 앞뒤, LocalVelocity.Y = 항상 캐릭터 좌우
 	FVector LocalVelocity = CachedActorRotation.UnrotateVector(CurrentVelocity);
+	
 	if (!LocalVelocity.IsNearlyZero())
 	{
-		// 정규화 (크기를 1로 만듦)
+		// 정규화 (크기를 1로 만듦, 속도 크기는 버리고 방향만 남김)
 		// 앞(1,0), 오른쪽 45도(0.707, 0.707)
 		LocalVelocity.Normalize();
 	}
 
 	// 로컬 속도를 보간하여 InputX, InputY에 적용
-	// Input [X] -> LocalVelocity [Y]
-	// Input [Y] -> LocalVelocity [X]
-	// 블렌드 스페이스의 X축이 캐릭터 좌우, Y축이 캐릭터 앞뒤에 매핑되어 있기 때문
+	// 방향이 급변해도 블렌드 스페이스 샘플 지점이 부드럽게 이동(팝핑 방지)
+	// Input [X] -> LocalVelocity [Y] (축 스왑)
+	// Input [Y] -> LocalVelocity [X] (축 스왑)
+	// [축 스왑] 블렌드 스페이스 규약이 X축은 캐릭터 좌우, Y축은 캐릭터 앞뒤에 매핑되어 있기 때문
 	MoveX = FMath::FInterpTo(MoveX, LocalVelocity.Y, DeltaSeconds, 10.f);
 	MoveY = FMath::FInterpTo(MoveY, LocalVelocity.X, DeltaSeconds, 10.f);
 }
@@ -100,19 +69,14 @@ void UCBCharacterAnimInstance::UpdateBasicMovementData()
 		CachedAcceleration = CachedCMC.Get()->GetCurrentAcceleration();
 		CachedActorRotation = CachedCharacter.Get()->GetActorRotation();
 	}
-	
-	if (GetCachedTrajectoryComp(CachedTrajectoryComp))
-	{
-		UPoseSearchTrajectoryLibrary::GetTrajectoryVelocity(CachedTrajectoryComp.Get()->GetTrajectory(), 0.3, 0.5, CachedFutureVelocity, false);
-	}
 }
 
 void UCBCharacterAnimInstance::UpdateCombatAndAbilityData()
 {
 	if (!GetCachedCharacter(CachedCharacter)) return;
-	
+
 	UCBAbilitySystemComponent* ASC = CachedCharacter.Get()->GetCBAbilitySystemComponent();
-	
+
 	if (ASC)
 	{
 		if (ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
@@ -141,7 +105,7 @@ bool UCBCharacterAnimInstance::GetCachedCharacter(TWeakObjectPtr<ACBBaseCharacte
 
 	// 유효하지 않다면 캐싱 시도
 	OutCharacter = Cast<ACBBaseCharacter>(TryGetPawnOwner());
-	
+
 	return OutCharacter.IsValid();
 }
 
@@ -158,50 +122,8 @@ bool UCBCharacterAnimInstance::GetCachedCMC(TWeakObjectPtr<UCharacterMovementCom
 	{
 		OutCMC = CachedCharacter.Get()->GetCharacterMovement();
 	}
-	
+
 	return OutCMC.IsValid();
-}
-
-bool UCBCharacterAnimInstance::GetCachedTrajectoryComp(TWeakObjectPtr<UCBCharacterTrajectoryComponent>& OutTrajectoryComp)
-{
-	// 캐싱된 CMC가 이미 존재하면 그대로 반환
-	if (OutTrajectoryComp.IsValid())
-	{
-		return true;
-	}
-
-	// 유효하지 않다면 캐싱 시도
-	if (GetCachedCharacter(CachedCharacter))
-	{
-		OutTrajectoryComp = CachedCharacter.Get()->GetCBTrajectoryComponent();
-	}
-	
-	return OutTrajectoryComp.IsValid();
-}
-
-bool UCBCharacterAnimInstance::IsStarting() const
-{
-	if (!bHasAcceleration || IsPivoting()) return false;
-	
-	return CurrentVelocitySize + 100.f <= FutureVelocitySize;
-}
-
-bool UCBCharacterAnimInstance::IsPivoting() const
-{
-	if (!bHasAcceleration) return false;
-	if (CurrentVelocitySize < 100.0f) return false;
-	
-	FVector CurrentVelocityDir = CurrentVelocity.GetSafeNormal2D();
-	FVector FutureVelocityDir = FutureVelocity.GetSafeNormal2D();
-
-	if (FutureVelocityDir.IsNearlyZero()) return false;
-
-	float CurrentYaw = CurrentVelocityDir.Rotation().Yaw;
-	float FutureYaw = FutureVelocityDir.Rotation().Yaw;
-
-	float YawDelta = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentYaw, FutureYaw));
-
-	return YawDelta >= 100.0f;
 }
 
 bool UCBCharacterAnimInstance::IsMoving() const
@@ -211,14 +133,7 @@ bool UCBCharacterAnimInstance::IsMoving() const
 
 bool UCBCharacterAnimInstance::IsStopping() const
 {
-	if (IsPivoting()) return false;
-	
 	return !bHasAcceleration && CurrentVelocitySize > 10.f;
-}
-
-bool UCBCharacterAnimInstance::IsInputLocked() const
-{
-	return bIsPivoting || PivotLockTimer > 0.f;
 }
 
 void UCBCharacterAnimInstance::PlayMontage(UAnimMontage* InMontage, float PlayRate)
@@ -240,35 +155,24 @@ void UCBCharacterAnimInstance::PlayMontage(UAnimMontage* InMontage, float PlayRa
 
 void UCBCharacterAnimInstance::OnCombatTagChanged(const FGameplayTag InTag, int32 InCount)
 {
+	// 태그가 1개 이상 추가되면 true, 모두 제거되면 false
 	bIsCombatMode = (InCount > 0);
 }
 
 void UCBCharacterAnimInstance::OnCharacterSystemReady()
 {
-	// 델리게이트 구독 해제 (중복 실행 방지)
-	if (GetCachedCharacter(CachedCharacter))
-	{
-		CachedCharacter.Get()->OnCharacterSystemReadyDelegate.RemoveAll(this);
-	}
-
 	// 애니메이션 데이터 초기화 (ASC 준비 완료)
 	InitAnimData();
 }
 
 // OnCharacterSystemReady 함수에서 호출되는 애니메이션 데이터 초기화 함수. ASC가 준비된 후에 실행되어야 하는 초기화 로직을 포함.
+// OnCharacterSystemReady가 1회만 실행되도록 보장되므로 별도의 중복 방지 플래그는 두지 않는다.
 void UCBCharacterAnimInstance::InitAnimData()
 {
-	if (bIsAnimDataInitialized)
+	// 소유 캐릭터 캐싱 보장 (베이스는 캐릭터를 캐싱하지 않으므로 여기서 확보)
+	if (!GetCachedCharacter(CachedCharacter))
 	{
 		return;
-	}
-	
-	// 초기 값 설정
-	if (auto* MoveData = CachedCharacter.Get()->GetMovementDataAsset())
-	{
-		WalkMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Movement_Walk);
-		RunMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Movement_Run);
-		SprintMaxSpeed = MoveData->GetSpeedForTag(CBGameplayTags::Movement_Sprint);
 	}
 
 	// 델리게이트 설정
@@ -279,9 +183,5 @@ void UCBCharacterAnimInstance::InitAnimData()
 			CBGameplayTags::Status_Combat_InCombat,
 			EGameplayTagEventType::NewOrRemoved)
 		.AddUObject(this, &UCBCharacterAnimInstance::OnCombatTagChanged);
-		
 	}
-
-	bIsAnimDataInitialized = true;
 }
-

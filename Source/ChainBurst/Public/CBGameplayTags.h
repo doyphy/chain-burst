@@ -60,7 +60,7 @@ namespace  CBGameplayTags
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Action_Combat_EquipWeapon)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Action_Combat_UnequipWeapon)
 
-	/** Effect Tags. (GE의 동작 의도를 선언하는 태그) */
+	/** Effect Tags. (GE의 동작 의도를 선언하는 태그) */ 
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_HitReact)
 
 	/** GameplayCue Tags. */

@@ -9,7 +9,7 @@
 class UCameraComponent;
 class USpringArmComponent;
 class UCBInputConfig;
-struct FInputActionValue;
+class UCBInputManagerComponent;
 class UCBCombatComponent;
 class UCBChaserCombatComponent;
 class UCBCameraControlComponent;
@@ -50,34 +50,13 @@ protected:
 	TObjectPtr<UCBCharacterRotationComponent> CBCharacterRotationComponent;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Combat")
 	TObjectPtr<UCBChaserCombatComponent> ChaserCombatComponent = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Input")
+	TObjectPtr<UCBInputManagerComponent> CBInputManagerComponent = nullptr;
 #pragma endregion
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|CharacterData")
 	TSoftObjectPtr<UCBChaserLoadout> ChaserLoadout = nullptr;
-	
-#pragma region Inputs
-	/** 입력 설정. 로드아웃(UCBChaserLoadout)에서 주입되는 런타임 캐시 */
-	UPROPERTY()
-	TObjectPtr<UCBInputConfig> InputConfig = nullptr;
 
-	void Input_Move(const FInputActionValue& InputActionValue);
-	void Input_Look(const FInputActionValue& InputActionValue);
-	void Input_Camera_Zoom(const FInputActionValue& InputActionValue);
-
-	void Input_AbilityInputPressed(FGameplayTag InInputTag);
-	void Input_AbilityInputReleased(FGameplayTag InInputTag);
-
-	/**
-	 * 입력 바인딩 지연 시도 함수.
-	 * InputConfig(로드아웃 로드)와 InputComponent(SetupPlayerInputComponent)는 완료 시점이 서로 다르므로,
-	 * 양쪽에서 이 함수를 호출해 둘 다 준비되었을 때 한 번만 실제 바인딩을 수행한다.
-	 */
-	void Local_TrySetupInput();
-
-	/** 실제 입력 바인딩 수행 (전제조건이 모두 충족되었다고 가정) */
-	void Local_SetupInputBindings();
-#pragma endregion
-	
 	UPROPERTY(Transient)
 	TObjectPtr<UCBCharacterAnimInstance> CachedAnimInstance;
 	
@@ -94,14 +73,17 @@ protected:
 	 */
 	void InitializePlayerSystem();
 
-	/** 전 인스턴스(서버·소유 클라·시뮬 프록시) 공용 초기화 함수 */
-	void InitCommonData();
+	/** [동기·전 인스턴스] ASC/AttributeSet 캐싱 및 ActorInfo 초기화 (로드아웃 불필요) */
+	void InitAbilitySystem();
 
-	/** 서버 전용 초기화 함수 */
-	void Auth_InitServerData();
+	/** [서버 전용] 로드된 로드아웃으로 어빌리티·무기·이펙트를 적용 */
+	void Auth_InitServerData(UCBChaserLoadout* InLoadout);
 
-	/** 클라이언트 전용 초기화 함수 */
-	void Local_InitClientData();
+	/** [소유 클라 전용] 로드된 로드아웃으로 입력 설정 등을 적용 */
+	void Local_InitClientData(UCBChaserLoadout* InLoadout);
+
+	/** 통합 초기화 완료 처리 (모든 초기화 완료 후 입력 잠금 해제) */
+	virtual void HandleCharacterSystemReady() override;
 	
 public:
 	//~ Begin ICBCombatInterface Interface.
@@ -109,14 +91,8 @@ public:
 	//~ End ICBCombatInterface Interface.
 	
 	FORCEINLINE UCBChaserCombatComponent* GetChaserCombatComponent() const { return ChaserCombatComponent.Get(); }
+	FORCEINLINE UCBCameraControlComponent* GetCameraControlComponent() const { return CBCameraControlComponent.Get(); }
 
-	/** 로드아웃에서 입력 설정을 주입하는 세터 (주입 후 입력 바인딩을 지연 시도) */
+	/** 로드아웃에서 입력 설정을 주입하는 세터 (입력 매니저 컴포넌트로 전달) */
 	void SetInputConfig(UCBInputConfig* InInputConfig);
-
-private:
-	/** 입력 잠금 여부 */
-	bool bIsInputLocked = true;
-
-	/** 입력 바인딩 완료 플래그 (지연 바인딩 중복 방지) */
-	bool bInputBindingsSetup = false;
 };

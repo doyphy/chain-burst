@@ -6,7 +6,6 @@
 #include "Components/Animation/CBActionComponent.h"
 #include "Characters/CBBaseCharacter.h"
 #include "DataAssets/Weapon/CBWeaponData.h"
-#include "AssetManager/CBAssetManager.h"
 
 // engine
 #include "GameFramework/Character.h"
@@ -27,24 +26,17 @@ void UCBCharacterLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 		ActionComponent->SetMontageData(MontageData);
 	}
 
-	// 스켈레탈 메시 소프트 참조 유효성 검사
-	if (SkeletalMesh.IsNull()) return;
+	// 스켈레탈 메시 유효성 검사 (하드 참조라 로드아웃 로드 시점에 이미 resolve됨)
+	if (!SkeletalMesh) return;
 
-	// 스켈레탈 메시 비동기 로드 후 메시·애님BP 적용
-	UCBAssetManager::Get().LoadAssetAsync<USkeletalMesh>(SkeletalMesh, [InCharacter, this](USkeletalMesh* LoadedMesh)
+	// 캐릭터 메시 설정
+	InCharacter->GetMesh()->SetSkeletalMesh(SkeletalMesh);
+
+	// 캐릭터 메시의 애니메이션 블루프린트 클래스 적용
+	if (AnimInstanceClass)
 	{
-		// 로드된 메시와 캐릭터 유효성 검사
-		if (!LoadedMesh || !IsValid(InCharacter)) return;
-
-		// 캐릭터 메시 설정
-		InCharacter->GetMesh()->SetSkeletalMesh(LoadedMesh);
-
-		// 캐릭터 메시의 애니메이션 블루프린트 클래스 적용
-		if (AnimInstanceClass)
-		{
-			InCharacter->GetMesh()->SetAnimInstanceClass(AnimInstanceClass);
-		}
-	});
+		InCharacter->GetMesh()->SetAnimInstanceClass(AnimInstanceClass);
+	}
 }
 
 void UCBCharacterLoadout::Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
@@ -64,25 +56,15 @@ void UCBCharacterLoadout::Auth_RegisterWeaponsToCombatComponent(UCBCombatCompone
 {
 	check(InCombatComponent);
 
-	// 소프트 참조 유효성 검사
-	if (WeaponData.IsNull())
+	// 무기 데이터 유효성 검사 (하드 참조라 로드아웃 로드 시점에 이미 resolve됨)
+	if (WeaponData && WeaponData->HasValidData())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("캐릭터 로드아웃에 등록된 무기 데이터가 유효하지 않음"));	
-		return;
+		InCombatComponent->Auth_RegisterWeapon(WeaponData);
 	}
-
-	// 무기 데이터 비동기 로드
-	UCBAssetManager::Get().LoadAssetAsync<UCBWeaponData>(WeaponData, [InCombatComponent](UCBWeaponData* LoadedWeaponData)
+	else
 	{
-		if (LoadedWeaponData && LoadedWeaponData->HasValidData())
-		{
-			InCombatComponent->Auth_RegisterWeapon(LoadedWeaponData);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("캐릭터 로드아웃의 무기 데이터 로드 실패"));
-		}
-	});
+		UE_LOG(LogTemp, Warning, TEXT("캐릭터 로드아웃에 등록된 무기 데이터가 유효하지 않음"));
+	}
 }
 
 void UCBCharacterLoadout::Auth_ApplyEffectsToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel)

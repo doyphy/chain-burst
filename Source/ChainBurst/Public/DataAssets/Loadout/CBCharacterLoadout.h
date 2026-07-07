@@ -24,7 +24,8 @@ class CHAINBURST_API UCBCharacterLoadout : public UPrimaryDataAsset
 public:
 	/**
 	 * [공용] 전 인스턴스(서버·클라)에서 필요한 데이터를 캐릭터에 일괄 적용하는 함수
-	 * 스켈레탈 메쉬·애님BP(비동기), 이동 데이터, 액션 몽타주 데이터를 적용한다.
+	 * 스켈레탈 메쉬·애님BP, 이동 데이터, 액션 몽타주 데이터를 적용한다.
+	 * 로드아웃 내부 에셋은 모두 하드 참조라 로드아웃 로드 시점에 함께 resolve되므로 이 함수는 동기 실행된다.
 	 */
 	void ApplyToCharacter(ACBBaseCharacter* InCharacter);
 
@@ -42,7 +43,7 @@ protected:
 	// 무기 데이터 (Weapons) - 캐릭터에 등록할 무기
 	// =========================================================
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout", meta = (TitleProperty = "WeaponTag"))
-	TSoftObjectPtr<UCBWeaponData> WeaponData;
+	TObjectPtr<UCBWeaponData> WeaponData = nullptr;
 	
 	// =========================================================
 	// 어빌리티 (Abilities) - 역할에 따라 명확히 구분
@@ -76,7 +77,7 @@ protected:
 
 	/** 캐릭터의 외형 (스켈레탈 메쉬) */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals")
-	TSoftObjectPtr<USkeletalMesh> SkeletalMesh;
+	TObjectPtr<USkeletalMesh> SkeletalMesh = nullptr;
 
 	/** 사용할 애니메이션 블루프린트 클래스 */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals")

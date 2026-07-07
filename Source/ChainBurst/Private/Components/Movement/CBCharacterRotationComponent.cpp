@@ -9,28 +9,11 @@
 UCBCharacterRotationComponent::UCBCharacterRotationComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	
+	// 처음에는 Tick 비활성화 (OnCharacterSystemReady 함수에서 활성화)
 	PrimaryComponentTick.bStartWithTickEnabled = false;
 	
 	SetIsReplicatedByDefault(true);
-}
-
-void UCBCharacterRotationComponent::BeginPlay()
-{
-	Super::BeginPlay();
-
-	if (ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>())
-	{
-		if (OwnerCharacter->bIsCharacterSystemReady)
-		{
-			// 이미 시스템이 준비된 상태라면 즉시 초기화 함수 실행
-			this->OnCharacterSystemReady();
-		}
-		else
-		{
-			// 캐릭터 시스템 준비 완료 델리게이트에 바인딩
-			OwnerCharacter->OnCharacterSystemReadyDelegate.AddUObject(this, &ThisClass::OnCharacterSystemReady);
-		}
-	}
 }
 
 void UCBCharacterRotationComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -102,12 +85,6 @@ void UCBCharacterRotationComponent::OnRep_TargetRotation()
 
 void UCBCharacterRotationComponent::OnCharacterSystemReady()
 {
-	// 델리게이트 구독 해제 (중복 실행 방지)
-	if (ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>())
-	{
-		OwnerCharacter->OnCharacterSystemReadyDelegate.RemoveAll(this);
-	}
-	
 	// Tick 활성화
 	SetComponentTickEnabled(true);
 }

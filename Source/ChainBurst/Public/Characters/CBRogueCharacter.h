@@ -1,27 +1,20 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Characters/CBBaseCharacter.h"
+#include "Characters/CBAICharacter.h"
 #include "CBRogueCharacter.generated.h"
 
 class UCBRogueLoadout;
 
 UCLASS()
-class CHAINBURST_API ACBRogueCharacter : public ACBBaseCharacter
+class CHAINBURST_API ACBRogueCharacter : public ACBAICharacter
 {
 	GENERATED_BODY()
 
-public:
-	ACBRogueCharacter();
-
 protected:
-	//~ Begin AActor Interface
-	virtual void BeginPlay() override;
-	//~ End AActor Interface
-
-	//~ Begin APawn Interface
-	virtual void PossessedBy(AController* NewController) override;
-	//~ End APawn Interface
+	//~ Begin ACBAICharacter Interface
+	virtual TSoftObjectPtr<UCBCharacterLoadout> GetAILoadout() const override;
+	//~ End ACBAICharacter Interface
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|CharacterData")
 	TSoftObjectPtr<UCBRogueLoadout> RogueLoadout = nullptr;

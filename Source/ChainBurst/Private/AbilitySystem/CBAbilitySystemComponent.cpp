@@ -21,12 +21,6 @@ void UCBAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag& InInpu
 		return;
 	}
 
-	// 현재 눌려있는 입력 태그 모음에 해당 입력 태그 추가 (입력감지)
-	HeldInputTags.AddTag(InInputTag);
-
-	// 입력 태그가 눌렸음을 알리는 델리게이트 호출 (입력감지)
-	OnAbilityInputTagPressed.Broadcast(InInputTag);
-	
 	// ASC 내부 배열을 순회할 때 도중에 배열이 수정되는 것을 방지하기 위해 잠금 (잠금 해제는 함수 종료 시 자동으로 이루어짐)
 	ABILITYLIST_SCOPE_LOCK();
 	
@@ -37,12 +31,22 @@ void UCBAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag& InInpu
 		if (AbilitySpec.GetDynamicSpecSourceTags().HasTagExact(InInputTag))
 		{
 			UE_LOG(LogTemp, Log, TEXT("ASC: %s 의 %s 어빌리티에 %s 입력이 눌렸음."), *GetName(), *AbilitySpec.Ability->GetName(), *InInputTag.ToString());
-			
+
+			// 입력이 눌렸음을 표시하는 플래그 설정 (활성/비활성 무관 — 이후 활성화되는 어빌리티가 홀드 상태를 알 수 있도록)
+			AbilitySpec.InputPressed = true;
+
 			// 이미 어빌리티가 활성화 되어 있다면
 			if (AbilitySpec.IsActive())
 			{
 				// 어빌리티 입력 신호가 눌렸음을 알림.
 				AbilitySpecInputPressed(AbilitySpec);
+				// 입력 눌림 이벤트를 서버로 복제 (서버측 어빌리티 인스턴스/WaitInputPress 태스크가 수신하도록)
+				// UE5.5: FGameplayAbilitySpec::ActivationInfo deprecated → 인스턴스별 CurrentActivationInfo 사용 (어빌리티는 InstancedPerActor)
+				if (UGameplayAbility* AbilityInstance = AbilitySpec.GetPrimaryInstance())
+				{
+					InvokeReplicatedEvent(EAbilityGenericReplicatedEvent::InputPressed, AbilitySpec.Handle,
+						AbilityInstance->GetCurrentActivationInfo().GetActivationPredictionKey());
+				}
 			}
 			else
 			{
@@ -62,9 +66,6 @@ void UCBAbilitySystemComponent::OnAbilityInputReleased(const FGameplayTag& InInp
 		return;
 	}
 
-	// 현재 눌려있는 입력 태그 모음에서 해당 입력 태그 제거
-	HeldInputTags.RemoveTag(InInputTag);
-	
 	// ASC 내부 배열을 순회할 때 도중에 배열이 수정되는 것을 방지하기 위해 잠금 (잠금 해제는 함수 종료 시 자동으로 이루어짐)
 	ABILITYLIST_SCOPE_LOCK();
 	
@@ -81,6 +82,13 @@ void UCBAbilitySystemComponent::OnAbilityInputReleased(const FGameplayTag& InInp
 			{
 				// 해당 입력 태그와 일치하는 어빌리티의 입력이 해제되었음을 알림
 				AbilitySpecInputReleased(AbilitySpec);
+				// 입력 해제 이벤트를 서버로 복제 (서버측 어빌리티 인스턴스/WaitInputRelease 태스크가 수신하도록)
+				// UE5.5: FGameplayAbilitySpec::ActivationInfo deprecated → 인스턴스별 CurrentActivationInfo 사용 (어빌리티는 InstancedPerActor)
+				if (UGameplayAbility* AbilityInstance = AbilitySpec.GetPrimaryInstance())
+				{
+					InvokeReplicatedEvent(EAbilityGenericReplicatedEvent::InputReleased, AbilitySpec.Handle,
+						AbilityInstance->GetCurrentActivationInfo().GetActivationPredictionKey());
+				}
 			}
 		}
 	}

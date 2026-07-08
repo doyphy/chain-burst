@@ -1,9 +1,12 @@
 // project
 #include "Components/Movement/CBCharacterRotationComponent.h"
 #include "Characters/CBChaserCharacter.h"
+#include "DataAssets/Movement/CBCharacterMovementData.h"
+#include "CBGameplayTags.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // engine
+#include "AbilitySystemComponent.h"
 #include "Net/UnrealNetwork.h"
 
 UCBCharacterRotationComponent::UCBCharacterRotationComponent()
@@ -22,18 +25,30 @@ void UCBCharacterRotationComponent::TickComponent(float DeltaTime, enum ELevelTi
 
 	if (!GetCachedCharacter(CachedCharacter) || !GetCachedCMC(CachedMovementComp)) return;
 
+	// 현재 개이트 (회전 타겟 선택 + 회전 보간 속도에 공통 사용)
+	const FGameplayTag GaitTag = GetCurrentGaitTag();
+
 	// 로컬용 회전 처리
 	if (CachedCharacter->IsLocallyControlled())
 	{
 		bool bIsMoving = CachedMovementComp->GetCurrentAcceleration().SizeSquared() > KINDA_SMALL_NUMBER;
 
-		// 이동 중이면 카메라 방향을 기준으로 회전
 		if (bIsMoving)
 		{
-			// 컨트롤러 회전 값(Yaw) 가져오기
-			FRotator NewTargetRotation = FRotator(0.0f, CachedCharacter->GetControlRotation().Yaw, 0.0f);
-    
-			// 컨트롤러 회전 값과 TargetRotation 이 같지 않다면 TargetRotation 업데이트 및 서버에 전송
+			FRotator NewTargetRotation;
+
+			// Sprint: 이동(입력) 방향으로 몸을 돌린다 (orient-to-movement) — 전방 클립 하나로 8방향 커버
+			if (GaitTag == CBGameplayTags::Movement_Sprint && !CachedMoveInputDir.IsNearlyZero())
+			{
+				NewTargetRotation = FRotator(0.0f, CachedMoveInputDir.Rotation().Yaw, 0.0f);
+			}
+			// Walk/Run: 카메라 방향을 바라본다 (aim-facing, 3인칭 슈터 — 카메라 방향이 전방 공격 방향)
+			else
+			{
+				NewTargetRotation = FRotator(0.0f, CachedCharacter->GetControlRotation().Yaw, 0.0f);
+			}
+
+			// 타겟이 바뀌었으면 갱신 및 서버 전송
 			if (!NewTargetRotation.Equals(TargetRotation, 0.1f))
 			{
 				TargetRotation = NewTargetRotation;
@@ -44,11 +59,51 @@ void UCBCharacterRotationComponent::TickComponent(float DeltaTime, enum ELevelTi
 
 	// SmoothedTargetRotation 업데이트
 	UpdateSmoothedTargetRotation(DeltaTime);
-	
-	// SmoothedTargetRotation 으로 보간
+
+	// SmoothedTargetRotation 으로 보간 (개이트별 회전 보간 속도 적용)
 	FRotator CurrentRotation = CachedCharacter->GetActorRotation();
-	FRotator NewRotation = FMath::RInterpTo(CurrentRotation, SmoothedTargetRotation, DeltaTime, RotationInterpSpeed);
+	FRotator NewRotation = FMath::RInterpTo(CurrentRotation, SmoothedTargetRotation, DeltaTime, ResolveRotationInterpSpeed(GaitTag));
 	CachedCharacter->SetActorRotation(NewRotation);
+}
+
+FGameplayTag UCBCharacterRotationComponent::GetCurrentGaitTag() const
+{
+	// 기본 개이트
+	if (!CachedCharacter) return CBGameplayTags::Movement_Run;
+
+	UAbilitySystemComponent* ASC = CachedCharacter->GetAbilitySystemComponent();
+	if (!ASC) return CBGameplayTags::Movement_Run;
+
+	// AnimInstance와 동일 우선순위: Sprint > Walk > 기본 Run
+	if (ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
+	{
+		return CBGameplayTags::Movement_Sprint;
+	}
+	if (ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Walk))
+	{
+		return CBGameplayTags::Movement_Walk;
+	}
+	return CBGameplayTags::Movement_Run;
+}
+
+float UCBCharacterRotationComponent::ResolveRotationInterpSpeed(FGameplayTag GaitTag) const
+{
+	// 개이트 데이터가 없을 때의 폴백
+	float Result = RotationInterpSpeed;
+
+	if (!CachedCharacter) return Result;
+
+	UCBCharacterMovementData* MovementData = CachedCharacter->GetMovementDataAsset();
+	if (!MovementData) return Result;
+
+	// 데이터 에셋에서 조회 — 유효한 값이면 사용, 아니면 폴백 유지
+	const float FoundSpeed = MovementData->GetRotationInterpSpeedForTag(GaitTag);
+	if (FoundSpeed > 0.0f)
+	{
+		Result = FoundSpeed;
+	}
+
+	return Result;
 }
 
 void UCBCharacterRotationComponent::UpdateSmoothedTargetRotation(float DeltaTime)

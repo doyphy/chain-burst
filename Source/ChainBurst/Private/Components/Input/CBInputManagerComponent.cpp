@@ -4,6 +4,7 @@
 #include "DataAssets/Input/CBInputConfig.h"
 #include "Characters/CBChaserCharacter.h"
 #include "Components/Camera/CBCameraControlComponent.h"
+#include "Components/Movement/CBCharacterRotationComponent.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "CBGameplayTags.h"
 
@@ -100,18 +101,60 @@ void UCBInputManagerComponent::Input_Move(const FInputActionValue& InputActionVa
 	if (bIsInputLocked) return;
 
 	ACBChaserCharacter* Character = GetOwningChaser();
+	if (!Character) return;
+
+	// 입력된 이동 벡터 가져오기
 	const FVector2D MovementVector = InputActionValue.Get<FVector2D>();
 
+	// 입력 축 규약(IMC의 Swizzle 매핑 기준): Y = 전/후(W/S), X = 좌/우(A/D).
+	// 아래에서 월드 전방 벡터에는 ForwardInput, 우측 벡터에는 RightInput을 곱함.
+	const float ForwardInput = MovementVector.Y;
+	const float RightInput = MovementVector.X;
+
+	// 카메라 기준 이동 방향(플레이어 의도)을 계산해 회전 컴포넌트에 전달.
+	// Sprint는 이동 방향으로 몸을 돌리는데 사용, Walk/Run은 무시(카메라 방향을 봄).
 	if (AController* Controller = Character->GetController())
 	{
-		// Yaw 회전값을 기준으로 전방 및 우측 방향 벡터 계산
-		const FRotator YawRotation(0, Controller->GetControlRotation().Yaw, 0);
+		// 카메라 회전 Yaw 값 (좌우 회전각) 가져오기
+		const FRotator CameraYaw(0, Controller->GetControlRotation().Yaw, 0);
+		
+		// 카메라의 전방/우측 방향 벡터 가져오기
+		const FVector CameraForward = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::X);
+		const FVector CameraRight = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::Y);
+
+		// 카메라의 전방 방향 벡터와 우측 방향 벡터에 입력 값을 곱한 후 더함 (월드 공간에서의 이동 방향)
+		const FVector DesiredDir = CameraForward * ForwardInput + CameraRight * RightInput;
+
+		// 이동 방향을 회전 컴포넌트에 넘기기
+		if (UCBCharacterRotationComponent* RotationComp = Character->GetCharacterRotationComponent())
+		{
+			RotationComp->SetMoveInputDirection(DesiredDir);
+		}
+	}
+
+	// 실제 이동 적용은 캐릭터의 현재 facing yaw 기준.
+	// 액터 회전은 UCBCharacterRotationComponent가 개이트별 회전 속도로 보간한 값이므로,
+	// 속도 방향이 회전을 따라 지연됨 — Walk/Run은 코너 관성, Sprint는 몸이 향한 정면으로 정렬.
+	const FRotator YawRotation(0, Character->GetActorRotation().Yaw, 0);
+
+	// Sprint 여부 판별 (orient-to-movement 이동 적용 분기)
+	UCBAbilitySystemComponent* ASC = Character->GetCBAbilitySystemComponent();
+	const bool bIsSprinting = ASC && ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint);
+
+	if (bIsSprinting)
+	{
+		// Sprint: 방향은 회전(몸이 입력 방향을 향함)이 전담하므로, 이동은 facing 정면으로 입력 크기만큼 직진만 한다.
+		// (전/후·좌/우 분해를 하면 이미 회전된 몸에 방향이 이중 적용되어 엉뚱한 방향으로 감)
+		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+		Character->AddMovementInput(ForwardDirection, FMath::Min(1.0f, MovementVector.Size()));
+	}
+	else
+	{
+		// Walk/Run: facing 기준 전/후·좌/우 분해 (aim-facing 스트레이핑)
 		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
-		// 입력된 이동 벡터를 기반으로 캐릭터 이동
-		Character->AddMovementInput(ForwardDirection, MovementVector.Y);
-		Character->AddMovementInput(RightDirection, MovementVector.X);
+		Character->AddMovementInput(ForwardDirection, ForwardInput);
+		Character->AddMovementInput(RightDirection, RightInput);
 	}
 }
 

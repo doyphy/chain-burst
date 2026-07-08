@@ -20,6 +20,9 @@ FileOpenOrder/
 Plugins/**/Binaries/
 Plugins/**/Intermediate/
 
+# Rider 가 엔진 버전에 맞춰 자동 생성/재설치하는 IDE 통합 플러그인. 커밋하지 않는다.
+Plugins/Developer/RiderLink/
+
 # --- [ System ] ---
 *.log
 .DS_Store

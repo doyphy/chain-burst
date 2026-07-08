@@ -8,11 +8,12 @@ public class ChainBurstTarget : TargetRules
 	public ChainBurstTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
-		// UE5.7: V6 부터 UndefinedIdentifierWarningLevel 기본값이 Error. 설치형 엔진(UnrealEditor)이
-		// V6로 컴파일돼 있어, 공유 빌드환경 검증을 통과하려면 게임 타겟도 V6를 따라야 한다.
-		// IncludeOrder는 5.8 도착 후 일괄 상향 예정이라 아직 Unreal5_5 유지.
-		DefaultBuildSettings = BuildSettingsVersion.V6;
-		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_5;
+		// UE5.8: V7 이 Return/Dangling/UnreachableCode WarningLevel 기본값을 Error 로 바꿈. 설치형
+		// UnrealEditor 가 V7로 컴파일돼 있어 공유 빌드환경 검증을 통과하려면 게임 타겟도 V7 필요.
+		// (MSVC 기준 이 셋은 이미 Error 였으므로 실제 컴파일 동작 변화는 없음)
+		// IncludeOrder: 5.8 Oldest 가 Unreal5_6 이라 최신 Unreal5_8 로 상향.
+		DefaultBuildSettings = BuildSettingsVersion.V7;
+		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
 		ExtraModuleNames.Add("ChainBurst");
 	}
 }

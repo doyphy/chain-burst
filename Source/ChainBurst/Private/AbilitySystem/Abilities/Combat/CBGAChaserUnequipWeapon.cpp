@@ -82,6 +82,7 @@ void UCBGAChaserUnequipWeapon::OnUnequipEvent(FGameplayEventData Payload)
 	if (GetCurrentActorInfo()->IsNetAuthority())
 	{
 		// 태그 제거 (클라이언트에 복제)
-		ASC->RemoveReplicatedLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
+		// UE5.7: RemoveReplicatedLooseGameplayTag 제거 → RemoveLooseGameplayTag + TagRepState 로 통합. TagAndCountToAll 이 옛 동작(태그+카운트 전원 복제)과 동일.
+		ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagAndCountToAll);
 	}
 }

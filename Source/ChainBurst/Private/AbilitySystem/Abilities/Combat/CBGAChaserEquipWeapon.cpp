@@ -82,6 +82,7 @@ void UCBGAChaserEquipWeapon::OnEquipEvent(FGameplayEventData Payload)
 	if (GetCurrentActorInfo()->IsNetAuthority())
 	{
 		// 태그 추가 (클라이언트에 복제)
-		ASC->AddReplicatedLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
+		// UE5.7: AddReplicatedLooseGameplayTag 제거 → AddLooseGameplayTag + TagRepState 로 통합. TagAndCountToAll 이 옛 동작(태그+카운트 전원 복제)과 동일.
+		ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagAndCountToAll);
 	}
 }

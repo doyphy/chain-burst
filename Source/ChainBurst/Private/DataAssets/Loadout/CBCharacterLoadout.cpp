@@ -10,6 +10,7 @@
 // engine
 #include "GameFramework/Character.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/CapsuleComponent.h"
 
 
 void UCBCharacterLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
@@ -24,6 +25,17 @@ void UCBCharacterLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 	if (UCBActionComponent* ActionComponent = InCharacter->GetCBActionComponent())
 	{
 		ActionComponent->SetMontageData(MontageData);
+	}
+
+	// 바디 셋업 적용 (캡슐 충돌 크기 + 메시 상대 트랜스폼). 메시 애셋과 무관하므로 항상 적용한다.
+	if (UCapsuleComponent* Capsule = InCharacter->GetCapsuleComponent())
+	{
+		Capsule->SetCapsuleSize(BodySetup.CapsuleRadius, BodySetup.CapsuleHalfHeight);
+	}
+	if (USkeletalMeshComponent* MeshComp = InCharacter->GetMesh())
+	{
+		MeshComp->SetRelativeLocationAndRotation(BodySetup.MeshRelativeLocation, BodySetup.MeshRelativeRotation);
+		MeshComp->SetRelativeScale3D(BodySetup.MeshRelativeScale);
 	}
 
 	// 스켈레탈 메시 유효성 검사 (하드 참조라 로드아웃 로드 시점에 이미 resolve됨)

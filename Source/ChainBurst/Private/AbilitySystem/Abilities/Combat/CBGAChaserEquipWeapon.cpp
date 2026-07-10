@@ -69,19 +69,8 @@ void UCBGAChaserEquipWeapon::EndAbility(const FGameplayAbilitySpecHandle Handle,
 
 void UCBGAChaserEquipWeapon::OnEquipEvent(FGameplayEventData Payload)
 {
-	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 	UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo();
 
-	// 전투 상태로 변경 (무기 부착)
+	// 전투 상태로 변경 (무기 부착 + 상태 태그는 컴포넌트가 관리)
 	CombatComp->SetCombatMode(true);
-	
-	// 태그 추가 (로컬 적용)
-	ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
-	
-	// 서버인지 확인
-	if (GetCurrentActorInfo()->IsNetAuthority())
-	{
-		// 태그 추가 (클라이언트에 복제)
-		ASC->AddReplicatedLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
-	}
 }

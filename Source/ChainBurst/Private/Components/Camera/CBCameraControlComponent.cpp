@@ -58,11 +58,11 @@ void UCBCameraControlComponent::InitializeCamera(USpringArmComponent* InSpringAr
 	SpringArm->TargetOffset = FVector(0.f,0.f,50.f);
 
 	// 기본 길이/오프셋 설정 (최대 줌 인/아웃의 30%로 초기화)
-	CurrentZoomAlpha = 0.3;
+	CurrentZoomAlpha = 0.3f;
 	
 	TargetZoomAlpha = CurrentZoomAlpha;
 	DefaultTargetArmLength = FMath::Lerp(ZoomConfig.MinLength, ZoomConfig.MaxLength, CurrentZoomAlpha);
-	DefaultSocketOffset = FMath::Lerp(ZoomConfig.MinSocketOffset, ZoomConfig.MaxSocketOffset, CurrentZoomAlpha);;
+	DefaultSocketOffset = FMath::Lerp(ZoomConfig.MinSocketOffset, ZoomConfig.MaxSocketOffset, CurrentZoomAlpha);
 	
 	SpringArm->SocketOffset = DefaultSocketOffset;
 	SpringArm->TargetArmLength = DefaultTargetArmLength;

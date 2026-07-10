@@ -69,19 +69,8 @@ void UCBGAChaserUnequipWeapon::EndAbility(const FGameplayAbilitySpecHandle Handl
 
 void UCBGAChaserUnequipWeapon::OnUnequipEvent(FGameplayEventData Payload)
 {
-	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 	UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo();
 
-	// 비전투 상태로 변경 (무기 부착)
+	// 비전투 상태로 변경 (무기 부착 + 상태 태그는 컴포넌트가 관리)
 	CombatComp->SetCombatMode(false);
-	
-	// 태그 제거 (로컬 적용)
-	ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
-	
-	// 서버인지 확인
-	if (GetCurrentActorInfo()->IsNetAuthority())
-	{
-		// 태그 제거 (클라이언트에 복제)
-		ASC->RemoveReplicatedLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
-	}
 }

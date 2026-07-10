@@ -15,11 +15,13 @@
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 
 
 ACBChaserCharacter::ACBChaserCharacter()
 {
 	// 캡슐 컴포넌트의 크기를 초기화 (충돌 영역 설정)
+	// 스폰 직후 fallback 값. 로드아웃 로드 후 UCBCharacterLoadout의 BodySetup 값으로 오버라이드됨.
 	GetCapsuleComponent()->InitCapsuleSize(30.f, 86.0f);
 
 	// 컨트롤러의 회전값을 캐릭터에 직접 적용하지 않도록 설정 (카메라 독립적 회전)

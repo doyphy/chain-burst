@@ -5,7 +5,6 @@
 #include "Types/CBEnumTypes.h"
 #include "CBBaseWeapon.generated.h"
 
-class UBoxComponent;
 class UCBWeaponSocketData;
 
 /**
@@ -34,9 +33,6 @@ protected:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Weapon|Components")
 	TObjectPtr<UStaticMeshComponent> WeaponMesh;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Weapon|Components")
-	TObjectPtr<UBoxComponent> WeaponCollisionBox;
 
 	/**
 	 * 무기가 비전투 전환에 따라 부착이 필요한지 여부
@@ -91,8 +87,6 @@ public:
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 	
-	FORCEINLINE UBoxComponent* GetWeaponCollisionBox() const { return WeaponCollisionBox; }
-
 private:
 	/**
 	 * 현재 무기가 손에 장착된 상태인지 여부

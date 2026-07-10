@@ -3,8 +3,8 @@
 #include "DataAssets/Weapon/CBWeaponSocketData.h"
 
 // engine
-#include "Components/BoxComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Components/StaticMeshComponent.h"
 
 ACBBaseWeapon::ACBBaseWeapon()
 {
@@ -21,12 +21,6 @@ ACBBaseWeapon::ACBBaseWeapon()
 	WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh"));
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	WeaponMesh->SetupAttachment(SceneRoot);
-
-	WeaponCollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollisionBox"));
-	WeaponCollisionBox->SetupAttachment(RootComponent);
-	WeaponCollisionBox->SetBoxExtent(FVector(20.f));
-	WeaponCollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
 }
 
 void ACBBaseWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

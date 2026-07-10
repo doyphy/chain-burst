@@ -10,6 +10,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "GameplayEffect.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/World.h"
 
 UCBCombatComponent::UCBCombatComponent()
 {
@@ -393,7 +395,8 @@ void UCBCombatComponent::OnEnterCombatMode()
 	if (!EquippedWeapon.IsValid()) return;
 
 	// ASC 유효 검사
-	if (GetCachedOwnerASC() == nullptr)
+	UCBAbilitySystemComponent* ASC = GetCachedOwnerASC();
+	if (ASC == nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[%s] 의 ASC를 가져올 수 없습니다."), *GetOwner()->GetName());
 		return;
@@ -401,6 +404,15 @@ void UCBCombatComponent::OnEnterCombatMode()
 
 	// 현재 장착중인 무기 Hand 에 부착
 	EquippedWeapon.WeaponInstance->AttachToHand(GetCachedOwnerMesh());
+
+	// 전투 상태 태그 추가 (로컬 적용)
+	ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
+
+	// 서버라면 태그 추가 (클라이언트에 복제)
+	if (GetOwner()->HasAuthority())
+	{
+		ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagAndCountToAll);
+	}
 }
 
 void UCBCombatComponent::OnExitCombatMode()
@@ -409,14 +421,24 @@ void UCBCombatComponent::OnExitCombatMode()
 	if (!EquippedWeapon.IsValid()) return;
 
 	// ASC 유효 검사
-	if (GetCachedOwnerASC() == nullptr)
+	UCBAbilitySystemComponent* ASC = GetCachedOwnerASC();
+	if (ASC == nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[%s] 의 ASC를 가져올 수 없습니다."), *GetOwner()->GetName());
 		return;
 	}
-	
+
 	// 현재 장착중인 무기 Sheath 에 부착
 	EquippedWeapon.WeaponInstance->AttachToSheath(GetCachedOwnerMesh());
+
+	// 전투 상태 태그 제거 (로컬 적용)
+	ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
+
+	// 서버라면 태그 제거 (클라이언트에 복제)
+	if (GetOwner()->HasAuthority())
+	{
+		ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagAndCountToAll);
+	}
 }
 
 void UCBCombatComponent::ProcessHit(const FGameplayAbilityTargetDataHandle& TargetDataHandle)

@@ -14,6 +14,39 @@ class UCBActionMontageData;
 class ACBBaseCharacter;
 
 /**
+ * 캐릭터의 바디(크기) 셋업.
+ * 캡슐 충돌 크기와 스켈레탈 메시 컴포넌트의 상대 트랜스폼을 담는다.
+ * 모두 사용하는 메시 모델에 종속되는 값들이라 메시와 한 세트로 로드아웃이 관리한다.
+ */
+USTRUCT(BlueprintType)
+struct FCBBodySetup
+{
+	GENERATED_BODY()
+
+	// --- 캡슐 (충돌) ---
+	/** 캡슐 반지름 */
+	UPROPERTY(EditDefaultsOnly, Category = "Body|Capsule")
+	float CapsuleRadius = 34.f;
+
+	/** 캡슐 절반 높이 */
+	UPROPERTY(EditDefaultsOnly, Category = "Body|Capsule")
+	float CapsuleHalfHeight = 88.f;
+
+	// --- 스켈레탈 메시 컴포넌트 상대 트랜스폼 ---
+	/** 메시 상대 위치 (보통 Z = -CapsuleHalfHeight 로 발을 캡슐 바닥에 정렬) */
+	UPROPERTY(EditDefaultsOnly, Category = "Body|Mesh")
+	FVector MeshRelativeLocation = FVector(0.f, 0.f, -88.f);
+
+	/** 메시 상대 회전 (UE 캐릭터 메시는 보통 Yaw -90 으로 전방 정렬) */
+	UPROPERTY(EditDefaultsOnly, Category = "Body|Mesh")
+	FRotator MeshRelativeRotation = FRotator(0.f, -90.f, 0.f);
+
+	/** 메시 상대 스케일 */
+	UPROPERTY(EditDefaultsOnly, Category = "Body|Mesh")
+	FVector MeshRelativeScale = FVector(1.f);
+};
+
+/**
  * 캐릭터의 공통 데이터
  */
 UCLASS()
@@ -24,7 +57,7 @@ class CHAINBURST_API UCBCharacterLoadout : public UPrimaryDataAsset
 public:
 	/**
 	 * [공용] 전 인스턴스(서버·클라)에서 필요한 데이터를 캐릭터에 일괄 적용하는 함수
-	 * 스켈레탈 메쉬·애님BP, 이동 데이터, 액션 몽타주 데이터를 적용한다.
+	 * 바디 셋업(캡슐·메시 트랜스폼), 스켈레탈 메쉬·애님BP, 이동 데이터, 액션 몽타주 데이터를 적용한다.
 	 * 로드아웃 내부 에셋은 모두 하드 참조라 로드아웃 로드 시점에 함께 resolve되므로 이 함수는 동기 실행된다.
 	 */
 	void ApplyToCharacter(ACBBaseCharacter* InCharacter);
@@ -82,6 +115,13 @@ protected:
 	/** 사용할 애니메이션 블루프린트 클래스 */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals")
 	TSubclassOf<UAnimInstance> AnimInstanceClass;
+
+	/**
+	 * 바디(크기) 셋업 - 캡슐 충돌 크기 + 메시 상대 트랜스폼(위치/회전/스케일).
+	 * 스폰 직후엔 캐릭터 생성자의 기본 캡슐이 쓰이고, 로드아웃 로드 후 이 값으로 오버라이드된다.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals")
+	FCBBodySetup BodySetup;
 
 	// =========================================================
 	// 캐릭터 데이터 (Data) - 전 인스턴스에서 필요한 데이터 에셋

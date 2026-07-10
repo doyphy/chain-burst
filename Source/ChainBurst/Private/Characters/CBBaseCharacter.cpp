@@ -8,6 +8,7 @@
 // engine
 #include "AbilitySystemBlueprintLibrary.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 
 ACBBaseCharacter::ACBBaseCharacter()
 {

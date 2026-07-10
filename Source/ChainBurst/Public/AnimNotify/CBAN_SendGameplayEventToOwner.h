@@ -11,7 +11,7 @@ class CHAINBURST_API UCBAN_SendGameplayEventToOwner : public UAnimNotify
 	GENERATED_BODY()
 	
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ChainBurst|Tag")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ChainBurst|Tag", meta = (Categories = "Event"))
 	FGameplayTag EventTag;
 
 	virtual void Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference) override;

@@ -10,6 +10,7 @@ FileOpenOrder/
 .idea/
 .vs/
 *.sln
+*.slnx
 *.suo
 *.user
 *.VC.db
@@ -27,6 +28,12 @@ Plugins/Developer/RiderLink/
 *.log
 .DS_Store
 Thumbs.db
+
+# --- [ Fab/마켓플레이스 썸네일 이미지 ] ---
+# 에셋 팩 다운로드 시 딸려오는 미리보기 이미지. 실제 사용 텍스처는 .uasset으로 임포트되므로 원본 이미지는 불필요.
+*.png
+*.jpg
+*.jpeg
 
 # --- [ Claude Code ] ---
 CLAUDE.md

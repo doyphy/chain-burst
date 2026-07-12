@@ -2,6 +2,7 @@
 #include "Components/Movement/CBCharacterRotationComponent.h"
 #include "Characters/CBChaserCharacter.h"
 #include "DataAssets/Movement/CBCharacterMovementData.h"
+#include "CBAbilitySystemLibrary.h"
 #include "CBGameplayTags.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
@@ -71,19 +72,8 @@ FGameplayTag UCBCharacterRotationComponent::GetCurrentGaitTag() const
 	// 기본 개이트
 	if (!CachedCharacter) return CBGameplayTags::Movement_Run;
 
-	UAbilitySystemComponent* ASC = CachedCharacter->GetAbilitySystemComponent();
-	if (!ASC) return CBGameplayTags::Movement_Run;
-
-	// AnimInstance와 동일 우선순위: Sprint > Walk > 기본 Run
-	if (ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
-	{
-		return CBGameplayTags::Movement_Sprint;
-	}
-	if (ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Walk))
-	{
-		return CBGameplayTags::Movement_Walk;
-	}
-	return CBGameplayTags::Movement_Run;
+	// 공용 헬퍼로 판별 (Sprint > Walk > 기본 Run 우선순위)
+	return UCBAbilitySystemLibrary::GetCurrentGaitTag(CachedCharacter->GetAbilitySystemComponent());
 }
 
 float UCBCharacterRotationComponent::ResolveRotationInterpSpeed(FGameplayTag GaitTag) const

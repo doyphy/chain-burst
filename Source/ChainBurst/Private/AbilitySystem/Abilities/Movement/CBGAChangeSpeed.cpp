@@ -7,6 +7,9 @@
 
 // engine
 #include "GameplayEffect.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 
 UCBGAChangeSpeed::UCBGAChangeSpeed()
 {
@@ -14,7 +17,6 @@ UCBGAChangeSpeed::UCBGAChangeSpeed()
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 
 	// 입력(질주/걷기 홀드)으로 발동되므로 예측 실행이 기본값
-	// (BP 엣지 클래스 GA_Sprint / GA_Walk에서 필요 시 재설정)
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
 }
 
@@ -52,9 +54,17 @@ void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 
 		// 캐릭터에 속도 태그 부여 (애니메이션 블루프린트에서 이 태그를 보고 애니메이션 상태를 변경할 수 있도록)
 		SpecHandle.Data.Get()->DynamicGrantedTags.AddTag(SpeedDataTag);
-		
+
 		// 캐릭터에게 효과 적용 및 핸들 저장
 		ActiveGEHandle = ApplyGameplayEffectSpecToOwner(Handle, ActorInfo, ActivationInfo, SpecHandle);
+
+		// 가속도 소실 자동 종료 옵션이 켜져 있으면 감시 타이머 시작 (정지·피벗 잠금 시 속도 태그도 함께 해제되도록)
+		if (bEndWhenNoAcceleration)
+		{
+			ZeroAccelStartTime = -1.0;
+			GetWorld()->GetTimerManager().SetTimer(
+				AccelCheckTimerHandle, this, &ThisClass::CheckAcceleration, 0.05f, true);
+		}
 	}
 	else
 	{
@@ -64,6 +74,15 @@ void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 
 void UCBGAChangeSpeed::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
+	// 가속도 감시 타이머 정리
+	if (AccelCheckTimerHandle.IsValid())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(AccelCheckTimerHandle);
+		}
+	}
+
 	// 어빌리티 종료 시 적용했던 GE를 제거 (자동으로 기본 속도인 Run으로 복구됨)
 	if (ActiveGEHandle.IsValid())
 	{
@@ -85,5 +104,37 @@ void UCBGAChangeSpeed::InputReleased(const FGameplayAbilitySpecHandle Handle,
 	if (IsActive())
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+	}
+}
+
+void UCBGAChangeSpeed::CheckAcceleration()
+{
+	// CMC 가져오기
+	const ACBBaseCharacter* BaseChar = Cast<ACBBaseCharacter>(GetAvatarActorFromActorInfo());
+	const UCharacterMovementComponent* CMC = BaseChar ? BaseChar->GetCharacterMovement() : nullptr;
+	if (!CMC) return;
+
+	// 가속(이동 입력)이 살아있으면 무가속 시작 시각 리셋
+	// 0으로 초기화하면 무가속중인지 가속의 첫 시작 (0초) 인지 모르기 때문에 -1로 초기화
+	if (CMC->GetCurrentAcceleration().SizeSquared() > KINDA_SMALL_NUMBER)
+	{
+		ZeroAccelStartTime = -1.0;
+		return;
+	}
+
+	// 현재 시간 가져오기
+	const double Now = GetWorld()->GetTimeSeconds();
+
+	// 무가속시 시작 시간 기록
+	if (ZeroAccelStartTime < 0.0)
+	{
+		ZeroAccelStartTime = Now;
+		return;
+	}
+
+	// [현재 시간 - 무가속 시각 시간]이 NoAccelerationGraceTime 이상이면 어빌리티 종료
+	if (Now - ZeroAccelStartTime >= NoAccelerationGraceTime)
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 	}
 }

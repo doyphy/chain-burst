@@ -43,6 +43,13 @@ public:
 	static UCBAbilitySystemComponent* GetSafeCBASC(const AActor* InActor);
 
 	/**
+	 * ASC의 Movement.* 태그로 현재 개이트 태그를 판별하는 함수 (Sprint > Walk > 기본 Run 우선순위)
+	 * @param InASC 검사할 ASC (nullptr 허용 — 기본 Run 반환)
+	 * @return 현재 개이트 태그 (Movement.Sprint / Movement.Walk / Movement.Run)
+	 */
+	static FGameplayTag GetCurrentGaitTag(const UAbilitySystemComponent* InASC);
+
+	/**
 	 * ASC 를 지연 캐싱하여 가져오는 함수 (C++ 전용)
 	 * @param InActor ASC를 가져올 액터 (ACBBaseCharacter 또는 ACBPlayerState 권장)
 	 * @param OutASC 캐싱할 포인터 변수 (참조)

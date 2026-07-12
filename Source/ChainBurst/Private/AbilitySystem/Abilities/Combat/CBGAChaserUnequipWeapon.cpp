@@ -11,6 +11,9 @@ UCBGAChaserUnequipWeapon::UCBGAChaserUnequipWeapon()
 {
 	// 로컬 입력으로 발동되어 즉시 반응해야 하므로 예측 실행
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+
+	// 어빌리티 식별 태그 (C++ 최종 엣지 — 생성자에서 지정)
+	SetAssetTags(FGameplayTagContainer(CBGameplayTags::Ability_Combat_UnequipWeapon));
 }
 
 void UCBGAChaserUnequipWeapon::ActivateAbility(const FGameplayAbilitySpecHandle Handle,

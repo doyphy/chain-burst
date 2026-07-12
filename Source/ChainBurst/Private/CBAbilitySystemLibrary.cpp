@@ -39,6 +39,23 @@ UCBAbilitySystemComponent* UCBAbilitySystemLibrary::GetSafeCBASC(const AActor* I
 	return CBASC;
 }
 
+FGameplayTag UCBAbilitySystemLibrary::GetCurrentGaitTag(const UAbilitySystemComponent* InASC)
+{
+	// ASC 가 없으면 기본 개이트 (Run) 반환
+	if (!InASC) return CBGameplayTags::Movement_Run;
+
+	// Sprint > Walk > 기본 Run 우선순위로 판별
+	if (InASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
+	{
+		return CBGameplayTags::Movement_Sprint;
+	}
+	if (InASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Walk))
+	{
+		return CBGameplayTags::Movement_Walk;
+	}
+	return CBGameplayTags::Movement_Run;
+}
+
 bool UCBAbilitySystemLibrary::GetCBCachedASC(const AActor* InActor, TWeakObjectPtr<UCBAbilitySystemComponent>& OutASC)
 {
 	// 이미 캐싱된 포인터가 유효한지 확인

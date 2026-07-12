@@ -7,6 +7,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Look, "Input.Action.Look", "카메라 회전 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Sprint, "Input.Action.Sprint", "캐릭터 달리기 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Walk, "Input.Action.Walk", "캐릭터 걷기 입력")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Jump, "Input.Action.Jump", "캐릭터 점프 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Camera_Zoom, "Input.Action.Camera.Zoom", "카메라 줌 인/아웃")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_Attack_Basic, "Input.Action.Combat.Attack.Basic", "기본 공격 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_EquipWeapon, "Input.Action.Combat.EquipWeapon", "무기 장착 입력")
@@ -18,6 +19,7 @@ namespace CBGameplayTags
 	/** Status Tags. */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_InCombat, "Status.Combat.InCombat", "현재 전투 상태")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Overridden, "Status.Movement.Overridden", "GE에 의해 이동속도가 오버라이드 된 상태")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Dashing, "Status.Movement.Dashing", "대시 중 상태 (GA_Dash 활성 동안 ActivationOwnedTags로 부여 — 대시 전용 감속 판별에 사용)")
 
 	/** Event Tags. (애님노티파이 등 태그 이벤트) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_EquipWeapon, "Event.Combat.EquipWeapon", "무기 장착 이벤트")
@@ -45,6 +47,10 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Basic, "Ability.Combat.Attack.Basic", "기본 공격 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_EquipWeapon, "Ability.Combat.EquipWeapon", "무기 장착 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_UnequipWeapon, "Ability.Combat.UnequipWeapon", "무기 해제 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Dash, "Ability.Movement.Dash", "대시 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Sprint, "Ability.Movement.Sprint", "전력 질주 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Walk, "Ability.Movement.Walk", "걷기 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Jump, "Ability.Movement.Jump", "점프 어빌리티 태그")
 
 	/** Action Tags. (액션에 맞는 몽타주 재생에 사용) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action, "Action", "액션 태그")
@@ -57,6 +63,10 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Skill, "Action.Combat.Skill", "스킬 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_EquipWeapon, "Action.Combat.EquipWeapon", "무기 장착 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_UnequipWeapon, "Action.Combat.UnequipWeapon", "무기 해제 액션 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Movement_Dash, "Action.Movement.Dash", "대시 액션 태그 (몽타주 인덱스 = 8방향 섹터)")
+
+	/** Cooldown Tags. (어빌리티 쿨다운 GE의 GrantedTags에 사용) */
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Movement_Dash, "Cooldown.Movement.Dash", "대시 쿨다운 상태 (GE_Cooldown_Dash가 부여)")
 
 	/** Effect Tags. (GE의 동작 의도를 선언하는 태그) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Effect_HitReact, "Effect.HitReact", "이 GE가 피격 반응을 유발함을 선언하는 태그 (Opt-in)")

@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "AnimInstances/CBBaseAnimInstance.h"
 #include "GameplayTagContainer.h"
+#include "Animation/AnimExecutionContext.h"
+#include "Animation/AnimNodeReference.h"
 #include "CBCharacterAnimInstance.generated.h"
 
 class ACBBaseCharacter;
@@ -87,14 +89,41 @@ public:
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
 	bool IsMoving() const;
 
+	/** 가속이 없고 속도가 0이 아닌 "정지" 구간인지 여부 */
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
 	bool IsStopping() const;
+
+	/** 가속 중이면서 아직 목표 개이트 속도에 크게 못 미치는 "출발" 구간인지 여부 (비예측, 현재 프레임 속도 비율 기준) */
+	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
+	bool IsStarting() const;
 
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
 	float GetMoveX() const { return MoveX; }
 
 	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
 	float GetMoveY() const { return MoveY; }
+
+	/** 현재 개이트 최대 속도 대비 현재 속도 비율 (0=정지, 1=목표 속도 도달). 출발/정지 애니메이션 블렌드·재생속도 선택에 사용 */
+	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
+	float GetSpeedRatio() const { return CurrentSpeedRatio; }
+
+	/** 공중(점프 상승/낙하) 여부 — ABP 공중 상태 전이용 */
+	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
+	bool IsInAir() const { return bIsInAir; }
+
+	/** 수직 속도 (양수=상승, 음수=하강) — 점프↔낙하 정점 판별·착지 블렌드용 */
+	UFUNCTION(BlueprintPure, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
+	float GetVerticalVelocity() const { return CurrentVelocity.Z; }
+
+	/**
+	 * 현재 개이트를 LockedLocomotionGait에 스냅샷하는 함수.
+	 * Start/Stop 스테이트 내 포즈 노드의 On Become Relevant(Anim Node Function)에 바인딩해 스테이트 진입 시 1회 호출 —
+	 * 재생 중 개이트가 바뀌어도(예: Sprint 자동 해제) 클립이 스왑되지 않도록 진입 시점 개이트로 고정한다.
+	 * @param UpdateContext  애님 노드 함수 시그니처 요구 파라미터 (미사용)
+	 * @param NodeReference  애님 노드 함수 시그니처 요구 파라미터 (미사용)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "AnimData|LocomotionData", meta = (BlueprintThreadSafe))
+	void LockCurrentGait(const FAnimUpdateContext& UpdateContext, const FAnimNodeReference& NodeReference);
 
 protected:
 	// ==========================================
@@ -109,6 +138,14 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "AnimData|Cached")
 	FRotator CachedActorRotation = FRotator::ZeroRotator;
 
+	/** 현재 개이트(Walk/Run/Sprint)의 최대 속도 (Start 판정용 속도 비율 계산에 사용) */
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "AnimData|Cached")
+	float CachedGaitMaxSpeed = 0.f;
+
+	/** 공중(점프 상승/낙하) 여부 (게임 스레드에서 CMC IsFalling 캐싱) */
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "AnimData|LocomotionData")
+	bool bIsInAir = false;
+	
 	// ==========================================
 	// 워커 스레드 변수 (계산에 사용할 데이터, 복사본)
 	// ==========================================
@@ -130,8 +167,24 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "AnimData|LocomotionData")
 	ECBLocomotionGait CurrentLocomotionGait = ECBLocomotionGait::Run;
 
+	/** Start/Stop 스테이트 진입 시점에 고정된 개이트 (LockCurrentGait로 스냅샷 — 재생 중 개이트 변경으로 인한 클립 스왑 방지) */
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "AnimData|LocomotionData")
+	ECBLocomotionGait LockedLocomotionGait = ECBLocomotionGait::Run;
+
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "AnimData|LocomotionData")
 	bool bHasAcceleration = false;
+
+	/** 현재 개이트 최대 속도 대비 현재 속도 비율 (CachedGaitMaxSpeed 기준, 워커 스레드에서 계산) */
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "AnimData|LocomotionData")
+	float CurrentSpeedRatio = 0.f;
+
+	/** 이 비율 미만으로 가속 중이면 "출발중" 판정 (목표 개이트 최대 속도 대비 현재 속도 비율) */
+	UPROPERTY(EditDefaultsOnly, Category = "AnimData|LocomotionData")
+	float StartSpeedRatioThreshold = 0.3f;
+
+	/** 이 비율 이상 속도가 나던 중 정지해야 "정지중" 판정 (목표 개이트 최대 속도 대비 현재 속도 비율) */
+	UPROPERTY(EditDefaultsOnly, Category = "AnimData|LocomotionData")
+	float StopSpeedRatioThreshold = 0.3f;
 #pragma endregion
 
 #pragma region Combat

@@ -2,16 +2,21 @@
 #include "Components/Input/CBInputManagerComponent.h"
 #include "Components/Input/CBInputComponent.h"
 #include "DataAssets/Input/CBInputConfig.h"
+#include "DataAssets/Movement/CBCharacterMovementData.h"
 #include "Characters/CBChaserCharacter.h"
 #include "Components/Camera/CBCameraControlComponent.h"
 #include "Components/Movement/CBCharacterRotationComponent.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
+#include "CBAbilitySystemLibrary.h"
 #include "CBGameplayTags.h"
 
 // engine
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 void UCBInputManagerComponent::SetInputConfig(UCBInputConfig* InInputConfig)
 {
@@ -97,8 +102,8 @@ ACBChaserCharacter* UCBInputManagerComponent::GetOwningChaser()
 
 void UCBInputManagerComponent::Input_Move(const FInputActionValue& InputActionValue)
 {
-	// 입력 잠금 여부 확인
-	if (bIsInputLocked) return;
+	// 입력 잠금 여부 확인 (시스템 잠금 + 피벗 잠금)
+	if (bIsInputLocked || bPivotInputLocked) return;
 
 	ACBChaserCharacter* Character = GetOwningChaser();
 	if (!Character) return;
@@ -111,19 +116,26 @@ void UCBInputManagerComponent::Input_Move(const FInputActionValue& InputActionVa
 	const float ForwardInput = MovementVector.Y;
 	const float RightInput = MovementVector.X;
 
-	// 카메라 기준 이동 방향(플레이어 의도)을 계산해 회전 컴포넌트에 전달.
-	// Sprint는 이동 방향으로 몸을 돌리는데 사용, Walk/Run은 무시(카메라 방향을 봄).
+	// 카메라 기준 이동 방향(플레이어 의도)을 계산해 피벗 감지와 회전 컴포넌트에 사용.
+	// 회전에서는 Sprint가 이동 방향으로 몸을 돌리는데 사용, Walk/Run은 무시(카메라 방향을 봄).
 	if (AController* Controller = Character->GetController())
 	{
 		// 카메라 회전 Yaw 값 (좌우 회전각) 가져오기
 		const FRotator CameraYaw(0, Controller->GetControlRotation().Yaw, 0);
-		
+
 		// 카메라의 전방/우측 방향 벡터 가져오기
 		const FVector CameraForward = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::X);
 		const FVector CameraRight = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::Y);
 
 		// 카메라의 전방 방향 벡터와 우측 방향 벡터에 입력 값을 곱한 후 더함 (월드 공간에서의 이동 방향)
 		const FVector DesiredDir = CameraForward * ForwardInput + CameraRight * RightInput;
+
+		// 피벗 감지 — 입력 방향이 현재 속도 방향과 크게 어긋나면 이동 입력을 잠그고 이번 입력은 무시.
+		// (잠금 동안 자연 감속 → Stop 재생 → 해제 후 유지 중인 입력으로 Start 재출발)
+		if (TryDetectPivot(DesiredDir))
+		{
+			return;
+		}
 
 		// 이동 방향을 회전 컴포넌트에 넘기기
 		if (UCBCharacterRotationComponent* RotationComp = Character->GetCharacterRotationComponent())
@@ -138,8 +150,8 @@ void UCBInputManagerComponent::Input_Move(const FInputActionValue& InputActionVa
 	const FRotator YawRotation(0, Character->GetActorRotation().Yaw, 0);
 
 	// Sprint 여부 판별 (orient-to-movement 이동 적용 분기)
-	UCBAbilitySystemComponent* ASC = Character->GetCBAbilitySystemComponent();
-	const bool bIsSprinting = ASC && ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint);
+	const bool bIsSprinting =
+		UCBAbilitySystemLibrary::GetCurrentGaitTag(Character->GetCBAbilitySystemComponent()) == CBGameplayTags::Movement_Sprint;
 
 	if (bIsSprinting)
 	{
@@ -176,6 +188,55 @@ void UCBInputManagerComponent::Input_Camera_Zoom(const FInputActionValue& InputA
 	{
 		CameraControl->Input_Camera_Zoom(WheelValue);
 	}
+}
+
+bool UCBInputManagerComponent::TryDetectPivot(const FVector& InDesiredDir)
+{
+	ACBChaserCharacter* Character = GetOwningChaser();
+	if (!Character) return false;
+
+	// 공중에서는 피벗 없음 (피벗은 지상 급반전 개념 — 공중 방향 전환에 입력 잠금이 걸리면 오동작)
+	const UCharacterMovementComponent* CMC = Character->GetCharacterMovement();
+	if (!CMC || CMC->IsFalling()) return false;
+
+	// 개이트별 피벗 파라미터 조회 — 이동 데이터가 없으면 피벗 비활성
+	UCBCharacterMovementData* MovementData = Character->GetMovementDataAsset();
+	if (!MovementData) return false;
+
+	const FGameplayTag GaitTag = UCBAbilitySystemLibrary::GetCurrentGaitTag(Character->GetCBAbilitySystemComponent());
+	const FCBGaitMovementData* GaitData = MovementData->FindGaitData(GaitTag);
+	if (!GaitData) return false;
+
+	// 속도 게이트 — 개이트 최대 속도 대비 일정 비율 이상으로 이동 중이어야 피벗 (저속 방향 전환은 잠금 없이 그냥 방향 전환)
+	const FVector Velocity2D = FVector(Character->GetVelocity().X, Character->GetVelocity().Y, 0.f);
+	if (Velocity2D.Size() < GaitData->MaxSpeed * PivotMinSpeedRatio) return false;
+
+	// 입력 방향이 사실상 없으면 (데드존) 판정 불가
+	const FVector DesiredDir2D = FVector(InDesiredDir.X, InDesiredDir.Y, 0.f);
+	if (DesiredDir2D.IsNearlyZero()) return false;
+
+	// 입력 방향(의도)과 현재 속도 방향의 각도 차이 계산
+	// 내적으로 각도 계산 (코사인) = -1 ~ 1 (180도 ~ 0도)
+	const float CosAngle = FVector::DotProduct(Velocity2D.GetSafeNormal(), DesiredDir2D.GetSafeNormal());
+	// 아크코사인으로 각도(도 단위)로 변환
+	const float AngleDegrees = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(CosAngle, -1.f, 1.f)));
+
+	// 임계값 미만이면 피벗 아님
+	if (AngleDegrees < GaitData->PivotAngleThreshold) return false;
+
+	// 피벗 감지 — 이동 입력을 개이트별 시간만큼 잠금 (해제는 UnlockPivotInput 타이머)
+	bPivotInputLocked = true;
+	GetWorld()->GetTimerManager().SetTimer(
+		PivotUnlockTimerHandle, this, &ThisClass::UnlockPivotInput, GaitData->PivotInputLockDuration, false);
+
+	return true;
+}
+
+// 피벗 이동 입력 잠금 해제 함수 (타이머 콜백)
+void UCBInputManagerComponent::UnlockPivotInput()
+{
+	// 잠금 해제 — 플레이어가 입력을 유지 중이면 다음 Input_Move부터 새 방향으로 재출발
+	bPivotInputLocked = false;
 }
 
 void UCBInputManagerComponent::Input_AbilityInputPressed(FGameplayTag InInputTag)

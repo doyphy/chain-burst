@@ -40,6 +40,17 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Deceleration")
 	float SprintBrakingDeceleration = 1000.0f;
 
+	/** 대시 중(Status.Movement.Dashing) 감속. 루트모션 대시는 속도가 매우 높아 개이트 감속과 별도로 튜닝 — 개이트보다 우선 적용 */
+	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Deceleration")
+	float DashBrakingDeceleration = 2000.0f;
+
+	/** 대시 태그가 사라진 뒤에도 대시 감속을 유지할 시간 (초). 몽타주 종료 후 잔여 고속 구간까지 대시 감속으로 처리 */
+	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Deceleration")
+	float DashBrakingLingerTime = 1.0f;
+
+	/** 대시 태그를 마지막으로 감지한 월드 시각 (linger 판정용) */
+	double LastDashTagSeenTime = -DBL_MAX;
+
 protected:
 	/** 캐릭터 시스템이 완료되었을 때 실행될 초기화 함수 (Tick 활성화) */
 	virtual void OnCharacterSystemReady() override;

@@ -6,6 +6,7 @@
 
 // engine
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Engine/World.h"
 
 UCBLocomotionProcessor::UCBLocomotionProcessor()
 {
@@ -31,7 +32,7 @@ void UCBLocomotionProcessor::TickComponent(float DeltaTime, enum ELevelTick Tick
 float UCBLocomotionProcessor::CalculateMaxAcceleration()
 {
 	// ASC 유효하지 않다면 기본 속도 (Run) 반환
-	if (!UCBAbilitySystemLibrary::GetCBCachedASC(GetOwner(),CachedASC))
+	if (!GetASC())
 	{
 		return RunMaxAcceleration;
 	}
@@ -53,11 +54,25 @@ float UCBLocomotionProcessor::CalculateMaxAcceleration()
 float UCBLocomotionProcessor::CalculateBrakingDeceleration()
 {
 	// ASC 유효하지 않다면 기본 속도 (Run) 반환
-	if (!UCBAbilitySystemLibrary::GetCBCachedASC(GetOwner(),CachedASC))
+	if (!GetASC())
 	{
 		return RunBrakingDeceleration;
 	}
-	
+
+	// 대시 중이면 개이트와 무관하게 대시 전용 감속 (루트모션 잔여 속도가 개이트 최대 속도보다 훨씬 높아 별도 튜닝 필요)
+	if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Dashing))
+	{
+		// 태그 감지 시각 기록 (linger 판정 기준)
+		LastDashTagSeenTime = GetWorld()->GetTimeSeconds();
+		return DashBrakingDeceleration;
+	}
+
+	// 대시 태그가 사라진 직후에도 잔여 고속 구간 동안은 대시 감속 유지 (linger)
+	if (GetWorld()->GetTimeSeconds() - LastDashTagSeenTime < DashBrakingLingerTime)
+	{
+		return DashBrakingDeceleration;
+	}
+
 	if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
 	{
 		return SprintBrakingDeceleration;
@@ -74,7 +89,8 @@ float UCBLocomotionProcessor::CalculateBrakingDeceleration()
 
 void UCBLocomotionProcessor::OnCharacterSystemReady()
 {
-	// CachedCMC 는 지연 캐싱으로 초기화.
+	// CachedCMC 초기화
+	GetCachedCMC(CachedCMC);
 
 	// Tick 활성화
 	SetComponentTickEnabled(true);

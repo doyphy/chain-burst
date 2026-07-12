@@ -1,8 +1,10 @@
 // project
 #include "AnimInstances/CBCharacterAnimInstance.h"
 #include "Characters/CBBaseCharacter.h"
+#include "CBAbilitySystemLibrary.h"
 #include "CBGameplayTags.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
+#include "DataAssets/Movement/CBCharacterMovementData.h"
 
 // engine
 #include "GameFramework/CharacterMovementComponent.h"
@@ -34,8 +36,10 @@ void UCBCharacterAnimInstance::NativeThreadSafeUpdateAnimation(float DeltaSecond
 	// 데이터 업데이트 (내부 데이터 복사)
 	CurrentVelocity = CachedVelocity;
 	CurrentVelocitySize = CurrentVelocity.Size2D();
-
 	CurrentAccelerationSize = CachedAcceleration.Size2D();
+	
+	// 목표 개이트 최대 속도 대비 현재 속도 비율 (출발 판정 + 정지 애니메이션 블렌드용)
+	CurrentSpeedRatio = (CachedGaitMaxSpeed > KINDA_SMALL_NUMBER) ? (CurrentVelocitySize / CachedGaitMaxSpeed) : 0.f;
 
 	// 상태 업데이트
 	bHasAcceleration = CurrentAccelerationSize > KINDA_SMALL_NUMBER;
@@ -68,6 +72,7 @@ void UCBCharacterAnimInstance::UpdateBasicMovementData()
 		CachedVelocity = CachedCharacter.Get()->GetVelocity();
 		CachedAcceleration = CachedCMC.Get()->GetCurrentAcceleration();
 		CachedActorRotation = CachedCharacter.Get()->GetActorRotation();
+		bIsInAir = CachedCMC.Get()->IsFalling();
 	}
 }
 
@@ -75,23 +80,28 @@ void UCBCharacterAnimInstance::UpdateCombatAndAbilityData()
 {
 	if (!GetCachedCharacter(CachedCharacter)) return;
 
-	UCBAbilitySystemComponent* ASC = CachedCharacter.Get()->GetCBAbilitySystemComponent();
+	// 개이트 태그를 한 번만 결정해 enum 판정과 최대 속도 조회에 함께 사용 (공용 헬퍼 — Sprint > Walk > 기본 Run 우선순위)
+	const FGameplayTag GaitTag = UCBAbilitySystemLibrary::GetCurrentGaitTag(CachedCharacter.Get()->GetCBAbilitySystemComponent());
 
-	if (ASC)
+	// 태그 → enum 매핑
+	if (GaitTag == CBGameplayTags::Movement_Sprint)
 	{
-		if (ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
-		{
-			CurrentLocomotionGait = ECBLocomotionGait::Sprint;
-		}
-		else if (ASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Walk))
-		{
-			CurrentLocomotionGait = ECBLocomotionGait::Walk;
-		}
-		else
-		{
-			// 기본 상태
-			CurrentLocomotionGait = ECBLocomotionGait::Run;
-		}
+		CurrentLocomotionGait = ECBLocomotionGait::Sprint;
+	}
+	else if (GaitTag == CBGameplayTags::Movement_Walk)
+	{
+		CurrentLocomotionGait = ECBLocomotionGait::Walk;
+	}
+	else
+	{
+		// 기본 상태
+		CurrentLocomotionGait = ECBLocomotionGait::Run;
+	}
+
+	// 출발 판정용 목표 개이트 최대 속도 캐싱 (UObject 접근이라 게임 스레드에서만 수행)
+	if (UCBCharacterMovementData* MovementData = CachedCharacter.Get()->GetMovementDataAsset())
+	{
+		CachedGaitMaxSpeed = MovementData->GetSpeedForTag(GaitTag);
 	}
 }
 
@@ -133,7 +143,20 @@ bool UCBCharacterAnimInstance::IsMoving() const
 
 bool UCBCharacterAnimInstance::IsStopping() const
 {
-	return !bHasAcceleration && CurrentVelocitySize > 10.f;
+	// 가속이 없고, 현재 속도 비율이 정지 속도 비율 임계값보다 크면 "정지중"
+	return !bHasAcceleration && CurrentSpeedRatio > StopSpeedRatioThreshold;
+}
+
+bool UCBCharacterAnimInstance::IsStarting() const
+{
+	// 가속 중이면서, 현재 속도 비율이 출발 속도 비율 임계값보다 작으면 "출발중"
+	return bHasAcceleration && CurrentSpeedRatio < StartSpeedRatioThreshold;
+}
+
+void UCBCharacterAnimInstance::LockCurrentGait(const FAnimUpdateContext& UpdateContext, const FAnimNodeReference& NodeReference)
+{
+	// 스테이트 진입 시점의 개이트를 고정 (Start/Stop 재생 중 개이트가 바뀌어도 클립 유지)
+	LockedLocomotionGait = CurrentLocomotionGait;
 }
 
 void UCBCharacterAnimInstance::PlayMontage(UAnimMontage* InMontage, float PlayRate)

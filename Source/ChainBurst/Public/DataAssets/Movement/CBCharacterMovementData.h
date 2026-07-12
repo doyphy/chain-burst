@@ -18,6 +18,14 @@ struct FCBGaitMovementData
 	/** 회전 보간 속도 (RInterpTo 속도). 값이 작을수록 회전이 느리다 — 질주 시 낮게 준다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
 	float RotationInterpSpeed = 5.0f;
+
+	/** 피벗 판정 각도 임계값 (도). 이동 입력 방향이 현재 속도 방향과 이 각도 이상 어긋나면 피벗. 낮을수록 민감 (예: Sprint 90, Walk 160) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	float PivotAngleThreshold = 135.0f;
+
+	/** 피벗 시 이동 입력 잠금 시간 (초). 잠금 동안 자연 감속 → Stop 재생 → 해제 후 유지 중인 입력으로 재출발 (예: Walk 0.1, Sprint 0.35) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	float PivotInputLockDuration = 0.2f;
 };
 
 UCLASS()
@@ -46,8 +54,15 @@ public:
 	/**
 	 * 태그에 해당하는 회전 보간 속도를 반환합니다.
 	 * @param InTag 조회할 이동 상태(개이트) 태그
-	 * @return 태그에 해당하는 회전 보간 속도 반환, 없으면 0.0f를 반환합니다(호출부에서 폴백 처리).
+	 * @return 태그에 해당하는 회전 보간 속도 반환, 없으면 0.0f를 반환합니다(호출부에서 폴백 처리(예외 처리)).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Movement")
 	float GetRotationInterpSpeedForTag(FGameplayTag InTag) const;
+
+	/**
+	 * 태그에 해당하는 개이트 데이터 구조체를 반환합니다. (C++ 전용)
+	 * @param InTag 조회할 이동 상태(개이트) 태그
+	 * @return 개이트 데이터 포인터 반환, 없으면 nullptr 반환 (호출부에서 폴백 처리(예외 처리)).
+	 */
+	const FCBGaitMovementData* FindGaitData(FGameplayTag InTag) const;
 };

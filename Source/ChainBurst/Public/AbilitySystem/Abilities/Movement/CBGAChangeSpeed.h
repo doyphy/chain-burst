@@ -25,8 +25,8 @@ protected:
 	//~ End UGameplayAbility Interface
 
 protected:
-	/** 블루프린트 자식(GA_Sprint, GA_Walk)에서 설정할 속도 구분 태그 */
-	UPROPERTY(EditDefaultsOnly, Category = "CB|Movement", meta = (Categories = "Movement"))
+	/** 블루프린트 자식(GA_Sprint, GA_Walk)에서 설정할 속도 구분 태그 (개이트 태그) */
+	UPROPERTY(EditDefaultsOnly, Category = "CB|Movement", meta = (Categories = "Status.Movement.Gait"))
 	FGameplayTag SpeedDataTag;
 
 	/** 공용으로 사용할 속도 변경용 GE 클래스 (GE_MovementModifier) */

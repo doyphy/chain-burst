@@ -1,6 +1,7 @@
 // project
 #include "AbilitySystem/Abilities/Combat/CBGAChaserUnequipWeapon.h"
 #include "Components/Combat/CBCombatComponent.h"
+#include "CBAbilitySystemLibrary.h"
 #include "CBGameplayTags.h"
 
 // engine
@@ -68,6 +69,12 @@ void UCBGAChaserUnequipWeapon::EndAbility(const FGameplayAbilitySpecHandle Handl
 	bool bReplicateEndAbility, bool bWasCancelled)
 {
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
+int32 UCBGAChaserUnequipWeapon::SelectActionMontageIndex() const
+{
+	// 개이트별 해제 몽타주 분기 — Idle=0, Walk=1, Run/Sprint=2
+	return UCBAbilitySystemLibrary::GetGaitMontageIndex(GetAvatarActorFromActorInfo());
 }
 
 void UCBGAChaserUnequipWeapon::OnUnequipEvent(FGameplayEventData Payload)

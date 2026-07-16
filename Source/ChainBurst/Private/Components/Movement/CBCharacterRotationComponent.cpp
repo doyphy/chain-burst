@@ -39,7 +39,7 @@ void UCBCharacterRotationComponent::TickComponent(float DeltaTime, enum ELevelTi
 			FRotator NewTargetRotation;
 
 			// Sprint: 이동(입력) 방향으로 몸을 돌린다 (orient-to-movement) — 전방 클립 하나로 8방향 커버
-			if (GaitTag == CBGameplayTags::Movement_Sprint && !CachedMoveInputDir.IsNearlyZero())
+			if (GaitTag == CBGameplayTags::Status_Movement_Gait_Sprint && !CachedMoveInputDir.IsNearlyZero())
 			{
 				NewTargetRotation = FRotator(0.0f, CachedMoveInputDir.Rotation().Yaw, 0.0f);
 			}
@@ -70,7 +70,7 @@ void UCBCharacterRotationComponent::TickComponent(float DeltaTime, enum ELevelTi
 FGameplayTag UCBCharacterRotationComponent::GetCurrentGaitTag() const
 {
 	// 기본 개이트
-	if (!CachedCharacter) return CBGameplayTags::Movement_Run;
+	if (!CachedCharacter) return CBGameplayTags::Status_Movement_Gait_Run;
 
 	// 공용 헬퍼로 판별 (Sprint > Walk > 기본 Run 우선순위)
 	return UCBAbilitySystemLibrary::GetCurrentGaitTag(CachedCharacter->GetAbilitySystemComponent());

@@ -136,7 +136,7 @@ void UCBAttributeSet::OnCharacterSystemReady()
 			if (UCBCharacterMovementData* MovementData = OwnerCharacter->GetMovementDataAsset())
 			{
 				// 이동 속도 설정
-				float InitialSpeed = MovementData->GetSpeedForTag(CBGameplayTags::Movement_Run);
+				float InitialSpeed = MovementData->GetSpeedForTag(CBGameplayTags::Status_Movement_Gait_Run);
 				SetMovementSpeed(InitialSpeed);
 			}
 		}

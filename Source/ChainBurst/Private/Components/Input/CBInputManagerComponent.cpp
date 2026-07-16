@@ -151,7 +151,7 @@ void UCBInputManagerComponent::Input_Move(const FInputActionValue& InputActionVa
 
 	// Sprint 여부 판별 (orient-to-movement 이동 적용 분기)
 	const bool bIsSprinting =
-		UCBAbilitySystemLibrary::GetCurrentGaitTag(Character->GetCBAbilitySystemComponent()) == CBGameplayTags::Movement_Sprint;
+		UCBAbilitySystemLibrary::GetCurrentGaitTag(Character->GetCBAbilitySystemComponent()) == CBGameplayTags::Status_Movement_Gait_Sprint;
 
 	if (bIsSprinting)
 	{

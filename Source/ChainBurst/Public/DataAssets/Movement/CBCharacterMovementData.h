@@ -36,10 +36,10 @@ class CHAINBURST_API UCBCharacterMovementData : public UDataAsset
 protected:
 	/**
 	 * GameplayTag(개이트)에 따른 이동 데이터 매핑 (속도 + 회전 보간 속도)
-	 * Key: Movement.Run   -> { MaxSpeed: 550, RotationInterpSpeed: 5 }
-	 * Key: Movement.Sprint -> { MaxSpeed: 700, RotationInterpSpeed: 2 }
+	 * Key: Status.Movement.Gait.Run    -> { MaxSpeed: 550, RotationInterpSpeed: 5 }
+	 * Key: Status.Movement.Gait.Sprint -> { MaxSpeed: 700, RotationInterpSpeed: 2 }
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement|Gaits", meta = (Categories = "Movement"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement|Gaits", meta = (Categories = "Status.Movement.Gait"))
 	TMap<FGameplayTag, FCBGaitMovementData> MovementDataMap;
 
 public:

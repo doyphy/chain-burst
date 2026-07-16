@@ -45,7 +45,7 @@ private:
 
 	void UpdateSmoothedTargetRotation(float DeltaTime);
 
-	/** 현재 개이트 태그(ASC의 Movement.* 판별, Sprint>Walk>Run 우선순위). 없으면 Movement.Run 반환. */
+	/** 현재 개이트 태그(ASC의 Status.Movement.Gait.* 판별, Sprint>Walk>Run 우선순위). 없으면 Gait.Run 반환. */
 	FGameplayTag GetCurrentGaitTag() const;
 
 	/**

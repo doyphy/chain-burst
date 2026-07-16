@@ -1,5 +1,6 @@
 // project
 #include "AbilitySystem/Abilities/Movement/CBGADash.h"
+#include "CBAbilitySystemLibrary.h"
 #include "CBGameplayTags.h"
 
 // engine
@@ -41,7 +42,7 @@ void UCBGADash::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		return;
 	}
 
-	// 몽타주 재생 (비콤보라 베이스가 인덱스 0 = 전방 대시를 재생)
+	// 몽타주 재생 (인덱스는 SelectActionMontageIndex가 전투 상태로 분기 — 비전투 0 / 전투 1)
 	PlayActionMontage();
 
 	// 대시 성공 → Sprint 어빌리티 활성화
@@ -54,4 +55,11 @@ void UCBGADash::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 			ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(SprintAbilityTag));
 		}
 	}
+}
+
+int32 UCBGADash::SelectActionMontageIndex() const
+{
+	// 전투 상태(Status.Combat.InCombat)면 전투 대시(인덱스 1), 비전투면 일반 대시(인덱스 0)
+	// 태그가 전 클라 복제(TagAndCountToAll)되므로 예측 클라/서버가 같은 인덱스를 계산한다
+	return UCBAbilitySystemLibrary::IsCombatMode(GetAvatarActorFromActorInfo()) ? 1 : 0;
 }

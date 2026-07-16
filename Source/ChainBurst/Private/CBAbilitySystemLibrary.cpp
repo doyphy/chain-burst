@@ -7,6 +7,7 @@
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
+#include "Engine/Engine.h"
 
 UAbilitySystemComponent* UCBAbilitySystemLibrary::GetASC(const AActor* InActor)
 {
@@ -42,18 +43,33 @@ UCBAbilitySystemComponent* UCBAbilitySystemLibrary::GetSafeCBASC(const AActor* I
 FGameplayTag UCBAbilitySystemLibrary::GetCurrentGaitTag(const UAbilitySystemComponent* InASC)
 {
 	// ASC 가 없으면 기본 개이트 (Run) 반환
-	if (!InASC) return CBGameplayTags::Movement_Run;
+	if (!InASC) return CBGameplayTags::Status_Movement_Gait_Run;
 
 	// Sprint > Walk > 기본 Run 우선순위로 판별
-	if (InASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Sprint))
+	if (InASC->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Gait_Sprint))
 	{
-		return CBGameplayTags::Movement_Sprint;
+		return CBGameplayTags::Status_Movement_Gait_Sprint;
 	}
-	if (InASC->HasMatchingGameplayTag(CBGameplayTags::Movement_Walk))
+	if (InASC->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Gait_Walk))
 	{
-		return CBGameplayTags::Movement_Walk;
+		return CBGameplayTags::Status_Movement_Gait_Walk;
 	}
-	return CBGameplayTags::Movement_Run;
+	return CBGameplayTags::Status_Movement_Gait_Run;
+}
+
+int32 UCBAbilitySystemLibrary::GetGaitMontageIndex(const AActor* InActor)
+{
+	UAbilitySystemComponent* ASC = GetASC(InActor);
+	if (!ASC) return 0;
+
+	// Idle 파생 상태 태그 우선 (LocomotionProcessor가 로컬 미러링)
+	if (ASC->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Idle))
+	{
+		return 0;
+	}
+
+	// 이동 중이면 개이트 태그로 분기 — Walk=1, Run/Sprint=2 (Sprint 몽타주는 Run 변형과 공유)
+	return GetCurrentGaitTag(ASC) == CBGameplayTags::Status_Movement_Gait_Walk ? 1 : 2;
 }
 
 bool UCBAbilitySystemLibrary::GetCBCachedASC(const AActor* InActor, TWeakObjectPtr<UCBAbilitySystemComponent>& OutASC)

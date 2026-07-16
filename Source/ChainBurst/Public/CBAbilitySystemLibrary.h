@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Types/CBEnumTypes.h"
 #include "CBAbilitySystemLibrary.generated.h"
@@ -43,11 +44,19 @@ public:
 	static UCBAbilitySystemComponent* GetSafeCBASC(const AActor* InActor);
 
 	/**
-	 * ASC의 Movement.* 태그로 현재 개이트 태그를 판별하는 함수 (Sprint > Walk > 기본 Run 우선순위)
+	 * ASC의 Status.Movement.Gait.* 태그로 현재 개이트 태그를 판별하는 함수 (Sprint > Walk > 기본 Run 우선순위)
 	 * @param InASC 검사할 ASC (nullptr 허용 — 기본 Run 반환)
-	 * @return 현재 개이트 태그 (Movement.Sprint / Movement.Walk / Movement.Run)
+	 * @return 현재 개이트 태그 (Status.Movement.Gait.Sprint / .Walk / .Run)
 	 */
 	static FGameplayTag GetCurrentGaitTag(const UAbilitySystemComponent* InASC);
+
+	/**
+	 * 현재 이동 상태 기준 개이트별 몽타주 변형 인덱스를 반환하는 함수 (개이트별 몽타주를 가진 액션 공용 — 무기 장착/해제 등)
+	 * Idle은 파생 상태 태그(Status.Movement.Idle — LocomotionProcessor가 로컬 미러링)로, 개이트는 Gait.* 태그로 판별.
+	 * @param InActor 검사할 캐릭터 액터
+	 * @return 개이트 몽타주 인덱스 (0=Idle, 1=Walk, 2=Run/Sprint)
+	 */
+	static int32 GetGaitMontageIndex(const AActor* InActor);
 
 	/**
 	 * ASC 를 지연 캐싱하여 가져오는 함수 (C++ 전용)

@@ -20,9 +20,11 @@ void UCBActionAbility::PlayActionMontage()
 		return;
 	}
 	
-	int32 ComboIndex = 0;
+	// 재생 인덱스 결정
+	// 비콤보 액션은 자식 훅(기본 0) - SelectActionMontageIndex()
+	int32 MontageIndex = SelectActionMontageIndex();
 
-	// 콤보 액션이면
+	// 콤보 액션는 CombatComponent가 전진시킨 콤보 인덱스 - AdvanceCombo()
 	if (IsCombo)
 	{
 		// 컴뱃 컴포넌트 가져오기
@@ -38,14 +40,14 @@ void UCBActionAbility::PlayActionMontage()
 			}
 
 			// 콤보 인덱스 증가 및 이번에 재생할 콤보 인덱스 가져오기
-			ComboIndex = CombatComp->AdvanceCombo(BoundActionTag, MaxComboCount);
+			MontageIndex = CombatComp->AdvanceCombo(BoundActionTag, MaxComboCount);
 		}
 	}
 
-	// 게임플레이 큐 파라미터 구성 (재생할 액션 태그 + 콤보 인덱스)
+	// 게임플레이 큐 파라미터 구성 (재생할 액션 태그 + 재생 인덱스)
 	FGameplayCueParameters CueParams;
 	CueParams.AggregatedSourceTags.AddTag(BoundActionTag);
-	CueParams.RawMagnitude = static_cast<float>(ComboIndex);
+	CueParams.RawMagnitude = static_cast<float>(MontageIndex);
 
 	// 자식이 그 외 추가 태그를 붙일 수 있도록 훅 호출
 	BuildActionCueParameters(CueParams);

@@ -46,7 +46,7 @@ void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	FGameplayEffectSpecHandle SpecHandle = MakeOutgoingGameplayEffectSpec(MovementModifierGEClass);
 	if (SpecHandle.IsValid())
 	{
-		// SetByCaller를 통해 데이터 설정
+		// SetByCaller를 통해 데이터 설정 (캐릭터의 MovementSpeed에 값 적용)
 		SpecHandle.Data.Get()->SetSetByCallerMagnitude(
 			CBGameplayTags::Data_Movement_Speed, 
 			TargetSpeed

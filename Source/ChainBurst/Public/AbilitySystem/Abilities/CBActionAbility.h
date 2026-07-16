@@ -17,6 +17,7 @@ class UAbilityTask_WaitDelay;
  * 싱글/콤보 몽타주 구분에 쓰이는 IsCombo는 이 베이스에서 공통으로 관리.
  *
  * 자식 확장 지점:
+ *   - SelectActionMontageIndex()   : 비콤보 액션의 재생 인덱스 결정 (기본 0, 예: 대시의 전투/비전투 분기)
  *   - BuildActionCueParameters()   : 큐 파라미터에 추가 태그를 붙임 (예: 피격 방향 등)
  *   - OnActionMontageStarted()     : 몽타주 재생 직후 후처리 (예: 입력 대기 태스크 등록)
  *   - ShouldResetComboOnEnd()      : 액션 종료 시 콤보 인덱스 초기화 여부 (기본: IsCombo)
@@ -33,6 +34,12 @@ protected:
 
 	/** 액션 몽타주 재생 및 종료 처리 등록 (자식에서 호출) */
 	void PlayActionMontage();
+
+	/**
+	 * 비콤보 액션의 재생 인덱스 결정 훅 (기본 0)
+	 * 자식이 상태에 따라 변형 몽타주를 고를 때 재정의. (콤보 액션은 CombatComponent의 콤보 인덱스가 우선)
+	 */
+	virtual int32 SelectActionMontageIndex() const { return 0; }
 
 	/**
 	 * 몽타주 재생용 GameplayCue 파라미터 구성 훅 (자식이 추가 태그를 붙임)

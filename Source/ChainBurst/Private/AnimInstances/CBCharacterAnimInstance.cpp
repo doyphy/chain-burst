@@ -84,11 +84,11 @@ void UCBCharacterAnimInstance::UpdateCombatAndAbilityData()
 	const FGameplayTag GaitTag = UCBAbilitySystemLibrary::GetCurrentGaitTag(CachedCharacter.Get()->GetCBAbilitySystemComponent());
 
 	// 태그 → enum 매핑
-	if (GaitTag == CBGameplayTags::Movement_Sprint)
+	if (GaitTag == CBGameplayTags::Status_Movement_Gait_Sprint)
 	{
 		CurrentLocomotionGait = ECBLocomotionGait::Sprint;
 	}
-	else if (GaitTag == CBGameplayTags::Movement_Walk)
+	else if (GaitTag == CBGameplayTags::Status_Movement_Gait_Walk)
 	{
 		CurrentLocomotionGait = ECBLocomotionGait::Walk;
 	}

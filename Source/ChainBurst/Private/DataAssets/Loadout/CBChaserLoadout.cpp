@@ -3,6 +3,7 @@
 #include "AbilitySystem/Abilities/CBChaserGameplayAbility.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Characters/CBChaserCharacter.h"
+#include "Components/UI/CBUIComponent.h"
 
 bool FCBInputAbilitySet::IsValid() const
 {
@@ -41,4 +42,10 @@ void UCBChaserLoadout::Local_ApplyToCharacter(ACBChaserCharacter* InCharacter)
 
 	// 입력 설정 주입 (세터 내부에서 입력 컴포넌트 준비 여부를 확인해 지연 바인딩 수행)
 	InCharacter->SetInputConfig(InputConfig);
+
+	// HUD 체력 위젯 클래스 주입 (위젯 생성은 준비 완료 후 UI 컴포넌트가 수행)
+	if (UCBUIComponent* UIComponent = InCharacter->GetCBUIComponent())
+	{
+		UIComponent->SetHUDWidgetClass(HUDHealthWidgetClass);
+	}
 }

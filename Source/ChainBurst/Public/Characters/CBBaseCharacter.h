@@ -4,6 +4,7 @@
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
 #include "Interfaces/CBCombatInterface.h"
+#include "Interfaces/CBUIInterface.h"
 #include "CBBaseCharacter.generated.h"
 
 class UCBAbilitySystemComponent;
@@ -14,6 +15,7 @@ class UCBCombatComponent;
 struct FOnAttributeChangeData;
 class UCBLocomotionProcessor;
 class UCBActionComponent;
+class UCBUIComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady)
 
@@ -26,7 +28,7 @@ enum class ECBSystemState : uint8
 };
 
 UCLASS()
-class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface, public ICBCombatInterface
+class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface, public ICBCombatInterface, public ICBUIInterface
 {
 	GENERATED_BODY()
 
@@ -81,6 +83,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Animation")
 	TObjectPtr<UCBActionComponent> CBActionComponent = nullptr;
 
+	/** 캐릭터 부착형 UI 관리 컴포넌트 (로컬 플레이어=HUD, 그 외=머리 위 체력바) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|UI")
+	TObjectPtr<UCBUIComponent> CBUIComponent = nullptr;
+
 public:
 	/**
 	 * 외부(어빌리티, 게임플레이 큐 등)에서 몽타주 재생을 요청하는 함수
@@ -94,6 +100,10 @@ public:
 	//~ Begin ICBCombatInterface Interface.
 	virtual UCBCombatComponent* GetCBCombatComponent() const override;
 	//~ End ICBCombatInterface Interface.
+
+	//~ Begin ICBUIInterface Interface.
+	virtual UCBUIComponent* GetCBUIComponent() const override;
+	//~ End ICBUIInterface Interface.
 
 	FORCEINLINE UCBActionComponent* GetCBActionComponent() const { return CBActionComponent.Get(); }
 #pragma endregion

@@ -12,6 +12,7 @@ class UCBWeaponData;
 class UCBCharacterMovementData;
 class UCBActionMontageData;
 class ACBBaseCharacter;
+class UCBHealthBarWidget;
 
 /**
  * 캐릭터의 바디(크기) 셋업.
@@ -136,6 +137,14 @@ protected:
 	/** 액션 몽타주 데이터. UCBActionComponent에 캐싱되어 태그 기반 몽타주 재생에 사용 */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Data")
 	TObjectPtr<UCBActionMontageData> MontageData = nullptr;
+
+	// =========================================================
+	// UI - 캐릭터 부착형 UI 위젯 클래스
+	// =========================================================
+
+	/** 머리 위 체력바 위젯 클래스 (전 클라이언트에서 필요. UCBUIComponent에 주입되어 준비 완료 후 생성됨) */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|UI")
+	TSubclassOf<UCBHealthBarWidget> OverheadHealthBarWidgetClass = nullptr;
 
 	// =========================================================
 	// 기본 스탯 (Stats & Attributes)

@@ -3,6 +3,7 @@
 #include "Components/Movement/CBLocomotionProcessor.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Animation/CBActionComponent.h"
+#include "Components/UI/CBUIComponent.h"
 #include "AbilitySystem/CBAttributeSet.h"
 
 // engine
@@ -26,6 +27,7 @@ ACBBaseCharacter::ACBBaseCharacter()
 	
 	CBLocomotionProcessor = CreateDefaultSubobject<UCBLocomotionProcessor>(TEXT("CBLocomotionProcessor"));
 	CBActionComponent = CreateDefaultSubobject<UCBActionComponent>(TEXT("CBActionComponent"));
+	CBUIComponent = CreateDefaultSubobject<UCBUIComponent>(TEXT("CBUIComponent"));
 }
 
 UAbilitySystemComponent* ACBBaseCharacter::GetAbilitySystemComponent() const
@@ -62,6 +64,11 @@ bool ACBBaseCharacter::RequestPlayMontage(const FGameplayTag InActionTag, int32 
 UCBCombatComponent* ACBBaseCharacter::GetCBCombatComponent() const
 {
 	return nullptr;
+}
+
+UCBUIComponent* ACBBaseCharacter::GetCBUIComponent() const
+{
+	return CBUIComponent.Get();
 }
 
 void ACBBaseCharacter::Server_SendGameplayEvent_Implementation(AActor* Actor, FGameplayTag EventTag, FGameplayEventData Payload)

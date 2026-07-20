@@ -4,6 +4,7 @@
 #include "AbilitySystem/Abilities/CBGameplayAbility.h"
 #include "Components/Combat/CBCombatComponent.h"
 #include "Components/Animation/CBActionComponent.h"
+#include "Components/UI/CBUIComponent.h"
 #include "Characters/CBBaseCharacter.h"
 #include "DataAssets/Weapon/CBWeaponData.h"
 
@@ -25,6 +26,12 @@ void UCBCharacterLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 	if (UCBActionComponent* ActionComponent = InCharacter->GetCBActionComponent())
 	{
 		ActionComponent->SetMontageData(MontageData);
+	}
+
+	// 머리 위 체력바 위젯 클래스를 UI 컴포넌트에 주입 (위젯 생성은 준비 완료 후 UI 컴포넌트가 수행)
+	if (UCBUIComponent* UIComponent = InCharacter->GetCBUIComponent())
+	{
+		UIComponent->SetOverheadWidgetClass(OverheadHealthBarWidgetClass);
 	}
 
 	// 바디 셋업 적용 (캡슐 충돌 크기 + 메시 상대 트랜스폼). 메시 애셋과 무관하므로 항상 적용한다.

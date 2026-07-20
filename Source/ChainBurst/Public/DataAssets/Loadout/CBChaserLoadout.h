@@ -9,6 +9,7 @@ class UCBGameplayAbility;
 class UCBAbilitySystemComponent;
 class UCBInputConfig;
 class ACBChaserCharacter;
+class UCBHealthBarWidget;
 
 USTRUCT(BlueprintType)
 struct FCBInputAbilitySet
@@ -40,6 +41,10 @@ private:
 	/** 입력 설정 데이터 에셋 (매핑 컨텍스트 + 입력 태그↔액션 바인딩). 소유 클라이언트에서만 사용 */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Input")
 	TObjectPtr<UCBInputConfig> InputConfig = nullptr;
+
+	/** HUD 체력 위젯 클래스 (소유 클라이언트 전용. UCBUIComponent에 주입되어 준비 완료 후 뷰포트에 추가됨) */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|UI")
+	TSubclassOf<UCBHealthBarWidget> HUDHealthWidgetClass = nullptr;
 
 public:
 	/** 어빌리티 시스템 컴포넌트에 어빌리티를 부여하는 함수 (부모 함수 재정의, 추격자 전용) */

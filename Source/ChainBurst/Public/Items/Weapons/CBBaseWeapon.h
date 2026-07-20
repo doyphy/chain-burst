@@ -40,11 +40,11 @@ protected:
 	 * 애니메이션 에셋에서 소켓 위치를 전투/비전투 위치로 조정해주는 경우.
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config")
-	bool bRequiresSheathSocketAttachment = true;
+	bool bRequiresSheathSocketAttachment = false;
 	
-	/** 무기 종류 (소켓 설정 조회에 사용) */
+	/** 무기 소켓 타입 (소켓 설정 조회에 사용) */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Weapon|Config")
-	ECBWeaponCombatType WeaponCombatType = ECBWeaponCombatType::None;
+	ECBWeaponSocketType WeaponSocketType = ECBWeaponSocketType::None;
 
 	/**
 	 * 무기 종류별 소켓 이름 데이터 에셋
@@ -70,6 +70,9 @@ protected:
 	FName WeaponTipSocketName = FName("WeaponTip");
 
 public:
+	/** [Getter] 무기 소켓 타입 (등록 시 데이터 에셋과의 일치 검증에 사용) */
+	ECBWeaponSocketType GetWeaponSocketType() const { return WeaponSocketType; }
+
 	/** [전투 상태] 무기를 손에 부착하는 함수 */
 	void AttachToHand(USceneComponent* TargetMesh);
 

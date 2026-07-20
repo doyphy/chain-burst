@@ -6,16 +6,16 @@
 
 /**
  * 무기 타입별 소켓 부착 정보 구조체
- * CBWeaponSocketData 에서 CombatType 별로 소켓 이름을 직접 입력
+ * CBWeaponSocketData 에서 소켓 타입별로 소켓 이름을 직접 입력
  */
 USTRUCT(BlueprintType)
 struct FCBWeaponSocketConfig
 {
 	GENERATED_BODY()
 
-	/** 이 설정이 적용될 무기 종류 */
+	/** 이 설정이 적용될 무기 소켓 타입 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	ECBWeaponCombatType WeaponCombatType = ECBWeaponCombatType::None;
+	ECBWeaponSocketType WeaponSocketType = ECBWeaponSocketType::None;
 
 	/** 전투 시 부착 소켓 이름 (예: Socket_Combat_Hand_R) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
@@ -27,7 +27,7 @@ struct FCBWeaponSocketConfig
 
 	bool IsValid() const
 	{
-		return WeaponCombatType != ECBWeaponCombatType::None
+		return WeaponSocketType != ECBWeaponSocketType::None
 			&& CombatSocket != NAME_None;
 	}
 };

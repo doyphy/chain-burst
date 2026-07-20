@@ -11,7 +11,7 @@
 #include "GameFramework/Character.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/CapsuleComponent.h"
-
+#include "Animation/AnimInstance.h"
 
 void UCBCharacterLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 {
@@ -68,14 +68,18 @@ void UCBCharacterLoadout::Auth_RegisterWeaponsToCombatComponent(UCBCombatCompone
 {
 	check(InCombatComponent);
 
-	// 무기 데이터 유효성 검사 (하드 참조라 로드아웃 로드 시점에 이미 resolve됨)
-	if (WeaponData && WeaponData->HasValidData())
+	// 목록의 무기를 순서대로 등록 (쌍수 무기는 좌/우 2개, 소켓 점유 중복은 컴뱃 컴포넌트가 차단)
+	for (UCBWeaponData* WeaponData : WeaponDatas)
 	{
-		InCombatComponent->Auth_RegisterWeapon(WeaponData);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("캐릭터 로드아웃에 등록된 무기 데이터가 유효하지 않음"));
+		// 무기 데이터 유효성 검사 (하드 참조라 로드아웃 로드 시점에 이미 resolve됨)
+		if (WeaponData && WeaponData->HasValidData())
+		{
+			InCombatComponent->Auth_RegisterWeapon(WeaponData);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[%s] 로드아웃에 등록된 무기 데이터가 유효하지 않음"), *GetName());
+		}
 	}
 }
 

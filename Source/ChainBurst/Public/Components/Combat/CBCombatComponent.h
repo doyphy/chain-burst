@@ -14,16 +14,16 @@ class UCBAbilitySystemComponent;
 
 /**
  * 실제 무기 인스턴스와 관련된 데이터를 저장하기 위한 구조체
- * 무기 태그와 무기 인스턴스를 함께 저장하여 관리
+ * 점유 소켓 타입과 무기 인스턴스를 함께 저장하여 관리
  */
 USTRUCT(BlueprintType)
 struct FCBRegisteredWeaponData
 {
 	GENERATED_BODY()
 
-	/** 무기 식별 태그 */
+	/** 무기 부착 소켓 타입 (점유 슬롯, 등록 중복 검사 기준. None = 소켓 미점유) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	FGameplayTag WeaponTag = FGameplayTag::EmptyTag;
+	ECBWeaponSocketType WeaponSocketType = ECBWeaponSocketType::None;
 
 	/** 스폰된 무기 인스턴스 */
 	UPROPERTY()
@@ -33,34 +33,20 @@ struct FCBRegisteredWeaponData
 	UPROPERTY()
 	float WeaponDamage = 0.0f;
 
-	/** 유효성 검사 함수 */
-	bool IsValid() const { return WeaponTag.IsValid() && WeaponInstance != nullptr; };
+	/** 유효성 검사 함수 (인스턴스가 등록의 본질, 소켓 타입은 None 이 정상 값일 수 있어 제외) */
+	bool IsValid() const { return WeaponInstance != nullptr; };
 
 	FCBRegisteredWeaponData() = default;
 
-	FCBRegisteredWeaponData(FGameplayTag InWeaponTag, TObjectPtr<ACBBaseWeapon> InWeaponInstance)
-		: WeaponTag(InWeaponTag)
-		, WeaponInstance(InWeaponInstance) {}
-
 	FCBRegisteredWeaponData(TObjectPtr<UCBWeaponData> InWeaponData, TObjectPtr<ACBBaseWeapon> InWeaponInstance)
-		: WeaponTag(InWeaponData->WeaponTag)
+		: WeaponSocketType(InWeaponData->WeaponSocketType)
 		, WeaponInstance(InWeaponInstance)
 		, WeaponDamage(InWeaponData->WeaponDamage) {}
-
-	/**
-	 * operator== 정의
-	 * FCBWeaponData 와 비교 연산
-	 */
-	bool operator==(const UCBWeaponData* Other) const
-	{
-		// WeaponTag가 같으면 같은 무기로 취급
-		return WeaponTag == Other->WeaponTag;
-	}
 };
 
 /**
  * [공용] 전투 컴포넌트의 부모 클래스.
- * 무기 장착, 데미지 처리, 전투 상태(태그) 등 추격자와 무법자가 공유하는 로직을 담당.
+ * 무기 장착, 데미지 처리, 전투 상태(태그) 등 공통 로직을 담당.
  * 콤보 카운트 및 초기화 관리 담당
  */
 UCLASS(Abstract)
@@ -108,11 +94,11 @@ public:
 	void Auth_RegisterWeapon(UCBWeaponData* InWeaponToRegister);
 
 	/**
-	 * 현재 장착된 무기가 유효한지 확인하는 함수
-	 * @return 현재 장착된 무기가 유효한지 여부 반환 (무기 태그와 인스턴스 모두 유효해야 True 반환)
+	 * 현재 장착된 무기가 하나라도 유효한지 확인하는 함수
+	 * @return 유효한 무기가 하나 이상 있으면 True 반환 (쌍수 무기는 2개 모두 별개로 등록됨)
 	 */
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
-	bool HasValidWeapon() const { return EquippedWeapon.IsValid(); }
+	bool HasValidWeapon() const;
 
 protected:
 	/**
@@ -131,13 +117,16 @@ protected:
 	/** [서버 전용] 무기 AttackPower GE를 ASC에서 제거하는 함수 */
 	void Auth_RemoveWeaponAttackPowerEffect();
 
-private:
-	/** [저장소] 현재 장착된 무기 데이터 */
-	UPROPERTY(Replicated)
-	FCBRegisteredWeaponData EquippedWeapon;
+	/** 등록 가능한 최대 무기 수 (쌍수 무기 = 2) */
+	static constexpr int32 MaxWeaponCount = 2;
 
-	/** 무기 AttackPower GE 핸들 (무기 해제 시 GE 제거에 사용) */
-	FActiveGameplayEffectHandle WeaponAttackPowerEffectHandle;
+private:
+	/** [저장소] 현재 장착된 무기 데이터 목록 (단일 무기는 1개, 쌍수 무기는 2개) */
+	UPROPERTY(Replicated)
+	TArray<FCBRegisteredWeaponData> EquippedWeapons;
+
+	/** 무기 AttackPower GE 핸들 목록 (무기 해제 시 GE 제거에 사용, 무기별 1개) */
+	TArray<FActiveGameplayEffectHandle> WeaponAttackPowerEffectHandles;
 #pragma endregion
 
 #pragma region CombatState
@@ -225,11 +214,11 @@ private:
 	/** 현재 트레이스 활성화 여부 */
 	bool bIsTracing = false;
 
-	/** 이전 프레임의 무기 뿌리 위치 */
-	FVector PrevRootLoc;
+	/** 이전 프레임의 무기 뿌리 위치 (EquippedWeapons 와 인덱스 대응) */
+	TArray<FVector> PrevRootLocs;
 
-	/** 이전 프레임의 무기 끝 위치*/
-	FVector PrevTipLoc;
+	/** 이전 프레임의 무기 끝 위치 (EquippedWeapons 와 인덱스 대응) */
+	TArray<FVector> PrevTipLocs;
 #pragma endregion
 
 #pragma region Combo

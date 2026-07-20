@@ -145,21 +145,21 @@ void ACBBaseWeapon::PostEditChangeProperty(FPropertyChangedEvent& PropertyChange
 	// 변경된 속성의 이름을 가져옴
 	const FName PropertyName = (PropertyChangedEvent.Property != nullptr) ? PropertyChangedEvent.Property->GetFName() : NAME_None;
 
-	// 변경된 속성이 'SheathSocket'인 경우에만 실행
-	if (PropertyName == GET_MEMBER_NAME_CHECKED(ACBBaseWeapon, WeaponCombatType))
+	// 변경된 속성이 'WeaponSocketType'인 경우에만 실행
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(ACBBaseWeapon, WeaponSocketType))
 	{
-		// 무기 종류에 맞는 소켓 설정을 조회
+		// 무기 소켓 타입에 맞는 소켓 설정을 조회
 		if (WeaponSocketData)
 		{
 			FCBWeaponSocketConfig SocketConfig;
-			if (WeaponSocketData->FindSocketConfig(WeaponCombatType, SocketConfig))
+			if (WeaponSocketData->FindSocketConfig(WeaponSocketType, SocketConfig))
 			{
 				CombatSocketOverride = SocketConfig.CombatSocket;
 				SheathSocketOverride = SocketConfig.SheathSocket;
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("[%s] 의 무기 종류 [%d]에 대한 소켓 설정을 찾을 수 없습니다. 데이터 에셋을 확인하세요."), *GetName(), static_cast<int32>(WeaponCombatType));
+				UE_LOG(LogTemp, Warning, TEXT("[%s] 의 무기 소켓 타입 [%d]에 대한 소켓 설정을 찾을 수 없습니다. 데이터 에셋을 확인하세요."), *GetName(), static_cast<int32>(WeaponSocketType));
 			}
 		}
 		else

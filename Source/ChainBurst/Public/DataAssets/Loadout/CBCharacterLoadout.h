@@ -75,8 +75,10 @@ protected:
 	// =========================================================
 	// 무기 데이터 (Weapons) - 캐릭터에 등록할 무기
 	// =========================================================
-	UPROPERTY(EditDefaultsOnly, Category = "Loadout", meta = (TitleProperty = "WeaponTag"))
-	TObjectPtr<UCBWeaponData> WeaponData = nullptr;
+
+	/** 캐릭터에 등록할 무기 데이터 목록 (단일 무기 = 1개, 쌍수 무기 = 좌/우 2개 등록) */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Weapons", meta = (TitleProperty = "WeaponSocketType"))
+	TArray<TObjectPtr<UCBWeaponData>> WeaponDatas;
 	
 	// =========================================================
 	// 어빌리티 (Abilities) - 역할에 따라 명확히 구분
@@ -86,14 +88,14 @@ protected:
 	 * [액티브] 플레이어/AI가 능동적으로 사용하는 스킬들 
 	 * 예: 평타, 스킬 Q, 스킬 E, 필살기
 	 */
-	UPROPERTY(EditDefaultsOnly, Category = "Loadout")
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Abilities")
 	TArray<TSubclassOf<UCBGameplayAbility>> ActiveAbilities;
 
 	/** 
 	 * [패시브] 게임 시작 시 부여되어 상시 적용되는 능력
 	 * 예: 체력 재생, 이동 속도 증가, 특정 속성 저항
 	 */
-	UPROPERTY(EditDefaultsOnly, Category = "Loadout")
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Abilities")
 	TArray<TSubclassOf<UCBGameplayAbility>> PassiveAbilities;
 	
 	/** 
@@ -101,7 +103,7 @@ protected:
 	 * 예: GA_HitReact(피격 모션 재생), GA_Death(사망 처리), GA_Spawn(등장 연출)
 	 * 이들은 입력으로 발동되지 않고, GameplayEvent로 트리거.
 	 */
-	UPROPERTY(EditDefaultsOnly, Category = "Loadout")
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Abilities")
 	TArray<TSubclassOf<UCBGameplayAbility>> ReactiveAbilities;
 
 	// =========================================================

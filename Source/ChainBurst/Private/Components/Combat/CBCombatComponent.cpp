@@ -29,7 +29,20 @@ void UCBCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(UCBCombatComponent, EquippedWeapon);
+	DOREPLIFETIME(UCBCombatComponent, EquippedWeapons);
+}
+
+bool UCBCombatComponent::HasValidWeapon() const
+{
+	// 유효한 무기가 하나라도 있으면 true
+	for (const FCBRegisteredWeaponData& Weapon : EquippedWeapons)
+	{
+		if (Weapon.IsValid())
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 int32 UCBCombatComponent::AdvanceCombo(const FGameplayTag& InActionTag, int32 MaxComboCount)
@@ -89,26 +102,33 @@ void UCBCombatComponent::TickComponent(float DeltaTime, enum ELevelTick TickType
  */
 void UCBCombatComponent::Auth_RegisterWeapon(UCBWeaponData* InWeaponToRegister)
 {
-	// 이미 무기가 등록되어 있는지 확인
-	if (EquippedWeapon.IsValid())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[%s] 에 이미 무기가 등록되어 있습니다."), *GetOwner()->GetName());
-		return;
-	}
-	
 	// 등록할 무기 데이터가 유효한지 확인
-	if (!InWeaponToRegister->HasValidData())
+	if (!InWeaponToRegister || !InWeaponToRegister->HasValidData())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[%s] 에 등록할 무기 데이터가 유효하지 않습니다."), *GetOwner()->GetName());
 		return;
 	}
-	
-	// 동일한 무기 이미 등록되어 있는지 확인
-	// operator== 연산자 중복 정의 필요
-	if (EquippedWeapon == InWeaponToRegister)
+
+	// 등록 가능한 최대 무기 수 초과 여부 확인 (쌍수 무기 = 2)
+	if (EquippedWeapons.Num() >= MaxWeaponCount)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[%s] 에 [%s] 무기가 이미 등록되어 있음."), *GetOwner()->GetName(), *InWeaponToRegister->WeaponTag.ToString());
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 에 이미 최대 무기 수(%d)가 등록되어 있습니다."), *GetOwner()->GetName(), MaxWeaponCount);
 		return;
+	}
+
+	// 동일한 소켓 타입(슬롯)이 이미 점유되어 있는지 확인
+	// None 은 소켓 미점유(소환형 무기 등)이므로 중복 검사에서 제외
+	const ECBWeaponSocketType NewSocketType = InWeaponToRegister->WeaponSocketType;
+	if (NewSocketType != ECBWeaponSocketType::None)
+	{
+		for (const FCBRegisteredWeaponData& Registered : EquippedWeapons)
+		{
+			if (Registered.WeaponSocketType == NewSocketType)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[%s] 의 [%s] 소켓에 이미 무기가 등록되어 있음."), *GetOwner()->GetName(), *UEnum::GetValueAsString(NewSocketType));
+				return;
+			}
+		}
 	}
 
 	// 무기 생성
@@ -118,15 +138,21 @@ void UCBCombatComponent::Auth_RegisterWeapon(UCBWeaponData* InWeaponToRegister)
 	{
 		return;
 	}
-	
+
+	// 무기 BP 와 무기 데이터의 소켓 타입 불일치 검증 (설정 실수 감지용, 등록은 계속 진행)
+	// 실제 등록될 무기의 소켓 타입은 'InWeaponToRegister' 를 따름.
+	if (NewWeapon->GetWeaponSocketType() != NewSocketType)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 의 무기 [%s] 소켓 타입 불일치: BP=[%s], 데이터=[%s]. 무기 BP 또는 데이터 에셋을 확인하세요."),
+			*GetOwner()->GetName(), *NewWeapon->GetName(),
+			*UEnum::GetValueAsString(NewWeapon->GetWeaponSocketType()), *UEnum::GetValueAsString(NewSocketType));
+	}
+
 	// 무기 부착
 	NewWeapon->AttachToSheath(GetCachedOwnerMesh());
-	
-	// 무기 데이터 생성
-	FCBRegisteredWeaponData NewWeaponData(InWeaponToRegister, NewWeapon);
 
-	// 생성한 무기 데이터를 장착된 무기로 설정
-	EquippedWeapon = NewWeaponData;
+	// 무기 데이터 생성 후 목록에 추가 (무기 데이터와 생성한 무기 객체를 넘김)
+	EquippedWeapons.Emplace(InWeaponToRegister, NewWeapon);
 
 	// 무기 AttackPower GE 적용
 	Auth_ApplyWeaponAttackPowerEffect(InWeaponToRegister);
@@ -167,15 +193,28 @@ void UCBCombatComponent::StartWeaponTrace()
 	// 새로운 트레이스 시작. 기존 충돌 기록 초기화
 	AlreadyHitActors.Empty();
 
-	if (!EquippedWeapon.IsValid())
+	if (!HasValidWeapon())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[%s] 에는 트레이스할 무기가 유효하지 않음."), *GetOwner()->GetName());
 		return;
 	}
+
+	// 무기별 이전 위치 초기화 (등록된 무기 모두 위치 초기화)
+	const int32 WeaponCount = EquippedWeapons.Num();
+	PrevRootLocs.SetNum(WeaponCount);
+	PrevTipLocs.SetNum(WeaponCount);
 	
-	PrevRootLoc = EquippedWeapon.WeaponInstance->GetWeaponRootLocation();
-	PrevTipLoc = EquippedWeapon.WeaponInstance->GetWeaponTipLocation();
-	
+	// PrevRootLocs[w] 및 PrevTipLocs[w] 에 무기별 이전 프레임 위치를 저장하기 때문에 인덱스 for문 사용
+	for (int32 w = 0; w < WeaponCount; ++w)
+	{
+		const FCBRegisteredWeaponData& Weapon = EquippedWeapons[w];
+		if (Weapon.IsValid())
+		{
+			PrevRootLocs[w] = Weapon.WeaponInstance->GetWeaponRootLocation();
+			PrevTipLocs[w] = Weapon.WeaponInstance->GetWeaponTipLocation();
+		}
+	}
+
 	// Trace 및 Tick 활성화
 	bIsTracing = true;
 	SetComponentTickEnabled(true);
@@ -188,73 +227,89 @@ void UCBCombatComponent::TickWeaponTrace()
 	if (!OwnerPawn || !OwnerPawn->IsLocallyControlled()) return;
 
 	// 무기 유효성 검사
-	if (!EquippedWeapon.IsValid()) return;
+	if (!HasValidWeapon()) return;
 
-	// 현재 무기의 뿌리와 끝 위치 가져오기
-	FVector CurrRootLoc = EquippedWeapon.WeaponInstance->GetWeaponRootLocation();
-	FVector CurrTipLoc = EquippedWeapon.WeaponInstance->GetWeaponTipLocation();
-
-	// 무시할 액터 목록 생성 (나 자신과 무기 자체는 때리지 않음)
+	// 무시할 액터 목록 생성 (나 자신과 모든 무기 인스턴스는 때리지 않음)
 	TArray<AActor*> ActorsToIgnore;
 	ActorsToIgnore.Add(OwnerPawn);
-	ActorsToIgnore.Add(EquippedWeapon.WeaponInstance);
+	for (const FCBRegisteredWeaponData& Weapon : EquippedWeapons)
+	{
+		if (Weapon.IsValid())
+		{
+			ActorsToIgnore.Add(Weapon.WeaponInstance);
+		}
+	}
 
 	// 트레이스 결과를 담을 배열
 	TArray<FHitResult> HitResults;
-	
+
 	// 디버그 드로잉 설정
 	EDrawDebugTrace::Type DebugTraceType = bShowDebugTrace ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None;
 
-	// 트레이스 분할 계산 (과거 위치와 현재 위치 사이를 TraceSubdivisions 만큼 나눔)
-	for (int32 i = 0; i <= TraceSubdivisions; i++)
+	// 무기별로 트레이스 (쌍수 무기는 양손 블레이드 모두 처리, AlreadyHitActors 공유로 이중 히트 방지)
+	// PrevRootLocs[w] 및 PrevTipLocs[w] 로 무기별 이전 프레임 위치를 저장하기 때문에 인덱스 for문 사용
+	const int32 WeaponCount = EquippedWeapons.Num();
+	for (int32 w = 0; w < WeaponCount; ++w)
 	{
-		// 0.0 ~ 1.0 사이의 비율 (예: 3등분이면 0.0, 0.33, 0.66, 1.0)
-		float Alpha = (float)i / TraceSubdivisions;
+		const FCBRegisteredWeaponData& Weapon = EquippedWeapons[w];
+		if (!Weapon.IsValid() || !PrevRootLocs.IsValidIndex(w)) continue;
 
-		// 과거의 위치와 현재의 위치를 계산
-		FVector PrevPoint = FMath::Lerp(PrevRootLoc, PrevTipLoc, Alpha);
-		FVector CurrPoint = FMath::Lerp(CurrRootLoc, CurrTipLoc, Alpha);
+		// 현재 무기의 뿌리와 끝 위치 가져오기
+		FVector CurrRootLoc = Weapon.WeaponInstance->GetWeaponRootLocation();
+		FVector CurrTipLoc = Weapon.WeaponInstance->GetWeaponTipLocation();
 
-		// 트레이스 결과 배열 초기화
-		HitResults.Reset();
-		
-		// 구형 트레이스 발사
-		bool bHit = UKismetSystemLibrary::SphereTraceMulti(
-			this,
-			PrevPoint,			// 시작 위치
-			CurrPoint,			// 끝 위치
-			TraceRadius,		// 트레이스 두께
-			WeaponTraceChannel,	// 트레이스 채널
-			false,				// 복잡한 콜리전 검사 여부
-			ActorsToIgnore,		// 무시할 액터들
-			DebugTraceType,		// 디버그 선 그리기 여부
-			HitResults,		// 결과를 담을 곳
-			true,				// 자신 무시 (안전장치)
-			FLinearColor::Red,	// 트레이스 색상
-			FLinearColor::Green,// 타격 성공 시 색상
-			2.0f				// 디버그 선 유지 시간
-		);
-
-		// 타격 성공 시
-		if (bHit)
+		// 트레이스 분할 계산 (과거 위치와 현재 위치 사이를 TraceSubdivisions 만큼 나눔)
+		for (int32 i = 0; i <= TraceSubdivisions; i++)
 		{
-			for (const FHitResult& Hit : HitResults)
-			{
-				AActor* HitActor = Hit.GetActor();
+			// 0.0 ~ 1.0 사이의 비율 (예: 3등분이면 0.0, 0.33, 0.66, 1.0)
+			float Alpha = (float)i / TraceSubdivisions;
 
-				// 충돌한 액터가 유효하고, 충돌한 기록이 없다면 배칭 목록에 추가
-				// 배칭 목록에 담아두고 일정 간격 마다 한 번에 처리함.
-				if (HitActor && !AlreadyHitActors.Contains(HitActor))
+			// 과거의 위치와 현재의 위치를 계산
+			FVector PrevPoint = FMath::Lerp(PrevRootLocs[w], PrevTipLocs[w], Alpha);
+			FVector CurrPoint = FMath::Lerp(CurrRootLoc, CurrTipLoc, Alpha);
+
+			// 트레이스 결과 배열 초기화
+			HitResults.Reset();
+
+			// 구형 트레이스 발사
+			bool bHit = UKismetSystemLibrary::SphereTraceMulti(
+				this,
+				PrevPoint,			// 시작 위치
+				CurrPoint,			// 끝 위치
+				TraceRadius,		// 트레이스 두께
+				WeaponTraceChannel,	// 트레이스 채널
+				false,				// 복잡한 콜리전 검사 여부
+				ActorsToIgnore,		// 무시할 액터들
+				DebugTraceType,		// 디버그 선 그리기 여부
+				HitResults,		// 결과를 담을 곳
+				true,				// 자신 무시 (안전장치)
+				FLinearColor::Red,	// 트레이스 색상
+				FLinearColor::Green,// 타격 성공 시 색상
+				2.0f				// 디버그 선 유지 시간
+			);
+
+			// 타격 성공 시
+			if (bHit)
+			{
+				for (const FHitResult& Hit : HitResults)
 				{
-					AlreadyHitActors.Add(HitActor);
-					PendingHits.Add(Hit);
+					AActor* HitActor = Hit.GetActor();
+
+					// 충돌한 액터가 유효하고, 충돌한 기록이 없다면 배칭 목록에 추가
+					// 배칭 목록에 담아두고 일정 간격 마다 한 번에 처리함.
+					if (HitActor && !AlreadyHitActors.Contains(HitActor))
+					{
+						AlreadyHitActors.Add(HitActor);
+						PendingHits.Add(Hit);
+					}
 				}
 			}
 		}
+
+		// 다음 프레임(Tick)을 위해 현재 위치를 과거 위치로 저장.
+		PrevRootLocs[w] = CurrRootLoc;
+		PrevTipLocs[w] = CurrTipLoc;
 	}
-	// 다음 프레임(Tick)을 위해 현재 위치를 과거 위치로 저장.
-	PrevRootLoc = CurrRootLoc;
-	PrevTipLoc = CurrTipLoc;
 }
 
 void UCBCombatComponent::StopWeaponTrace()
@@ -345,24 +400,34 @@ void UCBCombatComponent::Auth_ApplyWeaponAttackPowerEffect(UCBWeaponData* InWeap
 	// SetByCallerMagnitude 설정 (무기 공격력)
 	SpecHandle.Data->SetSetByCallerMagnitude(CBGameplayTags::Data_Weapon_AttackPower, InWeaponData->WeaponDamage);
 
-	// GE 적용 및 핸들 저장
-	WeaponAttackPowerEffectHandle = ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data);
+	// GE 적용 및 핸들 저장 (무기별로 누적, 쌍수 무기는 각 무기가 자기 공격력을 적용)
+	FActiveGameplayEffectHandle Handle = ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data);
+	if (Handle.IsValid())
+	{
+		WeaponAttackPowerEffectHandles.Add(Handle);
+	}
 }
 
 void UCBCombatComponent::Auth_RemoveWeaponAttackPowerEffect()
 {
 	// ASC 가져오기
 	UCBAbilitySystemComponent* ASC = GetCachedOwnerASC();
-	if (!ASC || !WeaponAttackPowerEffectHandle.IsValid())
+	if (!ASC)
 	{
 		return;
 	}
 
-	// GE 제거
-	ASC->RemoveActiveGameplayEffect(WeaponAttackPowerEffectHandle);
+	// 등록된 모든 무기 공격력 GE 제거
+	for (const FActiveGameplayEffectHandle& Handle : WeaponAttackPowerEffectHandles)
+	{
+		if (Handle.IsValid())
+		{
+			ASC->RemoveActiveGameplayEffect(Handle);
+		}
+	}
 
-	// 무기 공격력 GE 핸들 초기화
-	WeaponAttackPowerEffectHandle.Invalidate();
+	// 무기 공격력 GE 핸들 목록 초기화
+	WeaponAttackPowerEffectHandles.Reset();
 }
 
 USkeletalMeshComponent* UCBCombatComponent::GetCachedOwnerMesh()
@@ -392,7 +457,7 @@ UCBAbilitySystemComponent* UCBCombatComponent::GetCachedOwnerASC()
 void UCBCombatComponent::OnEnterCombatMode()
 {
 	// 현재 무기 유효 검사
-	if (!EquippedWeapon.IsValid()) return;
+	if (!HasValidWeapon()) return;
 
 	// ASC 유효 검사
 	UCBAbilitySystemComponent* ASC = GetCachedOwnerASC();
@@ -402,8 +467,15 @@ void UCBCombatComponent::OnEnterCombatMode()
 		return;
 	}
 
-	// 현재 장착중인 무기 Hand 에 부착
-	EquippedWeapon.WeaponInstance->AttachToHand(GetCachedOwnerMesh());
+	// 현재 장착중인 모든 무기 Hand 에 부착 (쌍수 무기는 양손 모두)
+	USkeletalMeshComponent* OwnerMesh = GetCachedOwnerMesh();
+	for (const FCBRegisteredWeaponData& Weapon : EquippedWeapons)
+	{
+		if (Weapon.IsValid())
+		{
+			Weapon.WeaponInstance->AttachToHand(OwnerMesh);
+		}
+	}
 
 	// 전투 상태 태그 추가 (로컬 적용)
 	ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
@@ -418,7 +490,7 @@ void UCBCombatComponent::OnEnterCombatMode()
 void UCBCombatComponent::OnExitCombatMode()
 {
 	// 현재 무기 유효 검사
-	if (!EquippedWeapon.IsValid()) return;
+	if (!HasValidWeapon()) return;
 
 	// ASC 유효 검사
 	UCBAbilitySystemComponent* ASC = GetCachedOwnerASC();
@@ -428,8 +500,15 @@ void UCBCombatComponent::OnExitCombatMode()
 		return;
 	}
 
-	// 현재 장착중인 무기 Sheath 에 부착
-	EquippedWeapon.WeaponInstance->AttachToSheath(GetCachedOwnerMesh());
+	// 현재 장착중인 모든 무기 Sheath 에 부착 (쌍수 무기는 양손 모두)
+	USkeletalMeshComponent* OwnerMesh = GetCachedOwnerMesh();
+	for (const FCBRegisteredWeaponData& Weapon : EquippedWeapons)
+	{
+		if (Weapon.IsValid())
+		{
+			Weapon.WeaponInstance->AttachToSheath(OwnerMesh);
+		}
+	}
 
 	// 전투 상태 태그 제거 (로컬 적용)
 	ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
@@ -450,14 +529,23 @@ void UCBCombatComponent::ProcessHit(const FGameplayAbilityTargetDataHandle& Targ
 void UCBCombatComponent::Server_NotifyAttackHit_Implementation(const FGameplayAbilityTargetDataHandle& TargetDataHandle)
 {
 	UCBAbilitySystemComponent* ASC = GetCachedOwnerASC();
-	if (!ASC || !EquippedWeapon.IsValid()) return;
+	if (!ASC || !HasValidWeapon()) return;
 
 	// 허용 거리 = 공격자 위치 ~ WeaponTip 거리 + 트레이스 반지름 + 레이턴시 보정값
 	// WeaponTip 이 가장 멀리 히트 판정이 가능한 지점이므로 기준으로 사용
-	const float AttackerToTipDistance = FVector::Distance(
-		GetOwner()->GetActorLocation(),
-		EquippedWeapon.WeaponInstance->GetWeaponTipLocation()
-	);
+	// 쌍수 무기는 무기 중 가장 먼 tip 거리를 기준으로 삼아, 어느 손 무기로든 유효한 히트를 허용
+	const FVector AttackerLocation = GetOwner()->GetActorLocation();
+	float AttackerToTipDistance = 0.0f;
+	for (const FCBRegisteredWeaponData& Weapon : EquippedWeapons)
+	{
+		if (Weapon.IsValid())
+		{
+			AttackerToTipDistance = FMath::Max(
+				AttackerToTipDistance,
+				FVector::Distance(AttackerLocation, Weapon.WeaponInstance->GetWeaponTipLocation())
+			);
+		}
+	}
 	const float AllowedDistance = AttackerToTipDistance + TraceRadius + HitValidationTolerance;
 
 	// 유효한 히트만 담을 핸들

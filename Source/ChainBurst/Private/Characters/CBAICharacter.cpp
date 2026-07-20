@@ -60,7 +60,7 @@ void ACBAICharacter::PossessedBy(AController* NewController)
 	InitializeAISystem();
 }
 
-// 초기화 함수, 공용, 로컬, 서버별 초기화 작업 진행
+// [공용] 초기화 함수, 공용, 로컬, 서버별 초기화 작업 진행
 void ACBAICharacter::InitializeAISystem()
 {
 	// 재진입 방지
@@ -80,21 +80,20 @@ void ACBAICharacter::InitializeAISystem()
 		return;
 	}
 
-	// [비동기] 로드아웃을 한 번만 로드하고, 콜백에서 공용 데이터(전 인스턴스) + 서버 권위 데이터(서버)를 적용한다.
-	// 로드아웃 내부 에셋은 모두 하드 참조라 이 로드 하나로 전부 resolve되며, 콜백이 유일한 완료 지점이다.
+	// [비동기] 로드아웃 로드하고, 콜백에서 공용 데이터(전 인스턴스) + 서버 권위 데이터(서버)를 적용.
 	UCBAssetManager::Get().LoadAssetAsync<UCBCharacterLoadout>(LoadoutPtr, [this](UCBCharacterLoadout* LoadedLoadout)
 	{
 		if (LoadedLoadout)
 		{
-			// 전 인스턴스 공용 데이터 적용 (메쉬·애님BP·이동 데이터·몽타주 데이터)
+			// [공용] 전 인스턴스 공용 데이터 적용 (메쉬·애님BP·이동 데이터·몽타주 데이터)
 			LoadedLoadout->ApplyToCharacter(this);
 
-			// 서버 권위 데이터 적용 (어빌리티·무기·이펙트). PossessedBy에서 InitAbilityActorInfo 완료 후 진입하므로 안전.
+			// [서버] 서버 권위 데이터 적용 (어빌리티·무기·이펙트). PossessedBy에서 InitAbilityActorInfo 완료 후 진입하므로 안전.
 			if (HasAuthority())
 			{
 				LoadedLoadout->Auth_GrantAbilitiesToASC(CBASC);
 
-				// 컴뱃 컴포넌트를 가진 AI(예: Outlaw)만 무기 등록. 없는 AI(예: Rogue)는 스킵.
+				// [서버] 컴뱃 컴포넌트를 가진 AI만 무기 등록. 없는 AI는 스킵.
 				if (UCBCombatComponent* CombatComponent = GetCBCombatComponent())
 				{
 					LoadedLoadout->Auth_RegisterWeaponsToCombatComponent(CombatComponent);

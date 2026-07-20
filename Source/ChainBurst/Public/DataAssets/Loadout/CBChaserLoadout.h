@@ -34,7 +34,7 @@ class CHAINBURST_API UCBChaserLoadout : public UCBCharacterLoadout
 	
 private:
 	/** 추격자의 어빌리티 세트 배열. 각 세트는 입력 태그와 어빌리티 클래스를 포함 */
-	UPROPERTY(EditDefaultsOnly, Category = "Loadout", meta = (TitleProperty = "InputTag"))
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Abilities", meta = (TitleProperty = "InputTag"))
 	TArray<FCBInputAbilitySet> InputAbilitySets;
 
 	/** 입력 설정 데이터 에셋 (매핑 컨텍스트 + 입력 태그↔액션 바인딩). 소유 클라이언트에서만 사용 */

@@ -163,7 +163,7 @@ void ACBChaserCharacter::InitializePlayerSystem()
 		return;
 	}
 
-	// 로드아웃 비동기 로드
+	// 로드아웃 비동기 로드, InitAbilityActorInfo 완료 후 진입
 	UCBAssetManager::Get().LoadAssetAsync<UCBChaserLoadout>(ChaserLoadout, [this](UCBChaserLoadout* LoadedLoadout)
 	{
 		if (LoadedLoadout)

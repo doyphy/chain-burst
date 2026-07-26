@@ -7,6 +7,7 @@
 class UCBCombatComponent;
 class UCBRogueCombatComponent;
 class UCBRogueLoadout;
+class UCBAILoadout;
 
 UCLASS()
 class CHAINBURST_API ACBRogueCharacter : public ACBAICharacter
@@ -18,7 +19,7 @@ public:
 
 protected:
 	//~ Begin ACBAICharacter Interface
-	virtual TSoftObjectPtr<UCBCharacterLoadout> GetAILoadout() const override;
+	virtual TSoftObjectPtr<UCBAILoadout> GetAILoadout() const override;
 	//~ End ACBAICharacter Interface
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Combat")

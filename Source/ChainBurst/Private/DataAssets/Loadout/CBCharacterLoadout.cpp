@@ -43,6 +43,8 @@ void UCBCharacterLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 	{
 		MeshComp->SetRelativeLocationAndRotation(BodySetup.MeshRelativeLocation, BodySetup.MeshRelativeRotation);
 		MeshComp->SetRelativeScale3D(BodySetup.MeshRelativeScale);
+		// 스무딩이 참조하는 Base(Translation/Rotation)Offset 캐시 갱신.
+		InCharacter->CacheInitialMeshOffset(BodySetup.MeshRelativeLocation, BodySetup.MeshRelativeRotation);
 	}
 
 	// 스켈레탈 메시 유효성 검사 (하드 참조라 로드아웃 로드 시점에 이미 resolve됨)

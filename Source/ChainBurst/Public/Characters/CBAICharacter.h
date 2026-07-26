@@ -4,7 +4,7 @@
 #include "Characters/CBBaseCharacter.h"
 #include "CBAICharacter.generated.h"
 
-class UCBCharacterLoadout;
+class UCBAILoadout;
 
 /**
  * AI 캐릭터 공통 베이스 (Outlaw·Rogue 등).
@@ -34,6 +34,6 @@ protected:
 	 */
 	void InitializeAISystem();
 
-	/** 이 AI가 사용할 로드아웃 소프트 참조를 반환한다. 서브클래스가 자신의 타입 멤버를 반환하도록 구현한다. */
-	virtual TSoftObjectPtr<UCBCharacterLoadout> GetAILoadout() const PURE_VIRTUAL(ACBAICharacter::GetAILoadout, return nullptr;);
+	/** 이 AI가 사용할 로드아웃 소프트 참조를 반환. 서브클래스가 자신의 타입 멤버를 반환하도록 구현. */
+	virtual TSoftObjectPtr<UCBAILoadout> GetAILoadout() const PURE_VIRTUAL(ACBAICharacter::GetAILoadout, return nullptr;);
 };

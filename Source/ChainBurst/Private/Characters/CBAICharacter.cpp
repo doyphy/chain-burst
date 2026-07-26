@@ -3,7 +3,7 @@
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "AbilitySystem/CBAttributeSet.h"
 #include "Components/Combat/CBCombatComponent.h"
-#include "DataAssets/Loadout/CBCharacterLoadout.h"
+#include "DataAssets/Loadout/CBAILoadout.h"
 #include "AssetManager/CBAssetManager.h"
 
 // engine
@@ -35,6 +35,12 @@ ACBAICharacter::ACBAICharacter()
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	// 회전 속도 설정
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 180.0f, 0.0f);
+
+	// 경로 추종(MoveTo)을 가속 기반으로 구동 (기본값 false = 속도 직접 세팅).
+	if (FNavMovementProperties* NavMovementProps = GetCharacterMovement()->GetNavMovementProperties())
+	{
+		NavMovementProps->bUseAccelerationForPaths = true;
+	}
 }
 
 // [공용] 게임 시작 시 호출되는 함수.
@@ -73,7 +79,7 @@ void ACBAICharacter::InitializeAISystem()
 	}
 
 	// 로드아웃이 없으면 비동기 작업 없이 즉시 준비 완료 처리
-	const TSoftObjectPtr<UCBCharacterLoadout> LoadoutPtr = GetAILoadout();
+	const TSoftObjectPtr<UCBAILoadout> LoadoutPtr = GetAILoadout();
 	if (LoadoutPtr.IsNull())
 	{
 		HandleCharacterSystemReady();
@@ -81,7 +87,7 @@ void ACBAICharacter::InitializeAISystem()
 	}
 
 	// [비동기] 로드아웃 로드하고, 콜백에서 공용 데이터(전 인스턴스) + 서버 권위 데이터(서버)를 적용.
-	UCBAssetManager::Get().LoadAssetAsync<UCBCharacterLoadout>(LoadoutPtr, [this](UCBCharacterLoadout* LoadedLoadout)
+	UCBAssetManager::Get().LoadAssetAsync<UCBAILoadout>(LoadoutPtr, [this](UCBAILoadout* LoadedLoadout)
 	{
 		if (LoadedLoadout)
 		{
@@ -100,6 +106,9 @@ void ACBAICharacter::InitializeAISystem()
 				}
 
 				LoadedLoadout->Auth_ApplyEffectsToASC(CBASC);
+
+				// [서버] AI 두뇌(BT)를 컨트롤러에 주입. 컨트롤러가 서버 전용이라 서버에서만 필요.
+				LoadedLoadout->Auth_ApplyBehaviorTreeToController(GetController());
 			}
 		}
 		else

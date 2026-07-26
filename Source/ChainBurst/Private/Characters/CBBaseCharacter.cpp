@@ -4,6 +4,7 @@
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Animation/CBActionComponent.h"
 #include "Components/UI/CBUIComponent.h"
+#include "Components/Perception/CBNoiseEmitterComponent.h"
 #include "AbilitySystem/CBAttributeSet.h"
 
 // engine
@@ -28,6 +29,7 @@ ACBBaseCharacter::ACBBaseCharacter()
 	CBLocomotionProcessor = CreateDefaultSubobject<UCBLocomotionProcessor>(TEXT("CBLocomotionProcessor"));
 	CBActionComponent = CreateDefaultSubobject<UCBActionComponent>(TEXT("CBActionComponent"));
 	CBUIComponent = CreateDefaultSubobject<UCBUIComponent>(TEXT("CBUIComponent"));
+	CBNoiseEmitterComponent = CreateDefaultSubobject<UCBNoiseEmitterComponent>(TEXT("CBNoiseEmitterComponent"));
 }
 
 UAbilitySystemComponent* ACBBaseCharacter::GetAbilitySystemComponent() const

@@ -15,6 +15,7 @@ class UCBCombatComponent;
 struct FOnAttributeChangeData;
 class UCBLocomotionProcessor;
 class UCBActionComponent;
+class UCBNoiseEmitterComponent;
 class UCBUIComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady)
@@ -86,6 +87,10 @@ protected:
 	/** 캐릭터 부착형 UI 관리 컴포넌트 (로컬 플레이어=HUD, 그 외=머리 위 체력바) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|UI")
 	TObjectPtr<UCBUIComponent> CBUIComponent = nullptr;
+
+	/** [서버 전용 동작] 이동 시 AI 청각용 소음을 발생시키는 컴포넌트 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Perception")
+	TObjectPtr<UCBNoiseEmitterComponent> CBNoiseEmitterComponent = nullptr;
 
 public:
 	/**

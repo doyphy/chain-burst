@@ -5,6 +5,7 @@
 #include "Components/Combat/CBChaserCombatComponent.h"
 #include "Components/Camera/CBCameraControlComponent.h"
 #include "Components/Movement/CBCharacterRotationComponent.h"
+#include "Components/Mesh/CBModularMeshComponent.h"
 #include "AnimInstances/CBCharacterAnimInstance.h"
 #include "PlayerState/CBPlayerState.h"
 #include "AssetManager/CBAssetManager.h"
@@ -56,6 +57,7 @@ ACBChaserCharacter::ACBChaserCharacter()
 	CBCameraControlComponent = CreateDefaultSubobject<UCBCameraControlComponent>(TEXT("CBCameraControlComponent"));
 	CBCharacterRotationComponent = CreateDefaultSubobject<UCBCharacterRotationComponent>(TEXT("CBCharacterRotationComponent"));
 	CBInputManagerComponent = CreateDefaultSubobject<UCBInputManagerComponent>(TEXT("CBInputManagerComponent"));
+	CBModularMeshComponent = CreateDefaultSubobject<UCBModularMeshComponent>(TEXT("CBModularMeshComponent"));
 }
 
 /**

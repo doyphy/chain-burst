@@ -16,6 +16,7 @@ class UCBCameraControlComponent;
 class UCBCharacterRotationComponent;
 class UCBCharacterAnimInstance;
 class UCBChaserLoadout;
+class UCBModularMeshComponent;
 
 UCLASS()
 class CHAINBURST_API ACBChaserCharacter : public ACBBaseCharacter
@@ -52,6 +53,8 @@ protected:
 	TObjectPtr<UCBChaserCombatComponent> ChaserCombatComponent = nullptr;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Input")
 	TObjectPtr<UCBInputManagerComponent> CBInputManagerComponent = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Mesh")
+	TObjectPtr<UCBModularMeshComponent> CBModularMeshComponent = nullptr;
 #pragma endregion
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|CharacterData")
@@ -93,6 +96,7 @@ public:
 	FORCEINLINE UCBChaserCombatComponent* GetChaserCombatComponent() const { return ChaserCombatComponent.Get(); }
 	FORCEINLINE UCBCameraControlComponent* GetCameraControlComponent() const { return CBCameraControlComponent.Get(); }
 	FORCEINLINE UCBCharacterRotationComponent* GetCharacterRotationComponent() const { return CBCharacterRotationComponent.Get(); }
+	FORCEINLINE UCBModularMeshComponent* GetModularMeshComponent() const { return CBModularMeshComponent.Get(); }
 
 	/** 로드아웃에서 입력 설정을 주입하는 세터 (입력 매니저 컴포넌트로 전달) */
 	void SetInputConfig(UCBInputConfig* InInputConfig);

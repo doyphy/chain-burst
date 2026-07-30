@@ -60,8 +60,9 @@ public:
 	 * [공용] 전 인스턴스(서버·클라)에서 필요한 데이터를 캐릭터에 일괄 적용하는 함수
 	 * 바디 셋업(캡슐·메시 트랜스폼), 스켈레탈 메쉬·애님BP, 이동 데이터, 액션 몽타주 데이터를 적용한다.
 	 * 로드아웃 내부 에셋은 모두 하드 참조라 로드아웃 로드 시점에 함께 resolve되므로 이 함수는 동기 실행된다.
+	 * 파생 로드아웃은 이 함수를 오버라이드해 역할별 공용 데이터를 추가로 적용한다 (Super 호출 필수).
 	 */
-	void ApplyToCharacter(ACBBaseCharacter* InCharacter);
+	virtual void ApplyToCharacter(ACBBaseCharacter* InCharacter);
 
 	/** [서버 전용] 어빌리티 시스템 컴포넌트에 어빌리티를 부여하는 함수 */
 	virtual void Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);

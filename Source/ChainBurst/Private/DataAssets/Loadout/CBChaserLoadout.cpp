@@ -4,6 +4,7 @@
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Characters/CBChaserCharacter.h"
 #include "Components/UI/CBUIComponent.h"
+#include "Components/Mesh/CBModularMeshComponent.h"
 
 bool FCBInputAbilitySet::IsValid() const
 {
@@ -32,6 +33,23 @@ void UCBChaserLoadout::Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASC
 
 		// 어빌리티 시스템 컴포넌트에 어빌리티 부여
 		InASCToGive->GiveAbility(AbilitySpec);
+	}
+}
+
+void UCBChaserLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
+{
+	// 공용 데이터 적용 (바디 셋업·스켈레탈 메시·애님BP·이동/몽타주 데이터)
+	Super::ApplyToCharacter(InCharacter);
+
+	// 팔로워 메시는 모듈러 메시 컴포넌트를 가진 추격자에만 해당
+	ACBChaserCharacter* ChaserCharacter = Cast<ACBChaserCharacter>(InCharacter);
+	if (!ChaserCharacter) return;
+
+	// 부착·리더 포즈 연결은 준비 완료 후 컴포넌트가 수행하므로 여기서는 데이터만 넘김.
+	if (UCBModularMeshComponent* ModularMeshComponent = ChaserCharacter->GetModularMeshComponent())
+	{
+		ModularMeshComponent->SetFollowerMeshes(FollowerMeshes);
+		ModularMeshComponent->SetHideLeaderMesh(bHideLeaderMesh);
 	}
 }
 

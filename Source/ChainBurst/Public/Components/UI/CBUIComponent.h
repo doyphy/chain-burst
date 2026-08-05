@@ -7,11 +7,12 @@
 class UCBHealthBarWidget;
 class UCBAbilitySystemComponent;
 class UWidgetComponent;
+class ACBHUD;
 
 /**
  * 캐릭터 부착형 UI의 공용 관리자 컴포넌트 (전 캐릭터 공통, ACBBaseCharacter가 소유).
- * 캐릭터 시스템 준비 완료 후 오너 유형에 맞는 체력 UI를 생성·소유한다:
- * - 로컬 조작 플레이어: HUD 위젯을 뷰포트에 추가
+ * 캐릭터 시스템 준비 완료 후 오너 유형에 맞는 체력 UI를 생성·소유:
+ * - 로컬 조작 플레이어: HUD 위젯을 생성해 HUD 스택(Game 레이어)에 위임
  * - 그 외(AI·원격 캐릭터): 머리 위 UWidgetComponent(Screen 모드)를 런타임 생성·부착
  * 위젯 클래스는 로드아웃에서 주입되는 런타임 캐시, UI 생성·표시는 전부 클라이언트 로컬.
  * (값 동기화는 어트리뷰트 리플리케이션이 담당). 외부 접근은 ICBUIInterface::GetCBUIComponent() 경유.
@@ -40,12 +41,12 @@ public:
 
 protected:
 	//~ Begin UActorComponent Interface.
-	/** 생성한 HUD 위젯·머리 위 위젯 컴포넌트를 정리한다. */
+	/** 생성한 HUD 위젯·머리 위 위젯 컴포넌트를 정리. */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	//~ End UActorComponent Interface.
 
 	//~ Begin UCBExtensionComponent Interface.
-	/** 준비 완료 시 오너 유형에 맞는 체력 UI를 생성한다 (로컬 플레이어=HUD, 그 외=머리 위 바). */
+	/** 준비 완료 시 오너 유형에 맞는 체력 UI를 생성 (로컬 플레이어=HUD, 그 외=머리 위 바). */
 	virtual void OnCharacterSystemReady() override;
 	//~ End UCBExtensionComponent Interface.
 
@@ -58,8 +59,14 @@ protected:
 	float OverheadZMargin = 30.f;
 
 private:
-	/** [로컬 전용] HUD 위젯을 생성해 뷰포트에 추가하는 함수 (로컬 조작 플레이어) */
+	/** [로컬 전용] HUD 위젯을 생성해 HUD 스택에 넘기는 함수 (로컬 조작 플레이어) */
 	void Local_CreateHUDWidget(UCBAbilitySystemComponent* InASC);
+
+	/** [로컬 전용] 생성한 HUD 위젯을 HUD 스택(Game 레이어)에 삽입하는 함수 */
+	void Local_PushHUDWidgetToStack();
+
+	/** [로컬 전용] HUD 위젯을 HUD 스택에서 제거하는 함수 */
+	void Local_RemoveHUDWidgetFromStack();
 
 	/** 머리 위 위젯 컴포넌트를 런타임 생성·부착하는 함수 (AI·원격 캐릭터) */
 	void CreateOverheadWidget(UCBAbilitySystemComponent* InASC);
@@ -83,4 +90,7 @@ private:
 	/** 머리 위 위젯을 그리는 위젯 컴포넌트 (런타임 생성) */
 	UPROPERTY()
 	TObjectPtr<UWidgetComponent> OverheadWidgetComponent = nullptr;
+
+	/** HUD 스택 제거용 HUD 캐시 (제거 시점엔 컨트롤러 연결이 끊겼을 수 있어 삽입 시점에 캐싱) */
+	TWeakObjectPtr<ACBHUD> CachedHUD;
 };

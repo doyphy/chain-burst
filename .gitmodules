@@ -1,3 +1,6 @@
 [submodule "Content/_ThirdParty"]
 	path = Content/_ThirdParty
 	url = https://github.com/doyphy/chain-burst-assets.git
+[submodule "Content/EasyGameUI"]
+	path = Content/EasyGameUI
+	url = https://github.com/doyphy/chain-burst-ui-assets.git

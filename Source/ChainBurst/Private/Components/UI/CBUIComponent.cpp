@@ -3,11 +3,13 @@
 #include "Characters/CBBaseCharacter.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "UI/Widgets/CBHealthBarWidget.h"
+#include "UI/CBHUD.h"
 
 // engine
 #include "Blueprint/UserWidget.h"
 #include "Components/WidgetComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/PlayerController.h"
 
 void UCBUIComponent::OnCharacterSystemReady()
 {
@@ -46,12 +48,39 @@ void UCBUIComponent::Local_CreateHUDWidget(UCBAbilitySystemComponent* InASC)
 	APlayerController* PC = GetOwningController<APlayerController>();
 	if (!PC) return;
 
-	// 위젯 생성 후 ASC 바인딩 → 뷰포트 추가
+	// 위젯 생성 후 ASC 바인딩 → HUD 스택 삽입
 	HUDWidget = CreateWidget<UCBHealthBarWidget>(PC, HUDWidgetClass);
 	if (!HUDWidget) return;
 
 	HUDWidget->InitializeWithASC(InASC);
-	HUDWidget->AddToViewport();
+	Local_PushHUDWidgetToStack();
+}
+
+void UCBUIComponent::Local_PushHUDWidgetToStack()
+{
+	// 화면 배치는 HUD의 내비게이션 스택이 전담한다 (AddToViewport 사용 금지)
+	const APlayerController* PC = GetOwningController<APlayerController>();
+	ACBHUD* HUD = PC ? Cast<ACBHUD>(PC->GetHUD()) : nullptr;
+	if (!HUD)
+	{
+		// 리페어런팅 누락·HUD Class 오지정이면 여기서 걸린다 (그대로 두면 체력바가 조용히 안 뜸)
+		UE_LOG(LogTemp, Warning, TEXT("[%s] HUD가 ACBHUD가 아니어서 HUD 위젯을 스택에 넣지 못함"), *GetOwner()->GetName());
+		return;
+	}
+
+	// 제거 시점엔 컨트롤러 연결이 이미 끊겼을 수 있으므로 삽입 시점의 HUD를 캐싱
+	CachedHUD = HUD;
+	HUD->PushGameLayerWidget(HUDWidget);
+}
+
+void UCBUIComponent::Local_RemoveHUDWidgetFromStack()
+{
+	// RemoveFromParent를 쓰면 스택 배열에 항목이 남아 위젯이 화면에 그대로 남는다
+	if (ACBHUD* HUD = CachedHUD.Get())
+	{
+		HUD->PopWidgetFromStack(HUDWidget);
+	}
+	CachedHUD.Reset();
 }
 
 void UCBUIComponent::CreateOverheadWidget(UCBAbilitySystemComponent* InASC)
@@ -94,10 +123,10 @@ void UCBUIComponent::SetOverheadBarVisible(bool bVisible)
 
 void UCBUIComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// HUD 위젯 정리 (어트리뷰트 구독 해제는 위젯의 NativeDestruct가 수행)
+	// HUD 위젯 정리 — 스택에서 빼야 한다 (어트리뷰트 구독 해제는 위젯의 NativeDestruct가 수행)
 	if (HUDWidget)
 	{
-		HUDWidget->RemoveFromParent();
+		Local_RemoveHUDWidgetFromStack();
 		HUDWidget = nullptr;
 	}
 

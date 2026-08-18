@@ -41,16 +41,38 @@ void UCBChaserLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 	// 공용 데이터 적용 (바디 셋업·스켈레탈 메시·애님BP·이동/몽타주 데이터)
 	Super::ApplyToCharacter(InCharacter);
 
-	// 팔로워 메시는 모듈러 메시 컴포넌트를 가진 추격자에만 해당
+	// 피부·의상 메시는 모듈러 메시 컴포넌트를 가진 추격자에만 해당
 	ACBChaserCharacter* ChaserCharacter = Cast<ACBChaserCharacter>(InCharacter);
 	if (!ChaserCharacter) return;
 
 	// 부착·리더 포즈 연결은 준비 완료 후 컴포넌트가 수행하므로 여기서는 데이터만 넘김.
+	// 기본 의상은 태그만 넘기고, 메시 로드는 준비 완료 직전에 PreloadDefaultCosmetics 가 수행함.
 	if (UCBModularMeshComponent* ModularMeshComponent = ChaserCharacter->GetModularMeshComponent())
 	{
-		ModularMeshComponent->SetFollowerMeshes(FollowerMeshes);
+		ModularMeshComponent->SetSkinMeshes(SkinMeshes);
+		ModularMeshComponent->SetCosmeticCatalog(CosmeticCatalog);
+		ModularMeshComponent->SetDefaultCosmeticIds(DefaultCosmeticIds);
 		ModularMeshComponent->SetHideLeaderMesh(bHideLeaderMesh);
 	}
+}
+
+// [공용] 기본 의상 파츠 메시 로드. 카탈로그의 소프트 참조라 로드아웃 로드만으로는 resolve되지 않음
+void UCBChaserLoadout::ApplyAsyncToCharacter(ACBBaseCharacter* InCharacter, TFunction<void()> OnComplete)
+{
+	// 모듈러 메시 컴포넌트 가져오기
+	const ACBChaserCharacter* ChaserCharacter = Cast<ACBChaserCharacter>(InCharacter);
+	UCBModularMeshComponent* ModularMeshComponent = ChaserCharacter ? ChaserCharacter->GetModularMeshComponent() : nullptr;
+
+	// 모듈러 메시 컴포넌트 유효성 검사
+	if (!ModularMeshComponent)
+	{
+		// 유효하지 않으면 바로 완료 콜백 호출 (로드아웃 적용이 끝난 것으로 간주)
+		OnComplete();
+		return;
+	}
+
+	// 유효하면 기본 의상 파츠 메시를 비동기 로드하고 완료 시 OnComplete 호출
+	ModularMeshComponent->PreloadDefaultCosmetics(MoveTemp(OnComplete));
 }
 
 void UCBChaserLoadout::Local_ApplyToCharacter(ACBChaserCharacter* InCharacter)

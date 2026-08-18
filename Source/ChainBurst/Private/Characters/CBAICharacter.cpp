@@ -114,9 +114,23 @@ void ACBAICharacter::InitializeAISystem()
 		else
 		{
 			UE_LOG(LogTemp, Warning, TEXT("%s 의 AI 로드아웃 로드 실패"), *GetName());
+
+			// 로드아웃이 없으면 이어서 로드할 것도 없음 (영구 잠김 방지)
+			HandleCharacterSystemReady();
+			return;
 		}
 
-		// 성공/실패 무관하게 준비 완료 통지 (영구 잠김 방지)
-		HandleCharacterSystemReady();
+		// [공용] 로드아웃의 소프트 참조 로드. AI 로드아웃은 현재 소프트 참조가 없어 즉시 완료되지만,
+		// 나중에 생겼을 때 이 경로가 없으면 오버라이드가 조용히 무시되므로 Chaser 와 같은 형태로 둔다.
+		TWeakObjectPtr<ACBAICharacter> WeakThis(this);
+		LoadedLoadout->ApplyAsyncToCharacter(this, [WeakThis]()
+		{
+			// 로드 중 캐릭터가 파괴됐으면 알릴 대상이 없음
+			if (ACBAICharacter* Character = WeakThis.Get())
+			{
+				// 성공/실패 무관하게 준비 완료 통지 (영구 잠김 방지)
+				Character->HandleCharacterSystemReady();
+			}
+		});
 	});
 }

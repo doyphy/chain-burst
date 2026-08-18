@@ -37,3 +37,25 @@ enum class ECBSuccessType : uint8
 	Failure,
 };
 
+/**
+ * 캐릭터 치장(의상) 부위 슬롯
+ * 모듈러 메시의 의상 파츠를 부위별로 식별하는 키.
+ */
+UENUM(BlueprintType)
+enum class ECBCosmeticSlot : uint8
+{
+	// 머리 (헬멧·모자 등)
+	Helmet	= 0		UMETA(DisplayName = "Helmet"),
+
+	// 상의
+	Torso	= 1		UMETA(DisplayName = "Torso"),
+
+	// 하의
+	Legs	= 2		UMETA(DisplayName = "Legs"),
+
+	// 신발
+	Feet	= 3		UMETA(DisplayName = "Feet"),
+
+	// 슬롯 개수 (배열 크기 산정용, 선택 값 아님). 값을 적지 않아 마지막 슬롯 다음 값이 자동으로 들어감.
+	MAX				UMETA(Hidden)
+};

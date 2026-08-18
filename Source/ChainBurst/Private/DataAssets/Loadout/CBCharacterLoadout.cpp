@@ -14,6 +14,13 @@
 #include "Components/CapsuleComponent.h"
 #include "Animation/AnimInstance.h"
 
+// [공용] 로드아웃의 소프트 참조를 로드해 적용. 기본 로드아웃은 소프트 참조가 없어 즉시 완료
+void UCBCharacterLoadout::ApplyAsyncToCharacter(ACBBaseCharacter* InCharacter, TFunction<void()> OnComplete)
+{
+	// 로드할 소프트 참조가 없음. 호출부가 준비 완료를 기다리므로 반드시 콜백
+	OnComplete();
+}
+
 void UCBCharacterLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 {
 	// 캐릭터 유효성 검사

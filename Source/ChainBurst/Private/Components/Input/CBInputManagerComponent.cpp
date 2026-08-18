@@ -18,6 +18,7 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 
+// 로드아웃에서 호출. 입력 설정을 주입하는 세터 (주입 후 셋업을 지연 시도)
 void UCBInputManagerComponent::SetInputConfig(UCBInputConfig* InInputConfig)
 {
 	InputConfig = InInputConfig;
@@ -26,6 +27,7 @@ void UCBInputManagerComponent::SetInputConfig(UCBInputConfig* InInputConfig)
 	TrySetupInput();
 }
 
+// SetupPlayerInputComponent에서 호출. 입력 컴포넌트를 받아 셋업을 지연 시도
 void UCBInputManagerComponent::SetupPlayerInput(UInputComponent* InInputComponent)
 {
 	// 폰의 입력 컴포넌트를 커스텀 타입으로 캐스팅해 보관 (프로젝트 설정상 항상 UCBInputComponent)
@@ -35,7 +37,23 @@ void UCBInputManagerComponent::SetupPlayerInput(UInputComponent* InInputComponen
 	TrySetupInput();
 }
 
+// 게임플레이 입력(매핑 컨텍스트)을 허용하는 함수. 캐릭터를 조작하지 않는 레벨에서는 호출하지 않음.
+void UCBInputManagerComponent::AllowGameplayInput()
+{
+	bGameplayInputAllowed = true;
+
+	// 나머지 전제조건이 이미 갖춰져 있으면 여기서 바로 등록됨
+	TryRegisterMappingContexts();
+}
+
 void UCBInputManagerComponent::TrySetupInput()
+{
+	// 준비된 것부터 처리
+	TryBindInputActions();
+	TryRegisterMappingContexts();
+}
+
+void UCBInputManagerComponent::TryBindInputActions()
 {
 	// 이미 바인딩이 완료되었으면 종료 (중복 방지)
 	if (bInputBindingsSetup) return;
@@ -43,19 +61,31 @@ void UCBInputManagerComponent::TrySetupInput()
 	// 입력 설정(로드아웃 주입)과 입력 컴포넌트(SetupPlayerInputComponent)가 모두 준비되어야 함
 	if (!InputConfig || !CachedInputComponent) return;
 
-	// 매핑 컨텍스트 등록을 위해 로컬 플레이어 컨트롤러가 필요
 	if (!GetOwningController<APlayerController>()) return;
 
-	// 전제조건 충족 → 실제 바인딩 수행
-	SetupInputBindings();
+	// 입력 액션 바인딩 수행
+	BindInputActions();
 	bInputBindingsSetup = true;
 }
 
-void UCBInputManagerComponent::SetupInputBindings()
+void UCBInputManagerComponent::TryRegisterMappingContexts()
 {
-	// 매핑 컨텍스트 등록 → 액션 바인딩 순서로 수행
+	// 이미 등록되었으면 종료 (중복 방지)
+	if (bMappingContextsRegistered) return;
+
+	// 허용 전에는 매핑 컨텍스트를 붙이지 않음.
+	// 로비처럼 조작하지 않는 레벨에서는 IMC 가 아예 없으므로, UI 가 걷어내주지 않아도 조작이 성립하지 않음.
+	if (!bGameplayInputAllowed) return;
+
+	// 등록 대상은 로컬 플레이어 서브시스템이라 InputComponent 는 필요 없음 (바인딩과 다른 지점)
+	if (!InputConfig) return;
+
+	// 매핑 컨텍스트 등록을 위해 로컬 플레이어 컨트롤러가 필요
+	if (!GetOwningController<APlayerController>()) return;
+
+	// IMC 등록 수행
 	RegisterMappingContexts();
-	BindInputActions();
+	bMappingContextsRegistered = true;
 }
 
 void UCBInputManagerComponent::RegisterMappingContexts()

@@ -64,6 +64,20 @@ public:
 	 */
 	virtual void ApplyToCharacter(ACBBaseCharacter* InCharacter);
 
+	/**
+	 * [공용] 로드아웃이 가진 소프트 참조를 로드해 적용하는 함수 (ApplyToCharacter 의 비동기 꼬리).
+	 *
+	 * 로드아웃에 소프트 참조가 생기면 여기에 모은다 — "무엇을 더 로드해야 하는지"는 로드아웃이 알고,
+	 * "언제 준비 완료인지"는 캐릭터가 정하게 하기 위함이다. 캐릭터는 완료 콜백만 기다리면 된다.
+	 *
+	 * **어떤 경로로 끝나든 OnComplete 를 반드시 호출할 것.** 빠뜨리면 캐릭터가 영구히 준비 완료되지 않고,
+	 * 화면이 검은 채로 멈춘다 → [SystemReady.md]
+	 *
+	 * 기본 구현은 소프트 참조가 없다고 보고 즉시 완료한다.
+	 * @param OnComplete 로드·적용이 끝난 뒤 호출할 콜백
+	 */
+	virtual void ApplyAsyncToCharacter(ACBBaseCharacter* InCharacter, TFunction<void()> OnComplete);
+
 	/** [서버 전용] 어빌리티 시스템 컴포넌트에 어빌리티를 부여하는 함수 */
 	virtual void Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
 

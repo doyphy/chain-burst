@@ -15,6 +15,25 @@ UCBAssetManager& UCBAssetManager::Get()
 	return *MyAssetManager;
 }
 
+void UCBAssetManager::LoadAssetsAsync(const TArray<FSoftObjectPath>& InAssetPaths, TFunction<void()> OnLoadedCallback)
+{
+	// 로드할 것이 없으면 즉시 콜백.
+	if (InAssetPaths.IsEmpty())
+	{
+		OnLoadedCallback();
+		return;
+	}
+
+	// 전부 로드되면 콜백 1회 호출
+	GetStreamableManager().RequestAsyncLoad(
+		InAssetPaths,
+		FStreamableDelegate::CreateLambda([OnLoadedCallback]()
+		{
+			OnLoadedCallback();
+		})
+	);
+}
+
 void UCBAssetManager::StartInitialLoading()
 {
 	Super::StartInitialLoading();

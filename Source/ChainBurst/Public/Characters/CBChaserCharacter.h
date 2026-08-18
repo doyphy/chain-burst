@@ -95,6 +95,7 @@ public:
 	
 	FORCEINLINE UCBChaserCombatComponent* GetChaserCombatComponent() const { return ChaserCombatComponent.Get(); }
 	FORCEINLINE UCBCameraControlComponent* GetCameraControlComponent() const { return CBCameraControlComponent.Get(); }
+	FORCEINLINE UCBInputManagerComponent* GetInputManagerComponent() const { return CBInputManagerComponent.Get(); }
 	FORCEINLINE UCBCharacterRotationComponent* GetCharacterRotationComponent() const { return CBCharacterRotationComponent.Get(); }
 	FORCEINLINE UCBModularMeshComponent* GetModularMeshComponent() const { return CBModularMeshComponent.Get(); }
 

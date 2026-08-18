@@ -14,7 +14,15 @@ public:
 	/** 비동기 로드 함수 */
 	template <typename AssetType>
 	void LoadAssetAsync(const TSoftObjectPtr<AssetType>& AssetPointer, TFunction<void(AssetType*)> OnLoadedCallback);
-	
+
+	/**
+	 * 여러 에셋을 한 번에 비동기 로드하는 함수. 전부 끝나면 콜백이 1회 호출됨.
+	 * 로드할 것이 없으면 즉시 콜백함.
+	 * @param InAssetPaths 로드할 에셋 경로 목록
+	 * @param OnLoadedCallback 전부 로드된 뒤 호출될 콜백 (로드된 에셋은 각자 소프트 포인터로 접근)
+	 */
+	void LoadAssetsAsync(const TArray<FSoftObjectPath>& InAssetPaths, TFunction<void()> OnLoadedCallback);
+
 protected:
 	virtual void StartInitialLoading() override;
 };

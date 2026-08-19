@@ -6,9 +6,12 @@
 #include "Components/Input/CBInputManagerComponent.h"
 #include "Components/Mesh/CBModularMeshComponent.h"
 #include "Core/CBLocalReadySubsystem.h"
+#include "CBGameplayTags.h"
+#include "GameModes/CBLobbyGameMode.h"
 #include "PlayerState/CBPlayerState.h"
 
 // engine
+#include "AbilitySystemComponent.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -39,6 +42,62 @@ void ACBChaserController::Server_RequestCosmeticPart_Implementation(ECBCosmeticS
 
 	// 검증을 통과했으면 PlayerState 에 반영 (서버에서만 실행)
 	CBPlayerState->Auth_SetCosmeticPart(InSlot, InPartId);
+}
+
+// [서버] 로비에서 준비 버튼을 누르면 호출 (서버에서 실행)
+void ACBChaserController::Server_RequestToggleReady_Implementation()
+{
+	const UWorld* World = GetWorld();
+	if (!World) return;
+
+	// 로비 레벨이 아니면 무시
+	ACBLobbyGameMode* LobbyGameMode = World->GetAuthGameMode<ACBLobbyGameMode>();
+	if (!LobbyGameMode) return;
+
+	ACBPlayerState* CBPlayerState = GetPlayerState<ACBPlayerState>();
+	if (!CBPlayerState) return;
+
+	// 현재 준비 상태를 뒤집음
+	const bool bNewReady = !CBPlayerState->IsReady();
+
+	// 플레이어의 준비 상태 설정
+	CBPlayerState->Auth_SetReady(bNewReady);
+
+	// 어빌리티 실행
+	Auth_PlayReadyAbility(bNewReady);
+
+	// 로비 전체 준비 상태 집계
+	LobbyGameMode->Auth_RefreshReadyState();
+}
+
+// [서버] 로비에서 시작 버튼을 누르면 호출 (서버에서 실행)
+void ACBChaserController::Server_RequestStartMatch_Implementation()
+{
+	const UWorld* World = GetWorld();
+	if (!World) return;
+
+	// 검증은 전부 게임모드가 함 (호스트 여부·전원 준비·최소 인원)
+	if (ACBLobbyGameMode* LobbyGameMode = World->GetAuthGameMode<ACBLobbyGameMode>())
+	{
+		LobbyGameMode->Auth_TryStartMatch(this);
+	}
+}
+
+// [서버] 준비 상태에 맞는 무기 장착·해제 어빌리티를 발동 (서버에서 실행)
+void ACBChaserController::Auth_PlayReadyAbility(bool bInReady)
+{
+	// 플레이어 스테이트에서 ASC 가져오기
+	const ACBPlayerState* CBPlayerState = GetPlayerState<ACBPlayerState>();
+	UAbilitySystemComponent* ASC = CBPlayerState ? CBPlayerState->GetAbilitySystemComponent() : nullptr;
+	if (!ASC) return;
+
+	// 준비 상태에 맞는 어빌리티 태그를 선택
+	const FGameplayTag AbilityTag = bInReady
+		? CBGameplayTags::Ability_Combat_EquipWeapon
+		: CBGameplayTags::Ability_Combat_UnequipWeapon;
+
+	// 어빌리티 실행
+	ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(AbilityTag));
 }
 
 // 뷰포트/넷 커넥션이 연결된 직후. 화면을 그리기 시작하는 시점. 빙의보다 확실히 앞서므로 여기서 화면을 검게 덮음

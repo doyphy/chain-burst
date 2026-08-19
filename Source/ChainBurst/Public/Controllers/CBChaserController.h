@@ -11,9 +11,8 @@ class ACBBaseCharacter;
 class ACBLobbyCamera;
 
 /**
- * 플레이어(추격자)의 컨트롤러.
- * 의상 교체 요청을 서버로 중계하고, 뷰 타겟이 정해지고 캐릭터가 준비될 때까지 화면을 검게 덮음.
- * 로비 레벨에서는 폰 대신 레벨의 고정 카메라를 뷰 타겟으로 삼으며, 커스터마이징 중에는 내 캐릭터 앞으로 당긴 카메라로 전환함.
+ * 플레이어의 컨트롤러.
+ * 로컬 플레이어의 입력을 처리하고, 서버와 통신하며, 뷰 타겟을 관리함.
  */
 UCLASS()
 class CHAINBURST_API ACBChaserController : public APlayerController
@@ -30,6 +29,31 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "ChainBurst|Cosmetic")
 	void Server_RequestCosmeticPart(ECBCosmeticSlot InSlot, FGameplayTag InPartId);
+#pragma endregion
+
+#pragma region Lobby
+public:
+	/**
+	 * [클라 → 서버] 로비 준비 상태 요청. (서버에서만 실행)
+	 * 서버가 PlayerState 의 준비 값을 뒤집고 무기 장착·해제 어빌리티로 실행.
+	 * 로비 게임모드가 없는 레벨에서는 아무것도 하지 않음.
+	 */
+	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "ChainBurst|Lobby")
+	void Server_RequestToggleReady();
+
+	/**
+	 * [클라 → 서버] 게임 시작 요청. (서버에서만 실행)
+	 * 호스트 여부·전원 준비·최소 인원 검증은 로비 게임모드가 함.
+	 */
+	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "ChainBurst|Lobby")
+	void Server_RequestStartMatch();
+
+private:
+	/**
+	 * [서버] 준비 상태에 맞는 어빌리티를 실행함. (서버에서만 실행)
+	 * @param bInReady 준비 상태 (true = 무기 장착, false = 무기 해제)
+	 */
+	void Auth_PlayReadyAbility(bool bInReady);
 #pragma endregion
 
 #pragma region Camera

@@ -4,8 +4,10 @@
 #include "AbilitySystem//CBAttributeSet.h"
 #include "Characters/CBChaserCharacter.h"
 #include "Components/Mesh/CBModularMeshComponent.h"
+#include "GameStates/CBLobbyGameState.h"
 
 // engine
+#include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 
 ACBPlayerState::ACBPlayerState()
@@ -35,6 +37,9 @@ void ACBPlayerState::BeginPlay()
 
 	// 복제가 폰보다 먼저 도착할 수 있으므로, 폰이 연결되는 시점에도 한 번 더 적용함
 	OnPawnSet.AddDynamic(this, &ACBPlayerState::HandlePawnSet);
+
+	// 폰이 이미 연결되어 있다면 바로 적용
+	ApplyCosmeticsWhenReady();
 }
 
 void ACBPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -43,6 +48,9 @@ void ACBPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 	// 다른 플레이어의 외형도 보여야 하므로 전 클라이언트에 복제
 	DOREPLIFETIME(ACBPlayerState, Cosmetics);
+
+	// 로비 위젯이 다른 플레이어의 준비 여부도 볼 수 있어야 하므로 전 클라이언트에 복제
+	DOREPLIFETIME(ACBPlayerState, bIsReady);
 }
 
 // seamless travel 로 맵을 넘어갈 때 엔진이 새 PlayerState 를 만든 뒤 호출
@@ -77,12 +85,84 @@ void ACBPlayerState::Auth_SetCosmeticPart(ECBCosmeticSlot InSlot, const FGamepla
 void ACBPlayerState::OnRep_Cosmetics()
 {
 	// 코스메틱 적용
-	ApplyCosmeticsToPawn();
+	ApplyCosmeticsWhenReady();
 }
 
-// 폰이 늦게 생기는 순서를 처리하기 위해 폰 연결 시에도 호출
+// 폰이 연결되는 시점에 호출되는 콜백. BeginPlay에서 구독함.
 void ACBPlayerState::HandlePawnSet(APlayerState* InPlayerState, APawn* InNewPawn, APawn* InOldPawn)
 {
+	// 코스메틱 적용
+	ApplyCosmeticsWhenReady();
+}
+
+// [서버] 컨트롤러가 준비 요청을 받으면 호출 (서버에서 실행)
+void ACBPlayerState::Auth_SetReady(bool bInReady)
+{
+	// 이미 같은 상태라면 무시
+	if (bIsReady == bInReady) return;
+
+	// 준비 상태 변경
+	bIsReady = bInReady;
+
+	// 서버에서는 OnRep 이 불리지 않으므로 직접 호출해 호스트 위젯에도 반영.
+	OnRep_IsReady();
+}
+
+// 준비 상태가 바뀌었을 때 호출되는 콜백
+void ACBPlayerState::OnRep_IsReady()
+{
+	const UWorld* World = GetWorld();
+	if (!World) return;
+
+	// 로비 게임 스테이트를 가져와 준비 상태 변경을 알림.
+	if (ACBLobbyGameState* LobbyGameState = World->GetGameState<ACBLobbyGameState>())
+	{
+		LobbyGameState->NotifyReadyStateChanged();
+	}
+}
+
+// 폰과 캐릭터 준비가 모두 갖춰졌을 때만 적용하는 진입점
+void ACBPlayerState::ApplyCosmeticsWhenReady()
+{
+	// 폰이 아직 없음.
+	ACBChaserCharacter* ChaserCharacter = Cast<ACBChaserCharacter>(GetPawn());
+	if (!ChaserCharacter) return;
+
+	// 준비가 끝났으면 바로 적용
+	if (ChaserCharacter->IsCharacterSystemReady())
+	{
+		ApplyCosmeticsToPawn();
+		return;
+	}
+
+	// 이미 같은 캐릭터의 준비 완료를 기다리는 중이면 중복 구독하지 않고 무시
+	if (PendingReadyCharacter.Get() == ChaserCharacter && CharacterSystemReadyHandle.IsValid()) return;
+
+	// 다른 캐릭터의 준비 완료를 기다리는 중이면 구독 해제
+	if (ACBChaserCharacter* OldCharacter = PendingReadyCharacter.Get())
+	{
+		OldCharacter->OnCharacterSystemReadyDelegate.Remove(CharacterSystemReadyHandle);
+	}
+
+	// 새로운 캐릭터의 준비 완료를 기다림
+	PendingReadyCharacter = ChaserCharacter;
+	// 준비 완료 콜백 구독
+	CharacterSystemReadyHandle = ChaserCharacter->OnCharacterSystemReadyDelegate.AddUObject(this, &ACBPlayerState::HandleCharacterSystemReady);
+}
+
+// 캐릭터 준비 완료 콜백
+void ACBPlayerState::HandleCharacterSystemReady()
+{
+	// 구독 해제
+	if (ACBChaserCharacter* ReadyCharacter = PendingReadyCharacter.Get())
+	{
+		ReadyCharacter->OnCharacterSystemReadyDelegate.Remove(CharacterSystemReadyHandle);
+	}
+
+	// 초기화
+	PendingReadyCharacter.Reset();
+	CharacterSystemReadyHandle.Reset();
+
 	// 코스메틱 적용
 	ApplyCosmeticsToPawn();
 }

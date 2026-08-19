@@ -7,6 +7,7 @@
 #include "Types/CBEnumTypes.h"
 #include "CBPlayerState.generated.h"
 
+class ACBChaserCharacter;
 class UCBAbilitySystemComponent;
 class UCBAttributeSet;
 
@@ -68,6 +69,16 @@ protected:
 	UFUNCTION()
 	void OnRep_Cosmetics();
 
+	/**
+	 * 폰이 붙고 캐릭터 준비가 끝난 뒤에 의상을 적용하는 진입점 (전 인스턴스 각자 로컬 실행).
+	 * 폰이 없으면 아무것도 하지 않고, 준비 전이면 준비 완료 신호를 구독해 기다림.
+	 * 로드아웃의 기본 의상이 준비 완료 직전에 적용되므로, 그보다 늦게 덮어써야 로비에서 고른 조합이 적용.
+	 */
+	void ApplyCosmeticsWhenReady();
+
+	/** 캐릭터 시스템 준비 완료 콜백. 구독을 해제하고 의상을 적용함. */
+	void HandleCharacterSystemReady();
+
 	/** 현재 조합을 소유 폰의 모듈러 메시 컴포넌트에 적용하는 함수 (전 인스턴스 각자 로컬 실행). */
 	void ApplyCosmeticsToPawn();
 
@@ -81,5 +92,34 @@ protected:
 	 */
 	UPROPERTY(ReplicatedUsing = OnRep_Cosmetics)
 	TArray<FGameplayTag> Cosmetics;
+
+	/** 준비 완료를 기다리는 중인 캐릭터. 구독 해제 대상 추적용. */
+	TWeakObjectPtr<ACBChaserCharacter> PendingReadyCharacter;
+
+	/** PendingReadyCharacter 의 준비 완료 델리게이트 구독 핸들. 유효하면 이미 대기 중이라는 뜻. */
+	FDelegateHandle CharacterSystemReadyHandle;
+#pragma endregion
+
+#pragma region Lobby
+	/** 로비 준비 상태 처리 */
+public:
+	/**
+	 * [서버] 준비 상태를 설정하는 함수. (서버에서만 실행)
+	 * @param bInReady 준비 여부
+	 */
+	void Auth_SetReady(bool bInReady);
+
+	/** [Getter] 준비 상태 (위젯이 버튼 표시 분기에 사용) */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Lobby")
+	FORCEINLINE bool IsReady() const { return bIsReady; }
+
+protected:
+	/** 준비 상태가 바뀌었을 때 호출되는 콜백. */
+	UFUNCTION()
+	void OnRep_IsReady();
+
+	/** 로비에서의 준비 여부. */
+	UPROPERTY(ReplicatedUsing = OnRep_IsReady)
+	bool bIsReady = false;
 #pragma endregion
 };

@@ -12,3 +12,15 @@
 /** [로컬] 로컬 플레이어의 캐릭터 준비가 끝났음. */
 UDELEGATE() // BP에서도 사용 가능하도록 UDELEGATE() 선언
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnLocalPlayerReady);
+
+/** [로컬] 서버 접속 또는 맵 이동에 실패했음. (표시할 사유 텍스트를 전달) */
+UDELEGATE() // BP에서도 사용 가능하도록 UDELEGATE() 선언
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnConnectionFailed, const FText&, FailureReason);
+
+/** 로비의 준비 인원이 바뀌었음. (준비 인원 / 전체 인원) */
+UDELEGATE() // BP에서도 사용 가능하도록 UDELEGATE() 선언
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCBOnLobbyReadyStateChanged, int32, ReadyCount, int32, TotalCount);
+
+/** 게임이 시작되어 곧 게임플레이 레벨로 이동함. (로비 위젯이 스스로를 정리할 시점) */
+UDELEGATE() // BP에서도 사용 가능하도록 UDELEGATE() 선언
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnMatchStarting);

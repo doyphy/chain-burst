@@ -62,6 +62,12 @@ public:
 protected:
 	virtual void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	/**
+	 * 컴포넌트가 끝날 때 호출됨. (캐릭터 파괴·맵 전환·종료)
+	 * 스폰한 무기는 부착·소유 어느 쪽으로도 함께 파괴되지 않으므로 여기서 직접 정리함.
+	 */
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** [Getter] CachedOwnerMesh */
@@ -108,8 +114,17 @@ protected:
 	 */
 	ACBBaseWeapon* Auth_SpawnWeapon(TSubclassOf<ACBBaseWeapon> WeaponClass);
 
-	/** [서버 전용] 무기를 파괴하는 내부 함수 */
+	/**
+	 * [서버 전용] 무기를 파괴하는 내부 함수.
+	 * 복제 액터라 서버에서 파괴하면 전 클라이언트에서도 사라짐.
+	 */
 	void Auth_DestroyWeapon(ACBBaseWeapon* WeaponToDestroy);
+
+	/**
+	 * [서버 전용] 등록된 무기를 전부 파괴하고 목록을 비우는 함수.
+	 * 무기 해제(GE 제거 등)와는 별개로, 무기 인스턴스의 수명만 정리함.
+	 */
+	void Auth_DestroyAllWeapons();
 
 	/** [서버 전용] 무기 AttackPower GE를 ASC에 적용하는 함수 */
 	void Auth_ApplyWeaponAttackPowerEffect(UCBWeaponData* InWeaponData);

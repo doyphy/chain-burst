@@ -25,6 +25,19 @@ UCBCombatComponent::UCBCombatComponent()
 }
 
 
+// 컴포넌트가 끝날 때 호출됨 (캐릭터 파괴·맵 전환·종료)
+void UCBCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 스폰·파괴는 서버 권위. 클라이언트는 복제로 사라짐
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		// 무기는 부착·소유 어느 쪽으로도 캐릭터와 함께 파괴되지 않으므로 직접 정리함.
+		Auth_DestroyAllWeapons();
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void UCBCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -376,8 +389,32 @@ ACBBaseWeapon* UCBCombatComponent::Auth_SpawnWeapon(TSubclassOf<ACBBaseWeapon> W
 	return NewWeapon;
 }
 
+/**
+ * 서버에서만 호출
+ * 무기 인스턴스 하나를 파괴함. 복제 액터라 서버에서 파괴하면 전 클라이언트에서도 사라짐.
+ */
 void UCBCombatComponent::Auth_DestroyWeapon(ACBBaseWeapon* WeaponToDestroy)
 {
+	// 이미 파괴 중이거나 유효하지 않으면 아무것도 하지 않음
+	if (!IsValid(WeaponToDestroy)) return;
+
+	WeaponToDestroy->Destroy();
+}
+
+/**
+ * 서버에서만 호출
+ * 등록된 무기를 전부 파괴하고 목록을 비움. UCBCombatComponent::EndPlay 에서 호출됨.
+ */
+void UCBCombatComponent::Auth_DestroyAllWeapons()
+{
+	// 등록된 무기를 순회하며 파괴
+	for (const FCBRegisteredWeaponData& Weapon : EquippedWeapons)
+	{
+		Auth_DestroyWeapon(Weapon.WeaponInstance);
+	}
+
+	// 파괴한 인스턴스를 가리키고 있으므로 목록도 비움
+	EquippedWeapons.Empty();
 }
 
 void UCBCombatComponent::Auth_ApplyWeaponAttackPowerEffect(UCBWeaponData* InWeaponData)

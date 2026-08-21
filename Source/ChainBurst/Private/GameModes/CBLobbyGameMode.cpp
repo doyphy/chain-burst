@@ -5,6 +5,7 @@
 
 // engine
 #include "Engine/World.h"
+#include "GameFramework/GameSession.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/PackageName.h"
 
@@ -126,5 +127,13 @@ void ACBLobbyGameMode::Auth_TravelToGameplayLevel()
 	}
 
 	// ServerTravel 시 "?listen" 옵션을 붙여 호스트가 Listen 서버가 되도록 함
-	World->ServerTravel(LevelPath + TEXT("?listen"));
+	FString TravelURL = LevelPath + TEXT("?listen");
+
+	// AGameSession 이 레벨마다 새로 스폰되기 때문에 URL 다시 설정
+	if (GameSession && GameSession->MaxPlayers > 0)
+	{
+		TravelURL += FString::Printf(TEXT("?MaxPlayers=%d"), GameSession->MaxPlayers);
+	}
+
+	World->ServerTravel(TravelURL);
 }

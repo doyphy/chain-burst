@@ -24,3 +24,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCBOnLobbyReadyStateChanged, int32,
 /** 게임이 시작되어 곧 게임플레이 레벨로 이동함. (로비 위젯이 스스로를 정리할 시점) */
 UDELEGATE() // BP에서도 사용 가능하도록 UDELEGATE() 선언
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnMatchStarting);
+
+/** [로컬] 세션 검색이 끝났음. (성공 여부 / 찾은 개수) */
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCBOnSessionSearchCompleted, bool, bSuccess, int32, ResultCount);
+
+/** [로컬] 세션 작업(생성·검색·참가)이 실패했음. (표시할 사유 텍스트를 전달) */
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnSessionOperationFailed, const FText&, FailureReason);

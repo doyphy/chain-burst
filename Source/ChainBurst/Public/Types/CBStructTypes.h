@@ -31,3 +31,30 @@ struct FCBWeaponSocketConfig
 			&& CombatSocket != NAME_None;
 	}
 };
+
+/**
+ * 세션 검색 결과 한 줄 (목록 위젯 표시용).
+ * 온라인 서비스의 세션 객체는 BP 로 넘길 수 없으므로, 표시에 필요한 값만 복사해 담는다.
+ * 참가는 이 배열의 인덱스로 요청한다. (UCBSessionSubsystem::Local_JoinFoundSession)
+ */
+USTRUCT(BlueprintType)
+struct FCBSessionSearchEntry
+{
+	GENERATED_BODY()
+
+	/** 방 이름 (호스트가 세션 속성으로 실어 보낸 값. 없으면 대체 문구) */
+	UPROPERTY(BlueprintReadOnly)
+	FString DisplayName;
+
+	/** 현재 인원 */
+	UPROPERTY(BlueprintReadOnly)
+	int32 CurrentPlayers = 0;
+
+	/** 최대 인원 */
+	UPROPERTY(BlueprintReadOnly)
+	int32 MaxPlayers = 0;
+
+	/** 참가 가능한지 (정원 초과·비공개 등이면 false) */
+	UPROPERTY(BlueprintReadOnly)
+	bool bIsJoinable = false;
+};

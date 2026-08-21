@@ -35,8 +35,14 @@ const FName UCBSessionSubsystem::SessionSchemaName = TEXT("ChainBurstSessionSche
 const FName UCBSessionSubsystem::HostAddressSettingKey = TEXT("CB_HostAddress");
 const FName UCBSessionSubsystem::DisplayNameSettingKey = TEXT("CB_DisplayName");
 
+// 현재 인원을 실어 보내는 세션 속성 키.
+const FName UCBSessionSubsystem::CurrentPlayersSettingKey = TEXT("CB_CurrentPlayers");
+
 // 서버 정원을 넘기는 URL 옵션 이름. AGameSession::InitOptions 가 이 이름으로 읽음(엔진 규약이라 바꿀 수 없음)
 const FString UCBSessionSubsystem::MaxPlayersUrlOption = TEXT("MaxPlayers");
+
+// 진행 중인 매치의 거부 문자열. 엔진의 "Server full." 과 같은 자리(PreLogin 의 ErrorMessage)에 실려 클라이언트로 옴
+const FString UCBSessionSubsystem::MatchInProgressError = TEXT("Match in progress.");
 
 // 서브시스템 생성 시 호출됨
 void UCBSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -193,6 +199,11 @@ bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLo
 		DisplayNameSettingKey,
 		FCustomSessionSetting{ FSchemaVariant(DisplayName), ESchemaAttributeVisibility::Public });
 
+	// 현재 인원을 1(호스트)로 두고 시작함.
+	Params.SessionSettings.CustomSettings.Emplace(
+		CurrentPlayersSettingKey,
+		FCustomSessionSetting{ FSchemaVariant(static_cast<int64>(1)), ESchemaAttributeVisibility::Public });
+
 	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 생성 요청: %s (LAN=%d, 최대 %d명)"), *DisplayName, bUseLANSessions ? 1 : 0, Params.SessionSettings.NumMaxConnections);
 
 	// 세션 생성 요청. 완료 콜백에서 로비를 엶
@@ -222,6 +233,59 @@ void UCBSessionSubsystem::Local_HandleCreateSessionComplete(const TOnlineResult<
 
 	// 세션 생성이 끝나면 로비를 엶.
 	Local_HostLobby(PendingLobbyLevel, PendingMaxPlayers);
+}
+
+// [서버] 광고 중인 세션 설정 갱신
+void UCBSessionSubsystem::Auth_UpdateAdvertisedSession(FSessionSettingsUpdate&& InMutations)
+{
+	// 세션을 들고 있는 호스트가 아니면 무시.
+	if (!bHasActiveSession || !bIsSessionHost) return;
+
+	// 세션 인터페이스와 활성 세션 계정 ID 조회. 없으면 세션 작업을 할 수 없음
+	const ISessionsPtr Sessions = Local_ResolveSessionsInterface();
+	if (!Sessions || !ActiveSessionAccountId.IsValid()) return;
+
+	// 갱신 요청 파라미터 구성
+	FUpdateSessionSettings::Params Params;
+	Params.LocalAccountId = ActiveSessionAccountId;
+	Params.SessionName = SessionName;
+	Params.Mutations = MoveTemp(InMutations);
+
+	// 갱신 요청.
+	Sessions->UpdateSessionSettings(MoveTemp(Params))
+		.OnComplete([](const TOnlineResult<FUpdateSessionSettings>& InResult)
+		{
+			if (!InResult.IsOk())
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[Session] 세션 광고 갱신 실패: %s"), *InResult.GetErrorValue().GetLogString());
+			}
+		});
+}
+
+// [서버] 광고 중인 세션의 현재 인원 갱신 (ACBLobbyGameMode에서 호출)
+void UCBSessionSubsystem::Auth_UpdateAdvertisedPlayerCount(int32 InCurrentPlayers)
+{
+	// 범위 제한.
+	const int32 ClampedPlayers = FMath::Clamp(InCurrentPlayers, 0, FMath::Max(1, PendingMaxPlayers));
+
+	// 세션 설정 갱신 요청 구성. CustomSettings 에 현재 인원을 실어 보냄
+	FSessionSettingsUpdate Mutations;
+	Mutations.UpdatedCustomSettings.Emplace(
+		CurrentPlayersSettingKey,
+		FCustomSessionSetting{ FSchemaVariant(static_cast<int64>(ClampedPlayers)), ESchemaAttributeVisibility::Public });
+
+	// 세션 설정 갱신
+	Auth_UpdateAdvertisedSession(MoveTemp(Mutations));
+}
+
+// [서버] 광고 중인 세션의 참가 허용 여부 변경 (ACBLobbyGameMode에서 호출)
+void UCBSessionSubsystem::Auth_SetSessionAcceptingPlayers(bool bInAllowNewMembers)
+{
+	FSessionSettingsUpdate Mutations;
+	Mutations.bAllowNewMembers = bInAllowNewMembers;
+
+	// 세션 설정 갱신
+	Auth_UpdateAdvertisedSession(MoveTemp(Mutations));
 }
 
 // [로컬] 세션 검색
@@ -289,26 +353,11 @@ void UCBSessionSubsystem::Local_HandleFindSessionsComplete(const TOnlineResult<F
 		const TOnlineResult<FGetSessionById> SessionResult = Sessions->GetSessionById({ SessionId });
 		if (!SessionResult.IsOk()) continue;
 
+		// 세션 정보 가져오기
 		const TSharedRef<const ISession>& Session = SessionResult.GetOkValue().Session;
-		const FSessionSettings& Settings = Session->GetSessionSettings();
-
-		FCBSessionSearchEntry Entry;
-		Entry.MaxPlayers = static_cast<int32>(Settings.NumMaxConnections);
-		Entry.CurrentPlayers = Entry.MaxPlayers - static_cast<int32>(Session->GetNumOpenConnections());
-		Entry.bIsJoinable = Session->IsJoinable();
-
-		// 방 이름은 호스트가 실어 보낸 속성. 없으면 대체 문구
-		if (const FCustomSessionSetting* DisplayNameSetting = Settings.CustomSettings.Find(DisplayNameSettingKey))
-		{
-			Entry.DisplayName = DisplayNameSetting->Data.GetString();
-		}
-		if (Entry.DisplayName.IsEmpty())
-		{
-			Entry.DisplayName = LOCTEXT("UnnamedSession", "이름 없는 방").ToString();
-		}
 
 		// 검색 결과 목록에 추가. 인덱스는 FoundSessionIds 와 대응됨
-		FoundSessions.Emplace(MoveTemp(Entry));
+		FoundSessions.Emplace(Local_BuildSearchEntry(*Session));
 		FoundSessionIds.Emplace(SessionId);
 	}
 
@@ -316,6 +365,44 @@ void UCBSessionSubsystem::Local_HandleFindSessionsComplete(const TOnlineResult<F
 
 	// 검색 결과 방송. UI 위젯이 구독해 표시를 갱신함
 	OnSessionSearchCompleted.Broadcast(true, FoundSessions.Num());
+}
+
+// [로컬] 세션에서 표시·참가 판정에 쓸 값을 읽어 담음
+FCBSessionSearchEntry UCBSessionSubsystem::Local_BuildSearchEntry(const ISession& InSession) const
+{
+	// 세션 설정 가져오기.
+	const FSessionSettings& Settings = InSession.GetSessionSettings();
+
+	FCBSessionSearchEntry Entry;
+	Entry.MaxPlayers = static_cast<int32>(Settings.NumMaxConnections);
+
+	// 세션 정보에서 현재 인원을 가져오기. (키 값 : CurrentPlayersSettingKey)
+	const FCustomSessionSetting* CurrentPlayersSetting = Settings.CustomSettings.Find(CurrentPlayersSettingKey);
+
+	// 현재 인원 데이터 유호성 검사
+	if (CurrentPlayersSetting && CurrentPlayersSetting->Data.GetType() == ESchemaAttributeType::Int64)
+	{
+		// 현재 인원 값을 가져와 Entry.CurrentPlayers 에 저장
+		Entry.CurrentPlayers = static_cast<int32>(CurrentPlayersSetting->Data.GetInt64());
+	}
+
+	// 인원을 광고하지 않는 방(구버전 호스트 등)은 알 수 없음을 뜻하는 0 으로 두되, 정원 판정에서 막지는 않음
+	Entry.CurrentPlayers = FMath::Clamp(Entry.CurrentPlayers, 0, Entry.MaxPlayers);
+
+	// 정원이 찼으면 참가 불가. IsJoinable() 만으로는 정원 판정이 되지 않아 인원을 함께 봄
+	Entry.bIsJoinable = InSession.IsJoinable() && Entry.CurrentPlayers < Entry.MaxPlayers;
+
+	// 방 이름은 호스트가 실어 보낸 속성. 없으면 대체 문구
+	if (const FCustomSessionSetting* DisplayNameSetting = Settings.CustomSettings.Find(DisplayNameSettingKey))
+	{
+		Entry.DisplayName = DisplayNameSetting->Data.GetString();
+	}
+	if (Entry.DisplayName.IsEmpty())
+	{
+		Entry.DisplayName = LOCTEXT("UnnamedSession", "이름 없는 방").ToString();
+	}
+
+	return Entry;
 }
 
 // [로컬] 검색 결과의 세션에 참가
@@ -337,13 +424,37 @@ bool UCBSessionSubsystem::Local_JoinFoundSession(int32 InSearchResultIndex)
 		return false;
 	}
 
+	// 검색 결과 인덱스에 대응하는 세션 ID 조회
+	const FOnlineSessionId TargetSessionId = FoundSessionIds[InSearchResultIndex];
+
+	// 참가 직전에 방 상태를 다시 읽음. (갱신 전 정보를 읽기 때문에, 그 사이 시작된 방은 걸러내지 못함)
+	const TOnlineResult<FGetSessionById> SessionResult = Sessions->GetSessionById({ TargetSessionId });
+	if (!SessionResult.IsOk())
+	{
+		Local_HandleSessionFailure(LOCTEXT("JoinFailedSessionGone", "방 정보가 만료되었습니다. 목록을 새로고침해 주세요."),
+			FString::Printf(TEXT("세션 조회 실패: %s"), *SessionResult.GetErrorValue().GetLogString()));
+		return false;
+	}
+
+	// 다시 읽은 값으로 표시용 항목을 갱신함.
+	FCBSessionSearchEntry& Entry = FoundSessions[InSearchResultIndex];
+	Entry = Local_BuildSearchEntry(*SessionResult.GetOkValue().Session);
+
+	// 참가할 수 없는 방이면 여기서 멈춤
+	if (!Entry.bIsJoinable)
+	{
+		Local_HandleSessionFailure(LOCTEXT("JoinFailedNotJoinable", "참가할 수 없는 방입니다. 목록을 새로고침해 주세요."),
+			FString::Printf(TEXT("참가 불가한 방: %s (%d/%d)"), *Entry.DisplayName, Entry.CurrentPlayers, Entry.MaxPlayers));
+		return false;
+	}
+
 	// 참가 요청 파라미터 구성
 	FJoinSession::Params Params;
 	Params.LocalAccountId = LocalAccountId;
 	Params.SessionName = SessionName;
-	Params.SessionId = FoundSessionIds[InSearchResultIndex];
+	Params.SessionId = TargetSessionId;
 
-	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 참가 요청: %s"), *FoundSessions[InSearchResultIndex].DisplayName);
+	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 참가 요청: %s (%d/%d)"), *Entry.DisplayName, Entry.CurrentPlayers, Entry.MaxPlayers);
 
 	// 참가 요청. 완료 콜백에서 호스트 주소로 접속함
 	Sessions->JoinSession(MoveTemp(Params))
@@ -618,6 +729,11 @@ void UCBSessionSubsystem::Local_HandleNetworkFailure(UWorld* InWorld, UNetDriver
 		if (InErrorString.Contains(TEXT("Server full")))
 		{
 			FailureReason = LOCTEXT("NetFailureServerFull", "방이 가득 찼습니다.");
+		}
+		// 이미 시작된 매치.
+		else if (InErrorString.Contains(MatchInProgressError))
+		{
+			FailureReason = LOCTEXT("NetFailureMatchInProgress", "이미 시작된 게임입니다.");
 		}
 		else
 		{

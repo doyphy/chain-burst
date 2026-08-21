@@ -1,9 +1,11 @@
 // project
 #include "GameModes/CBLobbyGameMode.h"
+#include "Core/CBSessionSubsystem.h"
 #include "GameStates/CBLobbyGameState.h"
 #include "PlayerState/CBPlayerState.h"
 
 // engine
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/GameSession.h"
 #include "GameFramework/PlayerController.h"
@@ -30,6 +32,13 @@ void ACBLobbyGameMode::Logout(AController* Exiting)
 	// 나가는 플레이어의 PlayerState 는 아직 목록에 남아 있으므로 집계에서 빼고 셈.
 	// 준비를 마친 사람이 나갔을 때 "전원 준비" 조건이 풀리려면 여기서 갱신해야 함
 	Auth_RefreshReadyState(Exiting ? Exiting->PlayerState : nullptr);
+}
+
+// [로컬] 세션 서브시스템 조회 (세션 광고 갱신용)
+UCBSessionSubsystem* ACBLobbyGameMode::Local_GetSessionSubsystem() const
+{
+	const UGameInstance* OwningGameInstance = GetGameInstance();
+	return OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBSessionSubsystem>() : nullptr;
 }
 
 // [서버] 준비 인원을 다시 세어 게임 스테이트에 반영 (서버에서 실행)
@@ -61,6 +70,12 @@ void ACBLobbyGameMode::Auth_RefreshReadyState(const APlayerState* InIgnorePlayer
 
 	// 집계 결과를 게임 스테이트에 반영. OnRep_ReadyState() 가 호출되어 전 클라이언트에 복제됨
 	LobbyGameState->Auth_SetReadyState(ReadyCount, TotalCount);
+
+	// 세션 광고에도 현재 인원을 갱신. 호스트가 아니면 아무것도 하지 않음
+	if (UCBSessionSubsystem* SessionSubsystem = Local_GetSessionSubsystem())
+	{
+		SessionSubsystem->Auth_UpdateAdvertisedPlayerCount(TotalCount);
+	}
 }
 
 // [서버] 호스트의 시작 요청 처리 (ACBChaserController::Server_RequestStartMatch 에서 호출됨)
@@ -112,6 +127,12 @@ void ACBLobbyGameMode::Auth_TravelToGameplayLevel()
 	if (!World) return;
 
 	bTravelStarted = true;
+
+	// 매치가 시작되면 난입을 받지 않으므로 세션을 닫음.
+	if (UCBSessionSubsystem* SessionSubsystem = Local_GetSessionSubsystem())
+	{
+		SessionSubsystem->Auth_SetSessionAcceptingPlayers(false);
+	}
 
 	// 소프트 참조의 경로는 "/Game/.../L_X.L_X" 형태라 패키지 이름만 뽑아 씀
 	const FString LevelPath = FPackageName::ObjectPathToPackageName(GameplayLevel.ToString());

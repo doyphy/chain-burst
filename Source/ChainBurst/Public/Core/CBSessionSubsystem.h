@@ -11,6 +11,7 @@
 
 namespace UE::Online
 {
+	class ISession;
 	class ISessions;
 	using ISessionsPtr = TSharedPtr<class ISessions>;
 
@@ -18,13 +19,14 @@ namespace UE::Online
 	struct FFindSessions;
 	struct FJoinSession;
 	struct FLeaveSession;
+	struct FSessionSettingsUpdate;
 
 	template <typename OpType> class TOnlineResult;
 }
 
 /**
  * 멀티플레이 접속 창구 서브시스템.
- * 세션(방 생성·검색·참가)과 실제 접속(레벨 열기·travel)을 모두 담당함.
+ * 세션(방 생성·검색·참가·광고 갱신)과 실제 접속(레벨 열기·travel)을 모두 담당함.
  *
  * 실패는 두 갈래로 나눠 다룸 —
  *  · 접속 시도(맵 로드 전) 실패는 현재 레벨을 유지한 채 사유만 방송함. (엔진의 기본 맵 복귀는 UCBOnlineSession 이 막음)
@@ -76,9 +78,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Session")
 	bool Local_JoinFoundSession(int32 InSearchResultIndex);
 
+	/**
+	 * [서버] 광고 중인 세션의 현재 인원을 갱신함. 로비 게임모드가 인원 변화 시 호출함.
+	 * 호스트가 아니거나 활성 세션이 없으면 아무것도 하지 않음
+	 * @param InCurrentPlayers 광고할 현재 인원
+	 */
+	void Auth_UpdateAdvertisedPlayerCount(int32 InCurrentPlayers);
+
+	/**
+	 * [서버] 광고 중인 세션의 참가 허용 여부를 바꿈. 매치가 시작되면 false 로 닫아 목록에서 참가 불가로 보이게 함.
+	 * 호스트가 아니거나 활성 세션이 없으면 아무것도 하지 않음
+	 * @param bInAllowNewMembers 새 참가자를 받을지
+	 */
+	void Auth_SetSessionAcceptingPlayers(bool bInAllowNewMembers);
+
 	/** [Getter] 마지막 검색 결과 (목록 위젯 표시용) */
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Session")
 	const TArray<FCBSessionSearchEntry>& GetFoundSessions() const { return FoundSessions; }
+
+	/**
+	 * 진행 중인 매치에 붙으려 할 때 서버가 돌려보내는 거부 문자열.
+	 * 서버(ACBGameplayGameMode::PreLogin)가 실어 보내고 클라이언트(Local_HandleNetworkFailure)가 읽어 문구를 가름.
+	 */
+	static const FString MatchInProgressError;
 
 	/** 세션 검색 완료 신호. 목록 위젯이 구독해 표시를 갱신함. */
 	UPROPERTY(BlueprintAssignable, Category = "ChainBurst|Session")
@@ -108,6 +130,13 @@ private:
 	/** [로컬] 세션 검색 완료 콜백. 결과를 표시용 목록으로 옮기고 방송함. */
 	void Local_HandleFindSessionsComplete(const UE::Online::TOnlineResult<UE::Online::FFindSessions>& InResult);
 
+	/**
+	 * [로컬] 세션 정보를 읽어 검색 결과 항목을 만듦.
+	 * @param InSession 값을 읽어올 세션
+	 * @return 세션 정보를 담은 검색 결과 항목
+	 */
+	FCBSessionSearchEntry Local_BuildSearchEntry(const UE::Online::ISession& InSession) const;
+
 	/** [로컬] 세션 참가 완료 콜백. 성공하면 호스트 주소로 접속함. */
 	void Local_HandleJoinSessionComplete(const UE::Online::TOnlineResult<UE::Online::FJoinSession>& InResult);
 
@@ -119,6 +148,12 @@ private:
 	 * 세션이 없으면 아무것도 하지 않음. 완료를 기다리지 않음
 	 */
 	void Local_LeaveActiveSession();
+
+	/**
+	 * [서버] 광고 중인 세션 설정을 갱신함. 호스트가 아니거나 활성 세션이 없으면 아무것도 하지 않음.
+	 * @param InMutations 적용할 세션 설정 변경분
+	 */
+	void Auth_UpdateAdvertisedSession(UE::Online::FSessionSettingsUpdate&& InMutations);
 
 	/**
 	 * 세션이 LAN 전용인지.
@@ -138,6 +173,9 @@ private:
 
 	/** 방 이름을 실어 보내는 세션 속성 키. */
 	static const FName DisplayNameSettingKey;
+
+	/** 현재 인원을 실어 보내는 세션 속성 키. 호스트만 갱신하고, 검색 측은 읽기만 함. */
+	static const FName CurrentPlayersSettingKey;
 
 	/** 서버 정원을 넘기는 URL 옵션 이름. AGameSession::InitOptions 가 이 이름으로 읽음(엔진 규약). */
 	static const FString MaxPlayersUrlOption;

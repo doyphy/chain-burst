@@ -7,7 +7,7 @@
 
 /**
  * 로비 레벨의 게임 스테이트.
- * 준비 인원 집계를 들고 전 클라이언트에 복제함.
+ * 준비 인원 집계를 들고 전 클라이언트에 복제하고, 고를 수 있는 캐릭터 클래스를 각 인스턴스가 미리 로드하게 함.
  */
 UCLASS()
 class CHAINBURST_API ACBLobbyGameState : public AGameStateBase
@@ -58,8 +58,13 @@ public:
 
 protected:
 	//~ Begin AActor Interface.
+	/** 고를 수 있는 캐릭터 클래스를 미리 로드함. */
+	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	//~ End AActor Interface.
+
+	/** 카탈로그에 등록된 캐릭터 클래스를 미리 로드하는 함수 (전 인스턴스 각자 로컬 실행). */
+	void PreloadCharacterClasses();
 
 	/** 집계 값이 바뀌었을 때 호출되는 콜백. */
 	UFUNCTION()

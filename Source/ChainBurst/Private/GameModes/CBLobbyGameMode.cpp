@@ -1,5 +1,6 @@
 // project
 #include "GameModes/CBLobbyGameMode.h"
+#include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Core/CBSessionSubsystem.h"
 #include "GameStates/CBLobbyGameState.h"
 #include "PlayerState/CBPlayerState.h"
@@ -8,6 +9,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/GameSession.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/PackageName.h"
 
@@ -29,9 +31,64 @@ void ACBLobbyGameMode::Logout(AController* Exiting)
 {
 	Super::Logout(Exiting);
 
+	// 나간 플레이어가 쥐고 있던 자리를 비움 (남은 사람이 다시 배정받을 수 있도록)
+	AssignedPlayerStarts.Remove(Exiting);
+
 	// 나가는 플레이어의 PlayerState 는 아직 목록에 남아 있으므로 집계에서 빼고 셈.
 	// 준비를 마친 사람이 나갔을 때 "전원 준비" 조건이 풀리려면 여기서 갱신해야 함
 	Auth_RefreshReadyState(Exiting ? Exiting->PlayerState : nullptr);
+}
+
+// [서버] 스폰 지점 결정. 처음 배정한 자리를 기억해 재스폰에도 같은 자리를 씀
+AActor* ACBLobbyGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+	// 이미 배정받은 자리가 있으면 그대로 사용
+	if (const TWeakObjectPtr<AActor>* FoundStart = AssignedPlayerStarts.Find(Player))
+	{
+		if (AActor* AssignedStart = FoundStart->Get())
+		{
+			return AssignedStart;
+		}
+	}
+
+	// 처음이거나 자리가 사라졌으면 엔진 기본 규칙으로 고르고 기억해 둠
+	AActor* ChosenStart = Super::ChoosePlayerStart_Implementation(Player);
+	if (ChosenStart && Player)
+	{
+		AssignedPlayerStarts.Add(Player, ChosenStart);
+	}
+
+	return ChosenStart;
+}
+
+// [서버] 컨트롤러가 캐릭터 변경 요청을 검증한 뒤 호출 (ACBChaserController::Server_RequestCharacterSelection)
+void ACBLobbyGameMode::Auth_RespawnWithSelectedCharacter(APlayerController* InPlayer)
+{
+	if (!InPlayer) return;
+
+	// 이미 게임플레이 레벨로 이동 중이면 폰을 건드리지 않음
+	if (bTravelStarted) return;
+
+	// 이전 캐릭터의 로드아웃이 ASC 에 부여해 둔 어빌리티·이펙트를 회수.
+	// ASC 는 PlayerState 소유라 폰을 갈아도 살아남으므로, 회수하지 않으면 새 로드아웃 부여분과 겹침
+	if (const ACBPlayerState* CBPlayerState = InPlayer->GetPlayerState<ACBPlayerState>())
+	{
+		if (UCBAbilitySystemComponent* CBASC = CBPlayerState->GetCBAbilitySystemComponent())
+		{
+			CBASC->Auth_ClearLoadoutGrants();
+		}
+	}
+
+	// 기존 폰을 파괴. 등록된 무기 액터는 컴뱃 컴포넌트의 EndPlay 가 함께 정리함.
+	// 폰이 남아 있으면 RestartPlayerAtPlayerStart 가 그 폰을 그대로 재사용해 캐릭터가 바뀌지 않음
+	if (APawn* OldPawn = InPlayer->GetPawn())
+	{
+		InPlayer->UnPossess(); // 빙의 해제. Destroy() 전에 호출해야 함.
+		OldPawn->Destroy(); // Destroy() 호출 시 Pawn::EndPlay() 가 실행되어 무기 액터가 같이 정리됨.
+	}
+
+	// 배정받은 자리에 그대로 다시 스폰. 스폰할 클래스는 GetDefaultPawnClassForController 가 PlayerState 를 보고 정함
+	RestartPlayerAtPlayerStart(InPlayer, ChoosePlayerStart(InPlayer));
 }
 
 // [로컬] 세션 서브시스템 조회 (세션 광고 갱신용)

@@ -120,8 +120,8 @@ void UCBCharacterLoadout::Auth_ApplyEffectsToASC(UCBAbilitySystemComponent* InAS
 				// SpecHandle 유효성 검사
 				if (SpecHandle.IsValid())
 				{
-					// GE를 ASC에 적용 (자신에게 적용)
-					InASCToGive->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+					// GE를 ASC에 적용 (자신에게 적용).
+					InASCToGive->Auth_ApplyLoadoutEffect(*SpecHandle.Data.Get());
 				}
 			}
 		}
@@ -146,8 +146,8 @@ void UCBCharacterLoadout::GrantAbilities(const TArray<TSubclassOf<UCBGameplayAbi
 		// 어빌리티 레벨 설정
 		AbilitySpec.Level = ApplyLevel;
 
-		// 어빌리티 시스템 컴포넌트에 어빌리티 부여
+		// 어빌리티 시스템 컴포넌트에 어빌리티 부여.
 		// 어빌리티의 활성화 정책이 OnGiven 이면 부여 즉시 TryActivateAbility 호출함 (CBGameplayAbility 참고)
-		InASCToGive->GiveAbility(AbilitySpec);
+		InASCToGive->Auth_GiveLoadoutAbility(AbilitySpec);
 	}
 }

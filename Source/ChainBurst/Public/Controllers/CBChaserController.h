@@ -31,6 +31,18 @@ public:
 	void Server_RequestCosmeticPart(ECBCosmeticSlot InSlot, FGameplayTag InPartId);
 #pragma endregion
 
+#pragma region Character Selection
+public:
+	/**
+	 * [클라 → 서버] 캐릭터(무기) 변경 요청. (서버에서만 실행)
+	 * 서버가 검증한 뒤 PlayerState 에 반영하고 폰을 다시 스폰함.
+	 * 로비 게임모드가 없는 레벨이거나 이미 준비를 마쳤으면 아무것도 하지 않음.
+	 * @param InCharacterId 고른 캐릭터 태그 (캐릭터 카탈로그에 등록된 값이어야 함)
+	 */
+	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "ChainBurst|Character")
+	void Server_RequestCharacterSelection(FGameplayTag InCharacterId);
+#pragma endregion
+
 #pragma region Lobby
 public:
 	/**

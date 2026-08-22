@@ -1,8 +1,44 @@
 // project
 #include "GameStates/CBLobbyGameState.h"
+#include "AssetManager/CBAssetManager.h"
+#include "Core/CBGameInstance.h"
+#include "DataAssets/Character/CBCharacterCatalog.h"
 
 // engine
 #include "Net/UnrealNetwork.h"
+
+void ACBLobbyGameState::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// 고를 수 있는 캐릭터 클래스를 미리 로드
+	PreloadCharacterClasses();
+}
+
+// [전 인스턴스] 고를 수 있는 캐릭터 클래스를 미리 로드
+void ACBLobbyGameState::PreloadCharacterClasses()
+{
+	// 캐릭터 카탈로그 가져오기
+	const UCBGameInstance* CBGameInstance = GetGameInstance<UCBGameInstance>();
+	const UCBCharacterCatalog* CharacterCatalog = CBGameInstance ? CBGameInstance->GetCharacterCatalog() : nullptr;
+
+	// 카탈로그를 등록하지 않았으면 미리 로드할 것도 없음
+	if (!CharacterCatalog) return;
+
+	// 등록된 캐릭터 클래스 경로를 모아 한 번에 비동기 로드.
+	TArray<FSoftObjectPath> CharacterClassPaths;
+	CharacterCatalog->GetCharacterClassPaths(CharacterClassPaths);
+
+	if (CharacterClassPaths.IsEmpty()) return;
+
+	const int32 PreloadCount = CharacterClassPaths.Num();
+	
+	// 비동기 로드
+	UCBAssetManager::Get().LoadAssetsAsync(CharacterClassPaths, [PreloadCount]()
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Lobby] 캐릭터 클래스 %d개 미리 로드 완료"), PreloadCount);
+	});
+}
 
 void ACBLobbyGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {

@@ -31,8 +31,8 @@ void UCBChaserLoadout::Auth_GrantAbilitiesToASC(UCBAbilitySystemComponent* InASC
 		// 입력 태그를 동적 어빌리티 태그에 추가 (입력 매핑 등에서 활용)
 		AbilitySpec.GetDynamicSpecSourceTags().AddTag(AbilitySet.InputTag);
 
-		// 어빌리티 시스템 컴포넌트에 어빌리티 부여
-		InASCToGive->GiveAbility(AbilitySpec);
+		// 어빌리티 시스템 컴포넌트에 어빌리티 부여.
+		InASCToGive->Auth_GiveLoadoutAbility(AbilitySpec);
 	}
 }
 

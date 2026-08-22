@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Delegates/DelegateCombinations.h"
+#include "GameplayTagContainer.h"
 #include "CBDelegates.generated.h" // BP에도 사용할거라 Include
 
 /**
@@ -24,6 +25,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCBOnLobbyReadyStateChanged, int32,
 /** 게임이 시작되어 곧 게임플레이 레벨로 이동함. (로비 위젯이 스스로를 정리할 시점) */
 UDELEGATE() // BP에서도 사용 가능하도록 UDELEGATE() 선언
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnMatchStarting);
+
+/** 플레이어가 고른 캐릭터(무기)가 바뀌었음. (새로 고른 캐릭터 태그) */
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnCharacterSelectionChanged, FGameplayTag, CharacterId);
 
 /** [로컬] 세션 검색이 끝났음. (성공 여부 / 찾은 개수) */
 UDELEGATE()

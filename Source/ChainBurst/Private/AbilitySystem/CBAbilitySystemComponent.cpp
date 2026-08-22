@@ -93,3 +93,65 @@ void UCBAbilitySystemComponent::OnAbilityInputReleased(const FGameplayTag& InInp
 		}
 	}
 }
+
+// [서버] 로드아웃이 어빌리티를 부여할 때 경유하는 함수 (부여 + 회수용 핸들 기록)
+FGameplayAbilitySpecHandle UCBAbilitySystemComponent::Auth_GiveLoadoutAbility(const FGameplayAbilitySpec& InAbilitySpec)
+{
+	// 어빌리티 부여는 서버 권위
+	if (!IsOwnerActorAuthoritative()) return FGameplayAbilitySpecHandle();
+
+	// 어빌리티 부여
+	const FGameplayAbilitySpecHandle GrantedHandle = GiveAbility(InAbilitySpec);
+
+	// 나중에 회수할 수 있도록 핸들 기록
+	if (GrantedHandle.IsValid())
+	{
+		LoadoutAbilityHandles.Add(GrantedHandle);
+	}
+
+	return GrantedHandle;
+}
+
+// [서버] 로드아웃이 이펙트를 적용할 때 경유하는 함수 (적용 + 회수용 핸들 기록)
+FActiveGameplayEffectHandle UCBAbilitySystemComponent::Auth_ApplyLoadoutEffect(const FGameplayEffectSpec& InEffectSpec)
+{
+	// 이펙트 적용은 서버 권위
+	if (!IsOwnerActorAuthoritative()) return FActiveGameplayEffectHandle();
+
+	// 이펙트 적용
+	const FActiveGameplayEffectHandle AppliedHandle = ApplyGameplayEffectSpecToSelf(InEffectSpec);
+
+	// 나중에 회수할 수 있도록 핸들 기록.
+	// 즉시(Instant) 이펙트는 지속되지 않아 무효 핸들이 돌아오며, 회수할 대상도 없음
+	if (AppliedHandle.IsValid())
+	{
+		LoadoutEffectHandles.Add(AppliedHandle);
+	}
+
+	return AppliedHandle;
+}
+
+// [서버] 캐릭터를 바꿔 다시 스폰하기 직전에 호출 (ACBLobbyGameMode::Auth_RespawnWithSelectedCharacter)
+void UCBAbilitySystemComponent::Auth_ClearLoadoutGrants()
+{
+	// 회수도 서버 권위
+	if (!IsOwnerActorAuthoritative()) return;
+
+	// 이펙트를 먼저 걷어냄 (어빌리티가 참조하는 스탯이 먼저 사라지지 않도록 먼저 처리)
+	for (const FActiveGameplayEffectHandle& EffectHandle : LoadoutEffectHandles)
+	{
+		if (!EffectHandle.IsValid()) continue;
+
+		RemoveActiveGameplayEffect(EffectHandle);
+	}
+	LoadoutEffectHandles.Reset();
+
+	// 부여했던 어빌리티 제거 (활성 중이면 종료 후 제거됨)
+	for (const FGameplayAbilitySpecHandle& AbilityHandle : LoadoutAbilityHandles)
+	{
+		if (!AbilityHandle.IsValid()) continue;
+
+		ClearAbility(AbilityHandle);
+	}
+	LoadoutAbilityHandles.Reset();
+}

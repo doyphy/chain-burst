@@ -51,6 +51,9 @@ void ACBPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 	// 로비 위젯이 다른 플레이어의 준비 여부도 볼 수 있어야 하므로 전 클라이언트에 복제
 	DOREPLIFETIME(ACBPlayerState, bIsReady);
+
+	// 선택 UI 가 자기 선택을 표시해야 하므로 복제 (다른 플레이어의 선택도 로비 위젯에 쓸 수 있음)
+	DOREPLIFETIME(ACBPlayerState, SelectedCharacterId);
 }
 
 // seamless travel 로 맵을 넘어갈 때 엔진이 새 PlayerState 를 만든 뒤 호출
@@ -62,7 +65,30 @@ void ACBPlayerState::CopyProperties(APlayerState* NewPlayerState)
 	if (ACBPlayerState* NewCBPlayerState = Cast<ACBPlayerState>(NewPlayerState))
 	{
 		NewCBPlayerState->Cosmetics = Cosmetics;
+
+		// 고른 캐릭터도 함께 이관. 빠지면 게임플레이 레벨에서 기본 폰 클래스로 스폰됨
+		NewCBPlayerState->SelectedCharacterId = SelectedCharacterId;
 	}
+}
+
+// [서버] 컨트롤러가 요청을 검증한 뒤 호출 (서버에서 실행)
+void ACBPlayerState::Auth_SetSelectedCharacterId(const FGameplayTag& InCharacterId)
+{
+	// 이미 같은 캐릭터라면 무시
+	if (SelectedCharacterId == InCharacterId) return;
+
+	// 고른 캐릭터 태그를 저장 (빈 태그 = 선택 안 함)
+	SelectedCharacterId = InCharacterId;
+
+	// 서버에서는 OnRep 이 불리지 않으므로 직접 호출해 호스트 위젯에도 반영.
+	OnRep_SelectedCharacterId();
+}
+
+// 고른 캐릭터가 바뀌었을 때 호출되는 콜백. 실제 캐릭터 교체는 서버의 재스폰이 담당하고, 여기서는 표시만 갱신함
+void ACBPlayerState::OnRep_SelectedCharacterId()
+{
+	// 선택 변경 신호를 방송. 위젯이 구독해 선택 표시를 갱신하도록 함
+	OnCharacterSelectionChanged.Broadcast(SelectedCharacterId);
 }
 
 // [서버] 컨트롤러가 요청을 검증한 뒤 호출 (서버에서 실행)

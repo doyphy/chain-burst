@@ -44,6 +44,43 @@ void ACBChaserController::Server_RequestCosmeticPart_Implementation(ECBCosmeticS
 	CBPlayerState->Auth_SetCosmeticPart(InSlot, InPartId);
 }
 
+// [서버] 로비에서 무기(캐릭터) 변경 버튼을 누르면 호출 (서버에서 실행)
+void ACBChaserController::Server_RequestCharacterSelection_Implementation(FGameplayTag InCharacterId)
+{
+	const UWorld* World = GetWorld();
+	if (!World) return;
+
+	// 로비 레벨이 아니면 무시 (게임플레이 중에는 캐릭터를 바꿀 수 없음)
+	ACBLobbyGameMode* LobbyGameMode = World->GetAuthGameMode<ACBLobbyGameMode>();
+	if (!LobbyGameMode) return;
+
+	ACBPlayerState* CBPlayerState = GetPlayerState<ACBPlayerState>();
+	if (!CBPlayerState) return;
+
+	// 준비를 마친 뒤에는 바꿀 수 없음. 무기 장착 어빌리티가 실행된 상태라 재스폰과 엉킴
+	if (CBPlayerState->IsReady())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 준비 상태에서 캐릭터 변경을 요청해 무시함"), *GetNameSafe(this));
+		return;
+	}
+
+	// 같은 캐릭터를 다시 고른 경우. 재스폰할 이유가 없음 (버튼 연타 방어)
+	if (CBPlayerState->GetSelectedCharacterId() == InCharacterId) return;
+
+	// 카탈로그에 등록된 캐릭터인지 확인 (게임모드가 게임 인스턴스의 카탈로그로 검증)
+	if (!LobbyGameMode->Auth_IsValidCharacterId(InCharacterId))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 유효하지 않은 캐릭터 요청: %s"), *GetNameSafe(this), *InCharacterId.ToString());
+		return;
+	}
+
+	// 검증을 통과했으면 PlayerState 에 반영 (스폰할 클래스를 정하는 키)
+	CBPlayerState->Auth_SetSelectedCharacterId(InCharacterId);
+
+	// 고른 캐릭터로 폰을 다시 스폰
+	LobbyGameMode->Auth_RespawnWithSelectedCharacter(this);
+}
+
 // [서버] 로비에서 준비 버튼을 누르면 호출 (서버에서 실행)
 void ACBChaserController::Server_RequestToggleReady_Implementation()
 {

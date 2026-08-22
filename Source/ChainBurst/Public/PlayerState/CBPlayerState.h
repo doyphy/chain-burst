@@ -4,6 +4,7 @@
 #include "GameFramework/PlayerState.h"
 #include "AbilitySystemInterface.h"
 #include "GameplayTagContainer.h"
+#include "Types/CBDelegates.h"
 #include "Types/CBEnumTypes.h"
 #include "CBPlayerState.generated.h"
 
@@ -14,6 +15,7 @@ class UCBAttributeSet;
 /**
  * 플레이어의 상태를 관리하는 클래스. 주로 어빌리티 시스템과 관련된 데이터를 저장하고 관리하는 역할을 함.
  * 플레이어가 소유한 [ASC]와 [AttributeSet]을 보유하며, IAbilitySystemInterface를 구현하여 다른 클래스에서 ASC에 접근할 수 있도록 함.
+ * 로비에서 고른 값(의상 조합·캐릭터 선택·준비 상태)도 여기에 두어 전 클라이언트가 보고, 맵을 넘어 게임플레이 레벨까지 이관함.
  */
 UCLASS()
 class CHAINBURST_API ACBPlayerState : public APlayerState, public IAbilitySystemInterface
@@ -93,11 +95,42 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_Cosmetics)
 	TArray<FGameplayTag> Cosmetics;
 
-	/** 준비 완료를 기다리는 중인 캐릭터. 구독 해제 대상 추적용. */
+	/** 준비 완료를 기다리는 중인 캐릭터. (준비되면 코스메틱 적용하기 위함) */
 	TWeakObjectPtr<ACBChaserCharacter> PendingReadyCharacter;
 
 	/** PendingReadyCharacter 의 준비 완료 델리게이트 구독 핸들. 유효하면 이미 대기 중이라는 뜻. */
 	FDelegateHandle CharacterSystemReadyHandle;
+#pragma endregion
+
+#pragma region Character Selection
+	/** 고른 캐릭터(무기). 확정은 서버가 하고, 이 값은 곧 게임모드가 스폰할 캐릭터 클래스를 결정할 때 사용함. */
+public:
+	/**
+	 * [서버] 검증을 통과한 캐릭터 선택을 반영하는 함수. (서버에서만 실행)
+	 * 서버에서는 OnRep 이 불리지 않으므로 직접 호출해 서버 호스트 위젯에도 반영.
+	 * @param InCharacterId 고른 캐릭터 태그 (빈 태그 = 선택 안 함, 게임모드 BP 의 기본 폰 클래스 유지)
+	 */
+	void Auth_SetSelectedCharacterId(const FGameplayTag& InCharacterId);
+
+	/** [Getter] 고른 캐릭터 태그 (게임모드가 스폰 클래스를 정할 때, 위젯이 선택 표시에 사용) */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Character")
+	FORCEINLINE FGameplayTag GetSelectedCharacterId() const { return SelectedCharacterId; }
+
+	/** 고른 캐릭터가 바뀌었음을 알리는 델리게이트. (선택 UI 에서 구독) */
+	UPROPERTY(BlueprintAssignable, Category = "ChainBurst|Character")
+	FCBOnCharacterSelectionChanged OnCharacterSelectionChanged;
+
+protected:
+	/** 선택이 바뀌었을 때 호출되는 콜백. 각 인스턴스가 로컬로 위젯에 알림. */
+	UFUNCTION()
+	void OnRep_SelectedCharacterId();
+
+	/**
+	 * 고른 캐릭터 태그 (빈 태그 = 선택 안 함).
+	 * 로비 선택 결과이며 CopyProperties 를 통해 게임플레이 레벨까지 이관됨.
+	 */
+	UPROPERTY(ReplicatedUsing = OnRep_SelectedCharacterId)
+	FGameplayTag SelectedCharacterId;
 #pragma endregion
 
 #pragma region Lobby

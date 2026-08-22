@@ -19,4 +19,9 @@ class CHAINBURST_API UCBHitReactAbility : public UCBEventActionAbility
 
 public:
 	UCBHitReactAbility();
+	
+protected:
+	//~ Begin UCBActionAbility Interface
+	virtual int32 SelectActionMontageIndex() const override;
+	//~ End UCBActionAbility Interface
 };

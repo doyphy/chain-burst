@@ -1,5 +1,6 @@
 // project
 #include "AbilitySystem/Abilities/Combat/CBHitReactAbility.h"
+#include "CBAbilitySystemLibrary.h"
 #include "CBGameplayTags.h"
 
 UCBHitReactAbility::UCBHitReactAbility()
@@ -15,4 +16,11 @@ UCBHitReactAbility::UCBHitReactAbility()
 
 	// Event.Combat.HitReact 이벤트로 자동 발동되도록 트리거 등록
 	RegisterEventTrigger(CBGameplayTags::Event_Combat_HitReact);
+}
+
+int32 UCBHitReactAbility::SelectActionMontageIndex() const
+{
+	// 전투 상태(Status.Combat.InCombat)면 전투 피격(인덱스 1), 비전투면 일반 피격(인덱스 0)
+	// 태그가 전 클라 복제(TagAndCountToAll)되므로 예측 클라/서버가 같은 인덱스를 계산한다
+	return UCBAbilitySystemLibrary::IsCombatMode(GetAvatarActorFromActorInfo()) ? 1 : 0;
 }

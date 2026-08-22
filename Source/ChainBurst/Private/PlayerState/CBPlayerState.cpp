@@ -137,6 +137,9 @@ void ACBPlayerState::Auth_SetReady(bool bInReady)
 // 준비 상태가 바뀌었을 때 호출되는 콜백
 void ACBPlayerState::OnRep_IsReady()
 {
+	// 이 플레이어의 준비 상태 변경을 방송. 준비 중 잠가야 하는 위젯이 각자 구독해 갱신함
+	OnPlayerReadyChanged.Broadcast(bIsReady);
+
 	const UWorld* World = GetWorld();
 	if (!World) return;
 

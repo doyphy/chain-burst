@@ -22,6 +22,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnConnectionFailed, const FText&,
 UDELEGATE() // BP에서도 사용 가능하도록 UDELEGATE() 선언
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCBOnLobbyReadyStateChanged, int32, ReadyCount, int32, TotalCount);
 
+/** 플레이어의 준비 상태가 바뀌었음. */
+UDELEGATE() 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnPlayerReadyChanged, bool, bIsReady);
+
 /** 게임이 시작되어 곧 게임플레이 레벨로 이동함. (로비 위젯이 스스로를 정리할 시점) */
 UDELEGATE() // BP에서도 사용 가능하도록 UDELEGATE() 선언
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnMatchStarting);

@@ -146,6 +146,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Lobby")
 	FORCEINLINE bool IsReady() const { return bIsReady; }
 
+	/**
+	 * 이 플레이어의 준비 상태가 바뀌었음을 알리는 델리게이트.
+	 * 준비 중에 잠가야 하는 위젯(무기 변경·의상 교체 등)이 각자 구독해 활성/비활성을 갱신함.
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "ChainBurst|Lobby")
+	FCBOnPlayerReadyChanged OnPlayerReadyChanged;
+
 protected:
 	/** 준비 상태가 바뀌었을 때 호출되는 콜백. */
 	UFUNCTION()

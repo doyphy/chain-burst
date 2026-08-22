@@ -9,7 +9,7 @@ void UCBAN_SendGameplayEventToOwner::Notify(USkeletalMeshComponent* MeshComp, UA
 	const FAnimNotifyEventReference& EventReference)
 {
 	Super::Notify(MeshComp, Animation, EventReference);
-
+	
 	if (!MeshComp) return;
 
 	// 애님 인스턴스 가져오기
@@ -20,6 +20,7 @@ void UCBAN_SendGameplayEventToOwner::Notify(USkeletalMeshComponent* MeshComp, UA
 	UAnimMontage* CurrentActiveMontage = AnimInstance->GetCurrentActiveMontage();
 	
 	// 이 노티파이를 부른 몽타주가 메인 몽타주가 아니라면
+	// 블렌드 타임에 호출할 경우 CurrentActiveMontage가 바뀌기 때문에 블렌드 타임에 노티파이 호출안하도록 주의.
 	if (Animation != CurrentActiveMontage)
 	{
 		return; 
@@ -43,5 +44,5 @@ void UCBAN_SendGameplayEventToOwner::Notify(USkeletalMeshComponent* MeshComp, UA
 				Character->Server_SendGameplayEvent(Owner, EventTag, Payload);
 			}
 		}
-	}
+	} 
 }

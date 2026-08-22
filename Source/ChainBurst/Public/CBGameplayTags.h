@@ -77,4 +77,5 @@ namespace  CBGameplayTags
 
 	/** GameplayCue Tags. */
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_PlayAction)
+	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_StopAction)
 }

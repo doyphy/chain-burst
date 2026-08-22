@@ -30,6 +30,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnPlayerReadyChanged, bool, bIsRe
 UDELEGATE() // BP에서도 사용 가능하도록 UDELEGATE() 선언
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnMatchStarting);
 
+/** [로컬] 현재 폰의 캐릭터 시스템 로드 완료 여부가 바뀌었음. (로딩 중 잠가야 하는 위젯이 구독) */
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnCharacterLoadedChanged, bool, bIsLoaded);
+
 /** 플레이어가 고른 캐릭터(무기)가 바뀌었음. (새로 고른 캐릭터 태그) */
 UDELEGATE()
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnCharacterSelectionChanged, FGameplayTag, CharacterId);

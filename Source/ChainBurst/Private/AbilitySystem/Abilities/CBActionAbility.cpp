@@ -73,17 +73,23 @@ void UCBActionAbility::PlayActionMontage()
 // 몽타주 종료 이벤트 대기 콜백 함수 (애님노티파이 수신 시 어빌리티 종료)
 void UCBActionAbility::OnActionEnded(FGameplayEventData Payload)
 {
-	// 몽타주 블렌드 아웃
-	if (UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo())
+	// 몽타주 정지 요청 (게임플레이 큐, 전 클라 동기화)
+	if (UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo())
 	{
-		ActionComp->StopMontage(0.25f);
+		// 태스크 콜백은 예측 윈도우 밖일 수 있으므로 명시적으로 연다.
+		// 없으면 소유 클라가 큐를 예측 실행하지 못해 서버 멀티캐스트를 기다리게 되고,
+		// 그만큼 클라 몽타주가 더 재생되어 루트 모션이 어긋날 수 있음.
+		FScopedPredictionWindow ScopedPrediction(CBASC, true);
+		
+		// 게임플레이 큐 실행 (몽타주 정지, 전 클라 동기화)
+		CBASC->ExecuteGameplayCue(CBGameplayTags::GameplayCue_StopAction, FGameplayCueParameters());
 	}
 
 	// 콤보 리셋 (몽타주가 끝까지 재생됨 → 체인 종료)
 	TryResetComboOnEnd();
 
 	// 어빌리티 정상 종료
-	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
 }
 
 // 폴백 타임아웃 콜백 함수 (애님노티파이가 없는 경우, 몽타주 길이만큼 대기 후 종료)

@@ -120,6 +120,17 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "ChainBurst|Character")
 	FCBOnCharacterSelectionChanged OnCharacterSelectionChanged;
 
+	/** [Getter] 현재 폰의 캐릭터 시스템 준비 여부 (위젯이 로딩 중 잠금 판단에 사용) */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Character")
+	FORCEINLINE bool IsCharacterLoaded() const { return bCharacterLoaded; }
+
+	/**
+	 * 현재 폰의 로드 완료 여부가 바뀌었음을 알리는 델리게이트.
+	 * 캐릭터 변경 시 로드 동안 잠가야 하는 위젯(준비 버튼 등)이 구독해 활성/비활성을 갱신함..
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "ChainBurst|Character")
+	FCBOnCharacterLoadedChanged OnCharacterLoadedChanged;
+
 protected:
 	/** 선택이 바뀌었을 때 호출되는 콜백. 각 인스턴스가 로컬로 위젯에 알림. */
 	UFUNCTION()
@@ -131,6 +142,12 @@ protected:
 	 */
 	UPROPERTY(ReplicatedUsing = OnRep_SelectedCharacterId)
 	FGameplayTag SelectedCharacterId;
+
+	/** 현재 폰의 준비 여부를 다시 판정하고, 값이 바뀌었을 때만 방송하는 함수. */
+	void Local_RefreshCharacterLoaded();
+
+	/** 현재 폰의 캐릭터 시스템 로드 완료 여부. */
+	bool bCharacterLoaded = false;
 #pragma endregion
 
 #pragma region Lobby

@@ -117,6 +117,9 @@ void ACBPlayerState::OnRep_Cosmetics()
 // 폰이 연결되는 시점에 호출되는 콜백. BeginPlay에서 구독함.
 void ACBPlayerState::HandlePawnSet(APlayerState* InPlayerState, APawn* InNewPawn, APawn* InOldPawn)
 {
+	// 폰이 바뀌었으므로 로드 완료 여부를 다시 판정.
+	Local_RefreshCharacterLoaded();
+
 	// 코스메틱 적용
 	ApplyCosmeticsWhenReady();
 }
@@ -160,6 +163,9 @@ void ACBPlayerState::ApplyCosmeticsWhenReady()
 	// 준비가 끝났으면 바로 적용
 	if (ChaserCharacter->IsCharacterSystemReady())
 	{
+		// 준비 완료 델리게이트를 거치지 않는 경로이므로 여기서도 로드 상태를 갱신해야 한다
+		Local_RefreshCharacterLoaded();
+
 		ApplyCosmeticsToPawn();
 		return;
 	}
@@ -192,8 +198,26 @@ void ACBPlayerState::HandleCharacterSystemReady()
 	PendingReadyCharacter.Reset();
 	CharacterSystemReadyHandle.Reset();
 
+	// 로드 완료를 위젯에 알림 (준비 버튼 잠금 해제)
+	Local_RefreshCharacterLoaded();
+
 	// 코스메틱 적용
 	ApplyCosmeticsToPawn();
+}
+
+// 현재 폰의 준비 여부를 다시 판정하고, 값이 바뀌었을 때만 방송
+void ACBPlayerState::Local_RefreshCharacterLoaded()
+{
+	// 폰이 없으면(재스폰 사이의 공백 등) 로드되지 않은 것으로 본다
+	const ACBBaseCharacter* CBCharacter = Cast<ACBBaseCharacter>(GetPawn());
+	const bool bNewLoaded = CBCharacter && CBCharacter->IsCharacterSystemReady();
+
+	// 값이 그대로면 방송하지 않음 (위젯이 같은 상태로 반복 갱신되는 것을 막음)
+	if (bCharacterLoaded == bNewLoaded) return;
+
+	bCharacterLoaded = bNewLoaded;
+
+	OnCharacterLoadedChanged.Broadcast(bCharacterLoaded);
 }
 
 void ACBPlayerState::ApplyCosmeticsToPawn()

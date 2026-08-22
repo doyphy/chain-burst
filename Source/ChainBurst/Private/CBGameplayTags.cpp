@@ -76,4 +76,5 @@ namespace CBGameplayTags
 
 	/** GameplayCue Tags. */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_PlayAction, "GameplayCue.PlayAction", "액션 재생 GameplayCue 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_StopAction, "GameplayCue.StopAction", "액션 정지 GameplayCue 태그")
 }

@@ -63,6 +63,17 @@ bool ACBBaseCharacter::RequestPlayMontage(const FGameplayTag InActionTag, int32 
 	return CBActionComponent->RequestPlayMontage(InActionTag, ComboIndex);
 }
 
+void ACBBaseCharacter::RequestStopMontage(float BlendOutTime /* = 0.f */)
+{
+	if (!CBActionComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] ActionComponent 가 없음"), *GetName());
+		return;
+	}
+
+	CBActionComponent->StopMontage(BlendOutTime);
+}
+
 UCBCombatComponent* ACBBaseCharacter::GetCBCombatComponent() const
 {
 	return nullptr;

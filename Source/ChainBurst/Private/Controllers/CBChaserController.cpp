@@ -94,6 +94,14 @@ void ACBChaserController::Server_RequestToggleReady_Implementation()
 	ACBPlayerState* CBPlayerState = GetPlayerState<ACBPlayerState>();
 	if (!CBPlayerState) return;
 
+	// 캐릭터 로드가 끝나기 전의 준비 요청은 무시.
+	const ACBBaseCharacter* CBCharacter = Cast<ACBBaseCharacter>(GetPawn());
+	if (!CBCharacter || !CBCharacter->IsCharacterSystemReady())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 캐릭터 로드 중에 준비 요청을 받아 무시함"), *GetNameSafe(this));
+		return;
+	}
+
 	// 현재 준비 상태를 뒤집음
 	const bool bNewReady = !CBPlayerState->IsReady();
 

@@ -18,7 +18,7 @@ class UCBActionComponent;
 class UCBNoiseEmitterComponent;
 class UCBUIComponent;
 
-DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady)
+DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady);
 
 /** 캐릭터 초기화 상태 */
 enum class ECBSystemState : uint8
@@ -101,6 +101,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Action")
 	bool RequestPlayMontage(const FGameplayTag InActionTag, int32 ComboIndex = 0);
+
+	/**
+	 * 외부(게임플레이 큐)에서 몽타주 정지를 요청하는 함수
+	 * @param BlendOutTime 블렌드 아웃 시간. (기본 0.f)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Action")
+	void RequestStopMontage(float BlendOutTime = 0.f);
 
 	//~ Begin ICBCombatInterface Interface.
 	virtual UCBCombatComponent* GetCBCombatComponent() const override;

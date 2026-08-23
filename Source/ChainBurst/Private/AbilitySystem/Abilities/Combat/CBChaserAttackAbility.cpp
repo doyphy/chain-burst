@@ -49,6 +49,13 @@ void UCBChaserAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Ha
 		return;
 	}
 
+	// 쿨다운 GE 적용 (쿨다운 중 재활성화는 CanActivateAbility가 차단)
+	if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+		return;
+	}
+
 	// 몽타주 재생
 	PlayActionMontage();
 	

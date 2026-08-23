@@ -10,6 +10,10 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Jump, "Input.Action.Jump", "캐릭터 점프 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Camera_Zoom, "Input.Action.Camera.Zoom", "카메라 줌 인/아웃")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_Attack_Basic, "Input.Action.Combat.Attack.Basic", "기본 공격 입력")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_Attack_Skill_A, "Input.Action.Combat.Attack.Skill.A", "스킬 공격 A 입력")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_Attack_Skill_B, "Input.Action.Combat.Attack.Skill.B", "스킬 공격 B 입력")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_Attack_Skill_C, "Input.Action.Combat.Attack.Skill.C", "스킬 공격 C 입력")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_Attack_Skill_D, "Input.Action.Combat.Attack.Skill.D", "스킬 공격 D 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_EquipWeapon, "Input.Action.Combat.EquipWeapon", "무기 장착 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_UnequipWeapon, "Input.Action.Combat.UnequipWeapon", "무기 해제 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_PauseMenu, "Input.Action.PauseMenu", "일시정지 메뉴 입력")
@@ -50,6 +54,10 @@ namespace CBGameplayTags
 
 	/** Ability Tags. */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Basic, "Ability.Combat.Attack.Basic", "기본 공격 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_A, "Ability.Combat.Attack.Skill.A", "스킬 공격 A 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_B, "Ability.Combat.Attack.Skill.B", "스킬 공격 B 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_C, "Ability.Combat.Attack.Skill.C", "스킬 공격 C 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_D, "Ability.Combat.Attack.Skill.D", "스킬 공격 D 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_EquipWeapon, "Ability.Combat.EquipWeapon", "무기 장착 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_UnequipWeapon, "Ability.Combat.UnequipWeapon", "무기 해제 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Dash, "Ability.Movement.Dash", "대시 어빌리티 태그")
@@ -60,9 +68,12 @@ namespace CBGameplayTags
 	/** Action Tags. (액션에 맞는 몽타주 재생에 사용) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action, "Action", "액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat, "Action.Combat", "전투 액션 태그")
-	
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Attack, "Action.Combat.Attack", "공격 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Attack_Basic, "Action.Combat.Attack.Basic", "기본 공격 액션 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Attack_Skill_A, "Action.Combat.Attack.Skill.A", "스킬 공격 A 액션 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Attack_Skill_B, "Action.Combat.Attack.Skill.B", "스킬 공격 B 액션 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Attack_Skill_C, "Action.Combat.Attack.Skill.C", "스킬 공격 C 액션 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Attack_Skill_D, "Action.Combat.Attack.Skill.D", "스킬 공격 D 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Block, "Action.Combat.Block", "방어 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_HitReact, "Action.Combat.HitReact", "피격 반응 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Skill, "Action.Combat.Skill", "스킬 액션 태그")
@@ -72,6 +83,11 @@ namespace CBGameplayTags
 
 	/** Cooldown Tags. (어빌리티 쿨다운 GE의 GrantedTags에 사용) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Movement_Dash, "Cooldown.Movement.Dash", "대시 쿨다운 상태")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Combat_Attack_Basic, "Cooldown.Combat.Attack.Basic", "기본 공격 쿨다운 상태")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Combat_Attack_Skill_A, "Cooldown.Combat.Attack.Skill.A", "스킬 공격 A 쿨다운 상태")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Combat_Attack_Skill_B, "Cooldown.Combat.Attack.Skill.B", "스킬 공격 B 쿨다운 상태")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Combat_Attack_Skill_C, "Cooldown.Combat.Attack.Skill.C", "스킬 공격 C 쿨다운 상태")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Combat_Attack_Skill_D, "Cooldown.Combat.Attack.Skill.D", "스킬 공격 D 쿨다운 상태")
 
 	/** Effect Tags. (GE의 동작 의도를 선언하는 태그) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Effect_HitReact, "Effect.HitReact", "이 GE가 피격 반응을 유발함을 선언하는 태그 (Opt-in)")

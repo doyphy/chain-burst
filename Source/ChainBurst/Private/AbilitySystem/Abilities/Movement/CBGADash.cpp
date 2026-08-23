@@ -5,6 +5,8 @@
 
 // engine
 #include "AbilitySystemComponent.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 UCBGADash::UCBGADash()
 {
@@ -60,6 +62,27 @@ void UCBGADash::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 int32 UCBGADash::SelectActionMontageIndex() const
 {
 	// 전투 상태(Status.Combat.InCombat)면 전투 대시(인덱스 1), 비전투면 일반 대시(인덱스 0)
-	// 태그가 전 클라 복제(TagAndCountToAll)되므로 예측 클라/서버가 같은 인덱스를 계산한다
+	// 태그가 전 클라 복제(TagAndCountToAll)되므로 예측 클라/서버가 같은 인덱스를 계산
 	return UCBAbilitySystemLibrary::IsCombatMode(GetAvatarActorFromActorInfo()) ? 1 : 0;
+}
+
+// 몽타주 재생 큐 파라미터에 추가 태그를 붙임
+void UCBGADash::BuildActionCueParameters(FGameplayCueParameters& CueParams)
+{
+	ACharacter* Avatar = Cast<ACharacter>(GetAvatarActorFromActorInfo());
+	if (!Avatar || !Avatar->GetCharacterMovement())
+	{
+		return;
+	}
+
+	// 대시 방향 = 현재 이동 입력 방향(CMC 가속도).
+	FVector Direction = Avatar->GetCharacterMovement()->GetCurrentAcceleration().GetSafeNormal();
+	if (Direction.IsNearlyZero())
+	{
+		Direction = Avatar->GetActorForwardVector();
+	}
+
+	// 모션 워핑 타겟(위치+방향)
+	CueParams.Location = Avatar->GetActorLocation() + Direction * DashDistance;
+	CueParams.Normal = Direction;
 }

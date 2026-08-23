@@ -18,7 +18,7 @@ class UAbilityTask_WaitDelay;
  *
  * 자식 확장 지점:
  *   - SelectActionMontageIndex()   : 비콤보 액션의 재생 인덱스 결정 (기본 0, 예: 대시의 전투/비전투 분기)
- *   - BuildActionCueParameters()   : 큐 파라미터에 추가 태그를 붙임 (예: 피격 방향 등)
+ *   - BuildActionCueParameters()   : 큐 파라미터에 추가 데이터를 실음 (예: 피격 방향, 모션 워핑 타겟 위치 등)
  *   - OnActionMontageStarted()     : 몽타주 재생 직후 후처리 (예: 입력 대기 태스크 등록)
  *   - ShouldResetComboOnEnd()      : 액션 종료 시 콤보 인덱스 초기화 여부 (기본: IsCombo)
  */

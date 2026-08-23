@@ -14,7 +14,7 @@ public class ChainBurst : ModuleRules
 			"GameplayTags", "GameplayAbilities", "GameplayTasks", "UMG", "AIModule"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore", "EngineSettings" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore", "EngineSettings", "MotionWarping" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "CoreOnline", "OnlineServicesInterface", "Sockets" });
 	}

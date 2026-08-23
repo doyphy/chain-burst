@@ -26,6 +26,12 @@ void UCBCharacterRotationComponent::TickComponent(float DeltaTime, enum ELevelTi
 
 	if (!GetCachedCharacter(CachedCharacter) || !GetCachedCMC(CachedMovementComp)) return;
 
+	// 루트모션 재생 중엔 회전하지 않음. (루트모션은 그 프레임의 액터 회전으로 회전)
+	if (CachedCharacter->IsPlayingRootMotion())
+	{
+		return;
+	}
+
 	// 현재 개이트 (회전 타겟 선택 + 회전 보간 속도에 공통 사용)
 	const FGameplayTag GaitTag = GetCurrentGaitTag();
 

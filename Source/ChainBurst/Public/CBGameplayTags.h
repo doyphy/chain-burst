@@ -19,6 +19,8 @@ namespace  CBGameplayTags
 	/** Item Tags. */
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Sword)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Dagger)
+	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_GreatSword)
+	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Spear)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Cosmetic_None)
 	
 	/** Status Tags. (캐릭터 상태 — 소유자·복제 규칙은 Docs/Tech/GameplayTags.md 참고) */

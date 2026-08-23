@@ -17,6 +17,8 @@ namespace CBGameplayTags
 	/** Item Tags. */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Weapon_Sword, "Item.Weapon.Sword", "무기 태그 - 검")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Weapon_Dagger, "Item.Weapon.Dagger", "무기 태그 - 단검")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Weapon_GreatSword, "Item.Weapon.GreatSword", "무기 태그 - 대검")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Weapon_Spear, "Item.Weapon.Spear", "무기 태그 - 창")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Cosmetic_None, "Item.Cosmetic.None", "의상 태그 - 해당 부위를 벗음")
 	
 	/** Status Tags. (캐릭터 상태 — 소유자·복제 규칙은 Docs/Tech/GameplayTags.md 참고) */

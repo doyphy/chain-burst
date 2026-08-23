@@ -4,6 +4,9 @@
 #include "CBGameplayTags.h"
 #include "Characters/CBBaseCharacter.h"
 
+// engine
+#include "MotionWarpingComponent.h"
+
 bool UCBGCN_PlayAction::OnExecute_Implementation(AActor* MyTarget, const FGameplayCueParameters& Parameters) const
 {
 	FGameplayTagContainer SourceTags = Parameters.AggregatedSourceTags;
@@ -27,6 +30,18 @@ bool UCBGCN_PlayAction::OnExecute_Implementation(AActor* MyTarget, const FGamepl
 	{
 		if (ACBBaseCharacter* Char = Cast<ACBBaseCharacter>(MyTarget))
 		{
+			// 파라미터에서 모션 워핑 타겟 위치가 있는지 확인
+			if (!Parameters.Location.IsZero())
+			{
+				// 모션 워핑 컴포넌트 가져오기
+				if (UMotionWarpingComponent* MotionWarpingComp = Char->GetMotionWarpingComponent())
+				{
+					// 모션 워핑 타겟 등록, 워프 타겟 이름은 액션 태그 자체를 사용
+					MotionWarpingComp->AddOrUpdateWarpTargetFromLocationAndRotation(
+						ActionTag.GetTagName(), Parameters.Location, Parameters.Normal.Rotation());
+				}
+			}
+
 			// 몽타주 재생 요청 (받은 인덱스로 클립 재생)
 			Char->RequestPlayMontage(ActionTag, ComboIndex);
 		}

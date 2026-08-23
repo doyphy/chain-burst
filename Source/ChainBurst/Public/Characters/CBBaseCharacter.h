@@ -17,6 +17,7 @@ class UCBLocomotionProcessor;
 class UCBActionComponent;
 class UCBNoiseEmitterComponent;
 class UCBUIComponent;
+class UMotionWarpingComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady);
 
@@ -92,6 +93,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Perception")
 	TObjectPtr<UCBNoiseEmitterComponent> CBNoiseEmitterComponent = nullptr;
 
+	/** 모션 워핑 컴포넌트 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Components|Movement")
+	TObjectPtr<UMotionWarpingComponent> CBMotionWarpingComponent = nullptr;
+
 public:
 	/**
 	 * 외부(어빌리티, 게임플레이 큐 등)에서 몽타주 재생을 요청하는 함수
@@ -118,6 +123,7 @@ public:
 	//~ End ICBUIInterface Interface.
 
 	FORCEINLINE UCBActionComponent* GetCBActionComponent() const { return CBActionComponent.Get(); }
+	FORCEINLINE UMotionWarpingComponent* GetMotionWarpingComponent() const { return CBMotionWarpingComponent.Get(); }
 #pragma endregion
 
 #pragma region Movement

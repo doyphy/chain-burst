@@ -11,6 +11,7 @@
 #include "AbilitySystemBlueprintLibrary.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "MotionWarpingComponent.h"
 
 ACBBaseCharacter::ACBBaseCharacter()
 {
@@ -30,6 +31,7 @@ ACBBaseCharacter::ACBBaseCharacter()
 	CBActionComponent = CreateDefaultSubobject<UCBActionComponent>(TEXT("CBActionComponent"));
 	CBUIComponent = CreateDefaultSubobject<UCBUIComponent>(TEXT("CBUIComponent"));
 	CBNoiseEmitterComponent = CreateDefaultSubobject<UCBNoiseEmitterComponent>(TEXT("CBNoiseEmitterComponent"));
+	CBMotionWarpingComponent = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("CBMotionWarpingComponent"));
 }
 
 UAbilitySystemComponent* ACBBaseCharacter::GetAbilitySystemComponent() const

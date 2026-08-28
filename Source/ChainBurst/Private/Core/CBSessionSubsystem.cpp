@@ -31,7 +31,8 @@ const FName UCBSessionSubsystem::SessionName = TEXT("ChainBurstSession");
 const FName UCBSessionSubsystem::SessionSchemaName = TEXT("ChainBurstSessionSchema");
 
 // 호스트 주소·방 이름을 실어 보내는 세션 속성 키.
-// 제공자마다 주소를 얻는 방법이 달라, 키 하나로 통일해 조회 코드를 하나로 유지함
+// 서비스 제공자마다 주소를 만드는 방식이 달라, 키 하나로 통일해 조회 코드를 하나로 유지함
+// LAN : 192.168.x.x, EOS : [EOS:0002aeeb5b2d...]
 const FName UCBSessionSubsystem::HostAddressSettingKey = TEXT("CB_HostAddress");
 const FName UCBSessionSubsystem::DisplayNameSettingKey = TEXT("CB_DisplayName");
 

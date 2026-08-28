@@ -182,6 +182,25 @@ void UCBCharacterAnimInstance::OnCombatTagChanged(const FGameplayTag InTag, int3
 	bIsCombatMode = (InCount > 0);
 }
 
+// 애님 인스턴스 정리 시점. ASC에 걸어둔 태그 이벤트 구독을 해제한다.
+void UCBCharacterAnimInstance::NativeUninitializeAnimation()
+{
+	// 이 시점은 UWorld::DestroyActor의 UnregisterAllComponents 단계라 캐릭터가 아직 살아있음.
+	if (CachedCharacter.IsValid())
+	{
+		if (UCBAbilitySystemComponent* ASC = CachedCharacter->GetCBAbilitySystemComponent())
+		{
+			// 구독 해제
+			ASC->RegisterGameplayTagEvent(
+				CBGameplayTags::Status_Combat_InCombat,
+				EGameplayTagEventType::NewOrRemoved)
+			.RemoveAll(this);
+		}
+	}
+
+	Super::NativeUninitializeAnimation();
+}
+
 void UCBCharacterAnimInstance::OnCharacterSystemReady()
 {
 	// 애니메이션 데이터 초기화 (ASC 준비 완료)

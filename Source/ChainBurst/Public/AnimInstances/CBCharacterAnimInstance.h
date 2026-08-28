@@ -36,6 +36,8 @@ protected:
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 	/** 워커 스레드에서 실행되는 업데이트 함수 (UObject 접근 불가 (외부 접근 불가, 내부 데이터로만), 매우 빠름)*/
 	virtual void NativeThreadSafeUpdateAnimation(float DeltaSeconds) override;
+	/** 애님 인스턴스 정리 시점 — ASC에 걸어둔 태그 이벤트 구독을 해제 */
+	virtual void NativeUninitializeAnimation() override;
 	//~ End UAnimInstance Interface
 
 #pragma region References

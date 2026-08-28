@@ -83,6 +83,7 @@ void ACBBaseWeapon::AttachToHand(USceneComponent* TargetMesh)
 	// 클라이언트의 내 캐릭터일 경우 서버로 부착 요청
 	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
+		// 복제 액터라 서버에서 부착하면 전 클라이언트(시뮬프록시)에 반영됨.
 		Server_AttachToHand(TargetMesh);
 	}
 }
@@ -110,6 +111,7 @@ void ACBBaseWeapon::AttachToSheath(USceneComponent* TargetMesh)
 	// 클라이언트의 내 캐릭터일 경우 서버로 부착 요청
 	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
+		// 복제 액터라 서버에서 부착하면 전 클라이언트(시뮬프록시)에 반영됨.
 		Server_AttachToSheath(TargetMesh);
 	}
 }
@@ -138,6 +140,7 @@ FVector ACBBaseWeapon::GetWeaponTipLocation() const
 	return GetActorLocation(); 
 }
 
+#if WITH_EDITOR
 void ACBBaseWeapon::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
@@ -168,3 +171,4 @@ void ACBBaseWeapon::PostEditChangeProperty(FPropertyChangedEvent& PropertyChange
 		}
 	}
 }
+#endif

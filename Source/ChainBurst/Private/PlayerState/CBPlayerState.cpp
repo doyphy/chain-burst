@@ -12,6 +12,12 @@
 
 ACBPlayerState::ACBPlayerState()
 {
+	// 복제 갱신 주기 상향
+	// APlayerState 기본값은 1Hz(이름·점수·핑 기준)인데, 이 PlayerState는 ASC·AttributeSet을 소유함.
+	// 복제 컴포넌트는 자기 주기를 갖지 않고 소유 액터를 따르므로, 기본값이면 ASC의 태그·어트리뷰트가
+	// 시뮬 프록시의 복제가 늦게 도착하기에 갱신 주기를 높여서 복제 지연을 줄임
+	SetNetUpdateFrequency(30.f);
+
 	// ASC 생성
 	CBAbilitySystemComponent = CreateDefaultSubobject<UCBAbilitySystemComponent>(TEXT("CBAbilitySystemComponent"));
 	// 복제 설정

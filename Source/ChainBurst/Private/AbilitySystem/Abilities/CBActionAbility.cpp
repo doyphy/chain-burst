@@ -88,7 +88,7 @@ void UCBActionAbility::OnActionEnded(FGameplayEventData Payload)
 	// 콤보 리셋 (몽타주가 끝까지 재생됨 → 체인 종료)
 	TryResetComboOnEnd();
 
-	// 어빌리티 정상 종료
+	// 어빌리티 정상 종료 — 복제하지 않음.(bReplicateEndAbility = false).
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
 }
 
@@ -98,8 +98,8 @@ void UCBActionAbility::OnDelayFinished()
 	// 콤보 리셋 (몽타주 길이만큼 지남 = 몽타주 끝까지 재생됨 → 체인 종료)
 	TryResetComboOnEnd();
 
-	// 어빌리티 종료
-	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+	// 어빌리티 정상 종료 — 복제하지 않음.(bReplicateEndAbility = false).
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
 }
 
 float UCBActionAbility::CurrentActionDuration() const

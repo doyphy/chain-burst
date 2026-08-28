@@ -514,14 +514,8 @@ void UCBCombatComponent::OnEnterCombatMode()
 		}
 	}
 
-	// 전투 상태 태그 추가 (로컬 적용)
-	ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
-
-	// 서버라면 태그 추가 (클라이언트에 복제)
-	if (GetOwner()->HasAuthority())
-	{
-		ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagAndCountToAll);
-	}
+	// 전투 상태 태그 추가
+	ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagOnly);
 }
 
 void UCBCombatComponent::OnExitCombatMode()
@@ -547,14 +541,8 @@ void UCBCombatComponent::OnExitCombatMode()
 		}
 	}
 
-	// 전투 상태 태그 제거 (로컬 적용)
-	ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat);
-
-	// 서버라면 태그 제거 (클라이언트에 복제)
-	if (GetOwner()->HasAuthority())
-	{
-		ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagAndCountToAll);
-	}
+	// 전투 상태 태그 제거
+	ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagOnly);
 }
 
 void UCBCombatComponent::ProcessHit(const FGameplayAbilityTargetDataHandle& TargetDataHandle)

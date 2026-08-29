@@ -2,11 +2,13 @@
 #include "AbilitySystem/Abilities/Combat/CBChaserAttackAbility.h"
 #include "CBGameplayTags.h"
 #include "Components/Combat/CBCombatComponent.h"
+#include "Components/Animation/CBActionComponent.h"
 #include "CBAbilitySystemLibrary.h"
 
 // engine
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "AbilitySystemComponent.h"
+#include "GameplayPrediction.h"
 
 UCBChaserAttackAbility::UCBChaserAttackAbility()
 {
@@ -109,6 +111,65 @@ void UCBChaserAttackAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
 	{
 		CombatComp->StopWeaponTrace();
+	}
+}
+
+// 콤보 액션이면 CombatComponent의 콤보 인덱스를 전진시켜 재생할 인덱스를 가져옴.
+int32 UCBChaserAttackAbility::SelectActionMontageIndex()
+{
+	if (!IsCombo)
+	{
+		return 0;
+	}
+
+	UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo();
+	if (!CombatComp)
+	{
+		return 0;
+	}
+
+	// 최대 콤보 수 = 이 액션 태그에 등록된 몽타주 개수
+	int32 MaxComboCount = 0;
+	if (UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo())
+	{
+		MaxComboCount = ActionComp->GetMontageCount(BoundActionTag);
+	}
+
+	// 예측 키를 함께 넘겨, 거부됐을 때 정확히 이 전진만 되돌릴 수 있게 한다.
+	FPredictionKey ActivationKey = CurrentActivationInfo.GetActivationPredictionKey();
+	const int32 KeyValue = ActivationKey.Current;
+	const int32 PlayIndex = CombatComp->AdvanceCombo(BoundActionTag, MaxComboCount, KeyValue);
+
+	// 만약 현재 어빌리티의 예측키가 서버에서 활성화 거부되면 콤보를 되돌림.
+	// 서버는 등록하지 않음.
+	if (!HasAuthority(&CurrentActivationInfo))
+	{
+		// 현재 어빌리티가 서버에서 거부될 경우 델리게이트 등록
+		TWeakObjectPtr<UCBCombatComponent> WeakCombat(CombatComp);
+		ActivationKey.NewRejectedDelegate().BindWeakLambda(this, [WeakCombat, KeyValue]()
+		{
+			// 이전 콤보로 돌아가기
+			if (UCBCombatComponent* Comp = WeakCombat.Get())
+			{
+				Comp->RollbackCombo(KeyValue);
+			}
+		});
+	}
+
+	return PlayIndex;
+}
+
+// 액션이 끝났을 때(정상·폴백·캔슬) 콤보 체인을 종료한다.
+void UCBChaserAttackAbility::CleanupActionState()
+{
+	if (!IsCombo)
+	{
+		return;
+	}
+
+	if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
+	{
+		CombatComp->ResetCombo();
 	}
 }
 

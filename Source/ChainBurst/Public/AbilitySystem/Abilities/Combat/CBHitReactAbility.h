@@ -22,6 +22,6 @@ public:
 	
 protected:
 	//~ Begin UCBActionAbility Interface
-	virtual int32 SelectActionMontageIndex() const override;
+	virtual int32 SelectActionMontageIndex() override;
 	//~ End UCBActionAbility Interface
 };

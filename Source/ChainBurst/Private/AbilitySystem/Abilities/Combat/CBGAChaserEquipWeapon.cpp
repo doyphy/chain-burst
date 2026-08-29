@@ -71,7 +71,7 @@ void UCBGAChaserEquipWeapon::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 
-int32 UCBGAChaserEquipWeapon::SelectActionMontageIndex() const
+int32 UCBGAChaserEquipWeapon::SelectActionMontageIndex()
 {
 	// 개이트별 장착 몽타주 분기 — Idle=0, Walk=1, Run/Sprint=2
 	return UCBAbilitySystemLibrary::GetGaitMontageIndex(GetAvatarActorFromActorInfo());

@@ -244,11 +244,20 @@ public:
 	/**
 	 * 콤보를 한 단계 전진시키고 이번에 재생할 인덱스를 반환.
 	 * 다른 액션 태그로 전환되거나 인덱스가 최대치 이상이면 리셋 후 진행.
-	 * @param InActionTag   콤보 액션 태그
-	 * @param MaxComboCount 이 액션의 최대 콤보 수(몽타주 개수). 인덱스가 이 값 이상이면 리셋.
+	 * @param InActionTag    콤보 액션 태그
+	 * @param MaxComboCount  이 액션의 최대 콤보 수(몽타주 개수). 인덱스가 이 값 이상이면 리셋.
+	 * @param InPredictionKey 이 전진을 일으킨 활성화의 예측 키. 거부 시 RollbackCombo가 대조에 사용.
 	 * @return 이번에 재생할 콤보 인덱스
 	 */
-	int32 AdvanceCombo(const FGameplayTag& InActionTag, int32 MaxComboCount);
+	int32 AdvanceCombo(const FGameplayTag& InActionTag, int32 MaxComboCount, int32 InPredictionKey);
+
+	/**
+	 * 예측이 거부됐을 때 콤보를 전진 직전 상태로 되돌린다 (소유 클라 전용).
+	 * 0으로 리셋하면 안 된다 — 서버는 전진 직전 값에 머물러 있으므로 방향만 바뀐 채 계속 어긋난다.
+	 * @param InPredictionKey 거부된 활성화의 예측 키. 스냅샷을 만든 활성화와 다르면 되돌리지 않는다.
+	 * @return 실제로 되돌렸으면 true
+	 */
+	bool RollbackCombo(int32 InPredictionKey);
 
 	/** 콤보 인덱스·액션 태그 초기화 (어빌리티 종료/캔슬 시 호출) */
 	void ResetCombo();
@@ -262,5 +271,12 @@ private:
 
 	/** 현재 콤보가 진행 중인 액션 태그 (태그 전환 시 리셋 판단용) */
 	FGameplayTag CurrentComboActionTag;
+
+	/** AdvanceCombo() 직전 상태 (예측 거부 시 되돌리기용) */
+	int32 PrevComboIndex = 0;
+	FGameplayTag PrevComboActionTag;
+
+	/** 스냅샷을 만든 활성화의 예측 키 (0이면 스냅샷 없음/서버) */
+	int32 PrevComboPredictionKey = 0;
 #pragma endregion
 };

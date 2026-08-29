@@ -30,7 +30,7 @@ protected:
 	//~ End UGameplayAbility Interface
 
 	//~ Begin UCBActionAbility Interface
-	virtual int32 SelectActionMontageIndex() const override;
+	virtual int32 SelectActionMontageIndex() override;
 	virtual void BuildActionCueParameters(FGameplayCueParameters& CueParams) override;
 	//~ End UCBActionAbility Interface
 

@@ -59,7 +59,7 @@ void UCBGADash::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	}
 }
 
-int32 UCBGADash::SelectActionMontageIndex() const
+int32 UCBGADash::SelectActionMontageIndex()
 {
 	// 전투 상태(Status.Combat.InCombat)면 전투 대시(인덱스 1), 비전투면 일반 대시(인덱스 0)
 	// 태그가 전 클라 복제(TagAndCountToAll)되므로 예측 클라/서버가 같은 인덱스를 계산

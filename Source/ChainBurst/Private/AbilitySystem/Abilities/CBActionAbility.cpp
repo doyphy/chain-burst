@@ -2,7 +2,6 @@
 #include "AbilitySystem/Abilities/CBActionAbility.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Animation/CBActionComponent.h"
-#include "Components/Combat/CBCombatComponent.h"
 #include "CBGameplayTags.h"
 
 // engine
@@ -20,29 +19,8 @@ void UCBActionAbility::PlayActionMontage()
 		return;
 	}
 	
-	// 재생 인덱스 결정
-	// 비콤보 액션은 자식 훅(기본 0) - SelectActionMontageIndex()
-	int32 MontageIndex = SelectActionMontageIndex();
-
-	// 콤보 액션는 CombatComponent가 전진시킨 콤보 인덱스 - AdvanceCombo()
-	if (IsCombo)
-	{
-		// 컴뱃 컴포넌트 가져오기
-		if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
-		{
-			int32 MaxComboCount = 0;
-
-			// 액션 컴포넌트 가져오기
-			if (UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo())
-			{
-				// 최대 콤보 수 가져오기 (몽타주 개수)
-				MaxComboCount = ActionComp->GetMontageCount(BoundActionTag);
-			}
-
-			// 콤보 인덱스 증가 및 이번에 재생할 콤보 인덱스 가져오기
-			MontageIndex = CombatComp->AdvanceCombo(BoundActionTag, MaxComboCount);
-		}
-	}
+	// 재생 인덱스 결정 (자식 훅. 기본 0, 콤보 액션은 자식이 콤보 인덱스를 전진시켜 반환)
+	const int32 MontageIndex = SelectActionMontageIndex();
 
 	// 게임플레이 큐 파라미터 구성 (재생할 액션 태그 + 재생 인덱스)
 	FGameplayCueParameters CueParams;
@@ -85,8 +63,8 @@ void UCBActionAbility::OnActionEnded(FGameplayEventData Payload)
 		CBASC->ExecuteGameplayCue(CBGameplayTags::GameplayCue_StopAction, FGameplayCueParameters());
 	}
 
-	// 콤보 리셋 (몽타주가 끝까지 재생됨 → 체인 종료)
-	TryResetComboOnEnd();
+	// 자식 상태 정리 (몽타주가 끝까지 재생됨 → 체인 종료)
+	CleanupActionState();
 
 	// 어빌리티 정상 종료 — 복제하지 않음.(bReplicateEndAbility = false).
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
@@ -95,8 +73,8 @@ void UCBActionAbility::OnActionEnded(FGameplayEventData Payload)
 // 폴백 타임아웃 콜백 함수 (애님노티파이가 없는 경우, 몽타주 길이만큼 대기 후 종료)
 void UCBActionAbility::OnDelayFinished()
 {
-	// 콤보 리셋 (몽타주 길이만큼 지남 = 몽타주 끝까지 재생됨 → 체인 종료)
-	TryResetComboOnEnd();
+	// 자식 상태 정리 (몽타주 길이만큼 지남 = 몽타주 끝까지 재생됨 → 체인 종료)
+	CleanupActionState();
 
 	// 어빌리티 정상 종료 — 복제하지 않음.(bReplicateEndAbility = false).
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
@@ -116,24 +94,11 @@ void UCBActionAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
 	bool bReplicateEndAbility, bool bWasCancelled)
 {
-	// 캔슬로 끊긴 경우 콤보 리셋 (정상 종료 리셋은 OnActionEnded/OnDelayFinished가 담당,
-	// 콤보 이어가기는 bWasCancelled=false로 종료되므로 여기에 안 걸림)
+	// 캔슬로 끊긴 경우 자식 상태 정리 (정상 종료 정리는 OnActionEnded/OnDelayFinished가 담당)
 	if (bWasCancelled)
 	{
-		TryResetComboOnEnd();
+		CleanupActionState();
 	}
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
-}
-
-void UCBActionAbility::TryResetComboOnEnd()
-{
-	// 콤보 액션일 때만 CombatComponent에 콤보 리셋 요청
-	if (ShouldResetComboOnEnd())
-	{
-		if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
-		{
-			CombatComp->ResetCombo();
-		}
-	}
 }

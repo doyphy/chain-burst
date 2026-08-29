@@ -156,6 +156,12 @@ private:
 	void Auth_UpdateAdvertisedSession(UE::Online::FSessionSettingsUpdate&& InMutations);
 
 	/**
+	 * [로컬][LAN전용] 온라인 서비스 인스턴스를 파괴해 세션 캐시를 비움.
+	 * 검색으로 발견한 세션 캐시를 정리하기 위함. 정리안하면 LAN환경에서 세션을 광고할 때 세션 캐시까지 같이 광고함.
+	 */
+	void Local_ResetOnlineServices();
+
+	/**
 	 * 세션이 LAN 전용인지.
 	 * Null 제공자는 LAN 비콘으로만 검색되므로 true 여야 하고, EOS 는 false 여야 함.
 	 */

@@ -21,7 +21,7 @@ protected:
 	//~ End UGameplayAbility Interface
 
 	//~ Begin UCBActionAbility Interface
-	virtual int32 SelectActionMontageIndex() const override;
+	virtual int32 SelectActionMontageIndex() override;
 	//~ End UCBActionAbility Interface
 
 	/** 입력 확인 시 호출되는 함수 (태그 이벤트 대기) */

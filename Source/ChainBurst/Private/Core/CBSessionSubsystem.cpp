@@ -152,6 +152,36 @@ FString UCBSessionSubsystem::Local_ResolveHostAddress() const
 	return LocalAddr->ToString(false);
 }
 
+// [로컬][LAN전용] 온라인 서비스 인스턴스를 새로 만들어 세션 캐시를 비움
+void UCBSessionSubsystem::Local_ResetOnlineServices()
+{
+	// 서비스를 파괴하면 로그인까지 날아가므로 LAN 일 때만 수행함.
+	// 세션 캐시 검색 문제는 LAN 에서만 발생
+	if (!bUseLANSessions) return;
+
+	// 세션에 들어가 있으면 건드리지 않음. 진행 중인 세션 작업이 통째로 사라짐
+	if (bHasActiveSession) return;
+
+	const UGameInstance* OwningGameInstance = GetGameInstance();
+	if (!OwningGameInstance) return;
+
+	// PIE 는 한 프로세스에 게임 인스턴스가 여럿이라, 내 것만 파괴하도록 월드 컨텍스트 이름으로 지정함
+	const FWorldContext* WorldContext = OwningGameInstance->GetWorldContext();
+	const FName InstanceName = WorldContext ? WorldContext->ContextHandle : NAME_None;
+
+	// 만들어진 적이 없으면 파괴할 것도 없음
+	if (!IsLoaded(EOnlineServices::Default, InstanceName)) return;
+
+	UE_LOG(LogTemp, Log, TEXT("[Session] 온라인 서비스를 재생성해 세션 캐시를 비움 (LAN 유령 세션 방지)"));
+
+	// 서비스 파괴만 함. 다음 GetServices() 가 빈 캐시로 새로 만듦
+	DestroyService(EOnlineServices::Default, InstanceName);
+
+	// 파괴와 함께 이전 검색 결과의 세션 ID 가 무효가 되므로 표시 목록도 비움
+	FoundSessions.Reset();
+	FoundSessionIds.Reset();
+}
+
 // [로컬] 세션 생성 후 로비 열기
 bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLobbyLevel, const FString& InSessionDisplayName, int32 InMaxPlayers /* = 4 */)
 {
@@ -160,6 +190,11 @@ bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLo
 		Local_HandleSessionFailure(LOCTEXT("CreateFailedNoLevel", "로비 레벨이 지정되지 않았습니다."), TEXT("로비 레벨 미지정"));
 		return false;
 	}
+
+	// [LAN 전용] 방을 열기 직전에 세션 캐시를 비움.
+	// LAN 비콘은 자기가 여태 본 모든 세션을 통째로 광고하므로, 이 시점에 캐시가 비어 있어야 죽은 방이 함께 광고되지 않음.
+	// 세션 조회보다 반드시 먼저 해야 함.
+	Local_ResetOnlineServices();
 
 	// 세션 인터페이스와 로컬 계정 ID 조회. 없으면 세션 작업을 할 수 없음
 	const ISessionsPtr Sessions = Local_ResolveSessionsInterface();

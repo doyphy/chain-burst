@@ -58,8 +58,13 @@ bool UCBCombatComponent::HasValidWeapon() const
 	return false;
 }
 
-int32 UCBCombatComponent::AdvanceCombo(const FGameplayTag& InActionTag, int32 MaxComboCount)
+int32 UCBCombatComponent::AdvanceCombo(const FGameplayTag& InActionTag, int32 MaxComboCount, int32 InPredictionKey)
 {
+	// 되돌리기용 스냅샷. 아래 리셋/순환 분기가 상태를 건드리기 전에 저장.
+	PrevComboIndex = CurrentComboIndex;
+	PrevComboActionTag = CurrentComboActionTag;
+	PrevComboPredictionKey = InPredictionKey;
+
 	// 다른 액션 태그로 전환되면 콤보 리셋
 	if (CurrentComboActionTag != InActionTag)
 	{
@@ -80,6 +85,28 @@ int32 UCBCombatComponent::AdvanceCombo(const FGameplayTag& InActionTag, int32 Ma
 	CurrentComboIndex++;
 
 	return PlayIndex;
+}
+
+bool UCBCombatComponent::RollbackCombo(int32 InPredictionKey)
+{
+	// 예측 키가 0이거나 스냅샷 키와 다르면 되돌리지 않음
+	if (InPredictionKey == 0 || InPredictionKey != PrevComboPredictionKey)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("[%s] 콤보 롤백 건너뜀 — 스냅샷 키(%d)와 거부 키(%d) 불일치."),
+			*GetNameSafe(GetOwner()), PrevComboPredictionKey, InPredictionKey);
+		return false;
+	}
+
+	// 전진 직전 상태로 복원 (서버가 머물러 있는 값과 일치)
+	CurrentComboIndex = PrevComboIndex;
+	CurrentComboActionTag = PrevComboActionTag;
+
+	// 같은 스냅샷으로 두 번 되돌리지 않도록 소진 처리
+	PrevComboPredictionKey = 0;
+
+	UE_LOG(LogTemp, Verbose, TEXT("[%s] 서버 거부로 콤보 롤백 — 인덱스 %d 로 복원."),
+		*GetNameSafe(GetOwner()), CurrentComboIndex);
+	return true;
 }
 
 void UCBCombatComponent::ResetCombo()

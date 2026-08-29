@@ -4,6 +4,7 @@
 #include "Components/CBExtensionComponent.h"
 #include "CBUIComponent.generated.h"
 
+class UUserWidget;
 class UCBHealthBarWidget;
 class UCBAbilitySystemComponent;
 class UWidgetComponent;
@@ -26,8 +27,8 @@ public:
 	/** 로드아웃에서 머리 위 체력바 위젯 클래스를 주입하는 세터 (전 인스턴스 공용 경로) */
 	FORCEINLINE void SetOverheadWidgetClass(TSubclassOf<UCBHealthBarWidget> InWidgetClass) { OverheadWidgetClass = InWidgetClass; }
 
-	/** 로드아웃에서 HUD 체력 위젯 클래스를 주입하는 세터 (소유 클라이언트 전용 경로) */
-	FORCEINLINE void SetHUDWidgetClass(TSubclassOf<UCBHealthBarWidget> InWidgetClass) { HUDWidgetClass = InWidgetClass; }
+	/** 로드아웃에서 HUD 위젯 클래스를 주입하는 세터 (소유 클라이언트 전용 경로) */
+	FORCEINLINE void SetHUDWidgetClass(TSubclassOf<UUserWidget> InWidgetClass) { HUDWidgetClass = InWidgetClass; }
 
 	/**
 	 * [로컬 UI 연출용] 머리 위 체력바 표시 여부를 변경하는 함수.
@@ -36,7 +37,7 @@ public:
 	 */
 	void SetOverheadBarVisible(bool bVisible);
 
-	FORCEINLINE UCBHealthBarWidget* GetHUDWidget() const { return HUDWidget.Get(); }
+	FORCEINLINE UUserWidget* GetHUDWidget() const { return HUDWidget.Get(); }
 	FORCEINLINE UCBHealthBarWidget* GetOverheadWidget() const { return OverheadWidget.Get(); }
 
 protected:
@@ -59,8 +60,8 @@ protected:
 	float OverheadZMargin = 30.f;
 
 private:
-	/** [로컬 전용] HUD 위젯을 생성해 HUD 스택에 넘기는 함수 (로컬 조작 플레이어) */
-	void Local_CreateHUDWidget(UCBAbilitySystemComponent* InASC);
+	/** [로컬 전용] HUD 위젯을 생성해 HUD 스택에 넘기는 함수 (로컬 조작 플레이어). ASC 바인딩은 HUD 위젯(WBP) 내부에서 처리 */
+	void Local_CreateHUDWidget();
 
 	/** [로컬 전용] 생성한 HUD 위젯을 HUD 스택(Game 레이어)에 삽입하는 함수 */
 	void Local_PushHUDWidgetToStack();
@@ -75,13 +76,13 @@ private:
 	UPROPERTY()
 	TSubclassOf<UCBHealthBarWidget> OverheadWidgetClass = nullptr;
 
-	/** HUD 체력 위젯 클래스. 로드아웃(Chaser)에서 주입되는 런타임 캐시 */
+	/** HUD 위젯 클래스. 로드아웃(Chaser)에서 주입되는 런타임 캐시 */
 	UPROPERTY()
-	TSubclassOf<UCBHealthBarWidget> HUDWidgetClass = nullptr;
+	TSubclassOf<UUserWidget> HUDWidgetClass = nullptr;
 
 	/** 생성한 HUD 위젯 인스턴스 (로컬 조작 플레이어 전용) */
 	UPROPERTY()
-	TObjectPtr<UCBHealthBarWidget> HUDWidget = nullptr;
+	TObjectPtr<UUserWidget> HUDWidget = nullptr;
 
 	/** 생성한 머리 위 위젯 인스턴스 */
 	UPROPERTY()

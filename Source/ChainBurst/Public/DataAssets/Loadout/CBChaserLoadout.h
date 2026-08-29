@@ -10,7 +10,7 @@ class UCBGameplayAbility;
 class UCBAbilitySystemComponent;
 class UCBInputConfig;
 class ACBChaserCharacter;
-class UCBHealthBarWidget;
+class UUserWidget;
 class USkeletalMesh;
 class UCBCosmeticCatalog;
 
@@ -45,9 +45,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Input")
 	TObjectPtr<UCBInputConfig> InputConfig = nullptr;
 
-	/** HUD 체력 위젯 클래스 (소유 클라이언트 전용. UCBUIComponent에 주입되어 준비 완료 후 뷰포트에 추가됨) */
+	/** HUD 위젯 클래스 (소유 클라이언트 전용, UCBUIComponent에 주입되어 준비 완료 후 HUD 스택에 삽입됨) */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|UI")
-	TSubclassOf<UCBHealthBarWidget> HUDHealthWidgetClass = nullptr;
+	TSubclassOf<UUserWidget> HUDWidgetClass = nullptr;
 
 	/**
 	 * 본체 메시(리더)를 따라갈 피부 스켈레탈 메시 목록 (MetaHuman 바디 파츠 등).

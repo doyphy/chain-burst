@@ -4,6 +4,7 @@
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "UI/Widgets/CBHealthBarWidget.h"
 #include "UI/CBHUD.h"
+#include "GameStates/CBLobbyGameState.h"
 
 // engine
 #include "Blueprint/UserWidget.h"
@@ -15,6 +16,9 @@ void UCBUIComponent::OnCharacterSystemReady()
 {
 	// 데디케이트 서버는 화면이 없으므로 UI 생성 안 함 (프로젝트는 리슨 서버 전제지만 안전 가드)
 	if (GetNetMode() == NM_DedicatedServer) return;
+
+	// 로비에서는 캐릭터 부착 UI(HUD·머리 위 바)를 만들지 않음.
+	if (GetWorld()->GetGameState<ACBLobbyGameState>()) return;
 
 	ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>();
 
@@ -30,7 +34,7 @@ void UCBUIComponent::OnCharacterSystemReady()
 	// AI는 서버에서 IsLocallyControlled가 참이므로 IsPlayerControlled를 병행 검사
 	if (OwnerCharacter->IsPlayerControlled() && OwnerCharacter->IsLocallyControlled())
 	{
-		Local_CreateHUDWidget(ASC);
+		Local_CreateHUDWidget();
 	}
 	// 그 외(AI 전부 + 원격 캐릭터)는 머리 위 바
 	else
@@ -39,7 +43,7 @@ void UCBUIComponent::OnCharacterSystemReady()
 	}
 }
 
-void UCBUIComponent::Local_CreateHUDWidget(UCBAbilitySystemComponent* InASC)
+void UCBUIComponent::Local_CreateHUDWidget()
 {
 	// 위젯 클래스 미주입이면 생성하지 않음 (로드아웃에 HUD 위젯 클래스 미등록)
 	if (!HUDWidgetClass) return;
@@ -48,11 +52,12 @@ void UCBUIComponent::Local_CreateHUDWidget(UCBAbilitySystemComponent* InASC)
 	APlayerController* PC = GetOwningController<APlayerController>();
 	if (!PC) return;
 
-	// 위젯 생성 후 ASC 바인딩 → HUD 스택 삽입
-	HUDWidget = CreateWidget<UCBHealthBarWidget>(PC, HUDWidgetClass);
+	// 위젯 생성.
+	HUDWidget = CreateWidget<UUserWidget>(PC, HUDWidgetClass);
+	
 	if (!HUDWidget) return;
 
-	HUDWidget->InitializeWithASC(InASC);
+	// HUD 스택 삽입.
 	Local_PushHUDWidgetToStack();
 }
 
@@ -123,8 +128,9 @@ void UCBUIComponent::SetOverheadBarVisible(bool bVisible)
 
 void UCBUIComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// HUD 위젯 정리 — 스택에서 빼야 한다 (어트리뷰트 구독 해제는 위젯의 NativeDestruct가 수행)
-	if (HUDWidget)
+	// HUD 위젯 정리 — 컴포넌트의 오너 액터(=캐릭터)가 파괴된 경우(사망·재스폰)만 스택에서 뺌.
+	// 월드가 통째로 끝나는 경우(맵 전환·PIE 종료)엔 HUD도 함께 파괴되므로 정리가 무의미함.
+	if (HUDWidget && EndPlayReason == EEndPlayReason::Destroyed)
 	{
 		Local_RemoveHUDWidgetFromStack();
 		HUDWidget = nullptr;

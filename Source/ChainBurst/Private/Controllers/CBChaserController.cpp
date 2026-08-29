@@ -151,7 +151,7 @@ void ACBChaserController::ReceivedPlayer()
 	Super::ReceivedPlayer();
 
 	// 뷰 타겟이 정해지고 캐릭터가 준비될 때까지 화면을 가림. Local_RequestFadeIn 이 걷어냄
-	if (IsLocalController() && PlayerCameraManager)
+	if (IsLocalController() && PlayerCameraManager) 
 	{
 		PlayerCameraManager->SetManualCameraFade(1.0f, FLinearColor::Black, false);
 	}

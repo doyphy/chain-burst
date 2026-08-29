@@ -20,9 +20,11 @@ class CHAINBURST_API UCBHealthBarWidget : public UUserWidget
 
 public:
 	/**
-	 * 대상 ASC의 체력 어트리뷰트에 구독하고 초기값을 반영하는 함수 (UI 컴포넌트가 준비 완료 후 호출)
+	 * 대상 ASC의 체력 어트리뷰트에 구독하고 초기값을 반영하는 함수.
+	 * 재호출 시 기존 구독을 먼저 해제하므로 여러 번 불려도 안전.
 	 * @param InASC 체력을 표시할 대상의 ASC
 	 */
+	UFUNCTION(BlueprintCallable, Category = "ChainBurst|UI")
 	void InitializeWithASC(UCBAbilitySystemComponent* InASC);
 
 protected:

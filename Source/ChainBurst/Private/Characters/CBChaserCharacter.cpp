@@ -30,6 +30,9 @@ ACBChaserCharacter::ACBChaserCharacter()
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
+	// 진영 기본값 (플레이어 = 추격자 진영)
+	Team = ECBTeam::Chaser;
+
 	// SpringArmComponent(카메라 붐) 생성 및 루트 컴포넌트에 부착
 	SpringArmComponent = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArmComponent"));
 	SpringArmComponent->SetupAttachment(RootComponent);

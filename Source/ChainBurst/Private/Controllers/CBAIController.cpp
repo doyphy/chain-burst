@@ -1,7 +1,6 @@
 // project
 #include "Controllers/CBAIController.h"
 #include "Characters/CBAICharacter.h"
-#include "Characters/CBChaserCharacter.h"
 
 // engine
 #include "Perception/AIPerceptionComponent.h"
@@ -24,18 +23,21 @@ ACBAIController::ACBAIController()
 	SightConfig->PeripheralVisionAngleDegrees = 60.f; // 전방 기준 좌우 각각 60° (= 전체 시야 120°)
 	SightConfig->SetMaxAge(5.f); // 감지 자극을 기억하는 시간(초). 0이면 무한, 지나면 만료(망각)
 	
-	// 팀이 없어 모두 Neutral이므로 일단 전부 감지 (실제 타겟 선별은 IsValidTarget)
+	// 적(진영이 다른 대상)만 감지. 아군·중립은 퍼셉션 단계에서 잘려 자극조차 오지 않는다.
 	SightConfig->DetectionByAffiliation.bDetectEnemies = true;
-	SightConfig->DetectionByAffiliation.bDetectNeutrals = true;
-	SightConfig->DetectionByAffiliation.bDetectFriendlies = true;
+	SightConfig->DetectionByAffiliation.bDetectNeutrals = false;
+	SightConfig->DetectionByAffiliation.bDetectFriendlies = false;
 
 	// 청각 감각 설정 — 전방위이며 LOS와 무관. 시야 사각지대(등 뒤)를 소리로 보완.
 	HearingConfig = CreateDefaultSubobject<UAISenseConfig_Hearing>(TEXT("HearingConfig"));
 	HearingConfig->HearingRange = 1500.f; // 기준 청취 거리. 실제 유효 거리 = 이 값 x 소음 Loudness
 	HearingConfig->SetMaxAge(3.f); // 들은 소리를 기억하는 시간(초). 지나면 만료되어 타겟 해제
+	
+	// 청각도 적만 감지. 단 청각은 인터페이스가 아니라 팀 ID 로 직접 비교하므로(엔진 UAISense_Hearing::Update)
+	// 판정은 UCBGameInstance에서 재정의한 attitude solver 를 따름.
 	HearingConfig->DetectionByAffiliation.bDetectEnemies = true;
-	HearingConfig->DetectionByAffiliation.bDetectNeutrals = true;
-	HearingConfig->DetectionByAffiliation.bDetectFriendlies = true;
+	HearingConfig->DetectionByAffiliation.bDetectNeutrals = false;
+	HearingConfig->DetectionByAffiliation.bDetectFriendlies = false;
 
 	// 위에서 구성한 Sight/Hearing 설정을 퍼셉션 컴포넌트에 등록 (이 감각들로 감지를 수행)
 	PerceptionComponent->ConfigureSense(*SightConfig);
@@ -54,6 +56,13 @@ void ACBAIController::OnPossess(APawn* InPawn)
 	// 빙의한 폰을 CB AI 캐릭터로 캐싱 (아니면 이후 로직 스킵)
 	CachedAICharacter = Cast<ACBAICharacter>(InPawn);
 	if (!CachedAICharacter) return;
+
+	// 빙의로 이 컨트롤러의 진영이 확정됐으므로 퍼셉션에 재평가를 요청한다.
+	// (퍼셉션 등록이 빙의보다 먼저면 팀 미확정 상태로 소속 필터가 계산돼 적을 놓친다)
+	if (PerceptionComponent)
+	{
+		PerceptionComponent->RequestStimuliListenerUpdate();
+	}
 
 	// 이미 준비 완료면 즉시 두뇌 시작, 아직이면 준비 완료 델리게이트에 바인딩해 대기
 	if (CachedAICharacter->IsCharacterSystemReady())
@@ -85,11 +94,27 @@ void ACBAIController::StartAILogic()
 {
 }
 
+// 빙의한 폰의 팀 ID를 반환
+FGenericTeamId ACBAIController::GetGenericTeamId() const
+{
+	// 자신의 소유 액터 가져오기
+	const AActor* TeamOwner = CachedAICharacter ? static_cast<const AActor*>(CachedAICharacter) : GetPawn();
+	
+	// 인터페이스 상속했는지 확인
+	if (const IGenericTeamAgentInterface* TeamAgent = Cast<const IGenericTeamAgentInterface>(TeamOwner))
+	{
+		// 자신의 팀 ID 반환
+		return TeamAgent->GetGenericTeamId();
+	}
+
+	return FGenericTeamId::NoTeam;
+}
+
 #pragma region Perception
 // 감지 결과 갱신 콜백 (감지/상실 상태 변화 시)
 void ACBAIController::HandleTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
-	// 타겟 후보가 아니면 무시 (Phase 1: 플레이어 클래스 필터)
+	// 타겟으로 삼을지 판단 (적인지 확인)
 	if (!IsValidTarget(Actor)) return;
 
 	if (Stimulus.WasSuccessfullySensed())
@@ -108,11 +133,13 @@ void ACBAIController::HandleTargetPerceptionUpdated(AActor* Actor, FAIStimulus S
 	}
 }
 
-// 이 액터를 타겟으로 삼을지 판정 (적 판정 seam)
+// 이 액터를 타겟으로 삼을지 판정 (적 판정)
 bool ACBAIController::IsValidTarget(AActor* InActor) const
 {
-	// Phase 1: 플레이어(Chaser) 클래스 필터. Phase 2: 팀(진영) 판정으로 교체 예정.
-	return InActor && InActor->IsA<ACBChaserCharacter>();
+	if (!IsValid(InActor)) return false;
+
+	// 진영이 적대인 대상만 타겟. (A:자신, B:상대), 규칙은 CBGameInstance 에서 커스텀한 규칙을 따름.
+	return FGenericTeamId::GetAttitude(this, InActor) == ETeamAttitude::Hostile;
 }
 
 // BT 시작 시점에 이미 시야에 있던 정지 타겟을 시드
@@ -126,6 +153,7 @@ void ACBAIController::SeedTargetFromCurrentPerception()
 	Perception->GetCurrentlyPerceivedActors(nullptr, PerceivedActors);
 	for (AActor* Actor : PerceivedActors)
 	{
+		// 타겟으로 삼을지 판단 (적인지 확인)
 		if (IsValidTarget(Actor))
 		{
 			UpdateTargetInBlackboard(Actor);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GenericTeamAgentInterface.h"
 #include "CBEnumTypes.generated.h"
 
 /**
@@ -59,3 +60,39 @@ enum class ECBCosmeticSlot : uint8
 	// 슬롯 개수 (배열 크기 산정용, 선택 값 아님). 값을 적지 않아 마지막 슬롯 다음 값이 자동으로 들어감.
 	MAX				UMETA(Hidden)
 };
+
+/** 캐릭터 진영(팀) */
+UENUM(BlueprintType)
+enum class ECBTeam : uint8
+{
+	// 추격자 (플레이어)
+	Chaser	= 0		UMETA(DisplayName = "Chaser"),
+
+	// 무법자 (AI 적. Outlaw·Rogue 모두 같은 팀)
+	Outlaw	= 1		UMETA(DisplayName = "Outlaw"),
+
+	// 중립 (누구와도 싸우지 않음. 팀 미지정의 기본값)
+	Neutral	= 255	UMETA(DisplayName = "Neutral")
+};
+
+/**
+ * ECBTeam 을 엔진 팀 ID 로 변환하는 함수.
+ * Neutral 은 엔진의 FGenericTeamId::NoTeam(255) 과 값이 같아 그대로 대응됨.
+ * NoTeam 을 중립으로 해석하는 것은 엔진 기본 solver 가 아니라 UCBGameInstance 가 등록하는 커스텀 solver 의 역할.
+ */
+FORCEINLINE FGenericTeamId CBTeamToGenericId(ECBTeam InTeam)
+{
+	return FGenericTeamId(static_cast<uint8>(InTeam));
+}
+
+/** 엔진 팀 ID 를 ECBTeam 으로 변환하는 함수. 정의된 값이 아니면 Neutral로 반환. */
+FORCEINLINE ECBTeam GenericIdToCBTeam(const FGenericTeamId& InTeamId)
+{
+	const uint8 RawId = InTeamId.GetId();
+	switch (RawId)
+	{
+	case static_cast<uint8>(ECBTeam::Chaser):	return ECBTeam::Chaser;
+	case static_cast<uint8>(ECBTeam::Outlaw):	return ECBTeam::Outlaw;
+	default:									return ECBTeam::Neutral;
+	}
+}

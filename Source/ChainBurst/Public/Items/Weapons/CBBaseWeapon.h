@@ -79,11 +79,17 @@ public:
 	/** [비전투 상태] 무기를 칼집에 부착하는 함수 */
 	void AttachToSheath(USceneComponent* TargetMesh);
 
-	/** 무기 뿌리(소켓) 위치를 가져오는 함수 (트레이스에 사용) */
-	FVector GetWeaponRootLocation() const;
+	/**
+	 * 무기 뿌리(소켓) 위치를 가져오는 함수 (트레이스에 사용)
+	 * 트레이스 소스를 바꾸는 파생 무기가 재정의한다 (예: ACBBodyWeapon 은 오너 캐릭터의 메시에서 조회).
+	 */
+	virtual FVector GetWeaponRootLocation() const;
 
-	/** 무기 끝(소켓) 위치를 가져오는 함수 (트레이스에 사용) */
-	FVector GetWeaponTipLocation() const;
+	/**
+	 * 무기 끝(소켓) 위치를 가져오는 함수 (트레이스에 사용)
+	 * 트레이스 소스를 바꾸는 파생 무기가 재정의한다 (예: ACBBodyWeapon 은 오너 캐릭터의 메시에서 조회).
+	 */
+	virtual FVector GetWeaponTipLocation() const;
 	
 #if WITH_EDITOR
 	/** 에디터에서 속성 변경 시 호출되는 함수 */

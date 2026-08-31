@@ -14,7 +14,7 @@ class UAISenseConfig_Hearing;
 /**
  * AI 컨트롤러 공통 베이스 (Outlaw·Rogue 등).
  * AI 두뇌(BT/StateTree 등)의 시작 타이밍을 캐릭터의 준비 완료(SystemReady) 신호에 맞춰 게이트.
- * 시야 퍼셉션으로 적을 감지해 블랙보드 타겟을 갱신.
+ * 시야·청각 퍼셉션으로 적(진영이 다른 대상)을 감지해 블랙보드 타겟을 갱신.
  * 실제 실행할 두뇌는 자식이 StartAILogic()을 오버라이드해 지정. 직접 스폰하지 않는 추상 클래스.
  */
 UCLASS(Abstract)
@@ -27,6 +27,11 @@ public:
 
 	/** [서버] 로드아웃이 이 컨트롤러에 실행할 비헤이비어 트리를 주입하는 세터. */
 	FORCEINLINE void SetBehaviorTree(UBehaviorTree* InBehaviorTree) { BehaviorTree = InBehaviorTree; }
+
+	//~ Begin IGenericTeamAgentInterface Interface.
+	/** AI 퍼셉션이 진영을 물을 때 쓰는 값. */
+	virtual FGenericTeamId GetGenericTeamId() const override;
+	//~ End IGenericTeamAgentInterface Interface.
 
 protected:
 	//~ Begin AController Interface
@@ -57,7 +62,7 @@ protected:
 	UFUNCTION()
 	void HandleTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
 
-	/** 이 액터를 타겟으로 삼을지 판정. (적 판정을 격리하는 seam) */
+	/** 이 액터를 타겟으로 삼을지 판정. (적 판정) */
 	virtual bool IsValidTarget(AActor* InActor) const;
 
 	/**

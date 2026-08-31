@@ -3,8 +3,10 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "GenericTeamAgentInterface.h"
 #include "Interfaces/CBCombatInterface.h"
 #include "Interfaces/CBUIInterface.h"
+#include "Types/CBEnumTypes.h"
 #include "CBBaseCharacter.generated.h"
 
 class UCBAbilitySystemComponent;
@@ -20,6 +22,7 @@ class UCBUIComponent;
 class UMotionWarpingComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnCBTeamChanged, ECBTeam /* NewTeam */);
 
 /** 캐릭터 초기화 상태 */
 enum class ECBSystemState : uint8
@@ -30,7 +33,7 @@ enum class ECBSystemState : uint8
 };
 
 UCLASS()
-class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface, public ICBCombatInterface, public ICBUIInterface
+class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface, public ICBCombatInterface, public ICBUIInterface, public IGenericTeamAgentInterface
 {
 	GENERATED_BODY()
 
@@ -38,6 +41,10 @@ public:
 	ACBBaseCharacter();
 
 	virtual void Tick(float DeltaTime) override;
+
+	//~ Begin AActor Interface.
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	//~ End AActor Interface.
 
 #pragma region Ability System
 	/**
@@ -141,6 +148,31 @@ public:
 
 	/** 로드아웃에서 이동 데이터를 주입하는 세터 */
 	FORCEINLINE void SetMovementDataAsset(UCBCharacterMovementData* InMovementData) { MovementDataAsset = InMovementData; }
+#pragma endregion
+
+#pragma region Team
+	/** 진영(팀) — AI 의 적/아군 판정 기준. */
+public:
+	/** 팀이 바뀌었을 때 방송 (UI 색 구분 등 로컬 표현용). */
+	FOnCBTeamChanged OnTeamChangedDelegate;
+
+	//~ Begin IGenericTeamAgentInterface Interface.
+	virtual FGenericTeamId GetGenericTeamId() const override { return CBTeamToGenericId(Team); }
+	virtual void SetGenericTeamId(const FGenericTeamId& InTeamId) override;
+	//~ End IGenericTeamAgentInterface Interface.
+
+	FORCEINLINE ECBTeam GetTeam() const { return Team; }
+
+	/** [서버] 진영을 변경한다. 복제되어 전 클라이언트에 반영. */
+	void Auth_SetTeam(ECBTeam InTeam);
+
+protected:
+	/** 이 캐릭터의 진영. 캐릭터 BP 기본값 설정 가능. (Chaser=Chaser, Outlaw·Rogue=Outlaw). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing = OnRep_Team, Category = "ChainBurst|Team")
+	ECBTeam Team = ECBTeam::Neutral;
+
+	UFUNCTION()
+	void OnRep_Team();
 #pragma endregion
 
 #pragma region System Ready

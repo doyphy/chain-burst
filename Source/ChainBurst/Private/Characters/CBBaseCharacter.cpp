@@ -12,6 +12,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "MotionWarpingComponent.h"
+#include "Net/UnrealNetwork.h"
 
 ACBBaseCharacter::ACBBaseCharacter()
 {
@@ -32,6 +33,14 @@ ACBBaseCharacter::ACBBaseCharacter()
 	CBUIComponent = CreateDefaultSubobject<UCBUIComponent>(TEXT("CBUIComponent"));
 	CBNoiseEmitterComponent = CreateDefaultSubobject<UCBNoiseEmitterComponent>(TEXT("CBNoiseEmitterComponent"));
 	CBMotionWarpingComponent = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("CBMotionWarpingComponent"));
+}
+
+void ACBBaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	// 진영은 AI 판정(서버)뿐 아니라 아군/적 표현(클라)에도 필요하므로 전 클라이언트에 복제.
+	DOREPLIFETIME(ACBBaseCharacter, Team);
 }
 
 UAbilitySystemComponent* ACBBaseCharacter::GetAbilitySystemComponent() const
@@ -90,6 +99,30 @@ void ACBBaseCharacter::Server_SendGameplayEvent_Implementation(AActor* Actor, FG
 {
 	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(Actor, EventTag, Payload);
 }
+
+#pragma region Team
+// [서버] 진영 변경. 복제(OnRep_Team)로 전 클라이언트에 반영.
+void ACBBaseCharacter::Auth_SetTeam(ECBTeam InTeam)
+{
+	if (!HasAuthority() || Team == InTeam) return;
+
+	Team = InTeam;
+
+	// 서버에는 OnRep 이 오지 않으므로 직접 방송.
+	OnTeamChangedDelegate.Broadcast(Team);
+}
+
+// IGenericTeamAgentInterface 경유 팀 지정 (엔진 코드가 호출하는 경로). 권위 검사는 Auth_SetTeam 이 수행.
+void ACBBaseCharacter::SetGenericTeamId(const FGenericTeamId& InTeamId)
+{
+	Auth_SetTeam(GenericIdToCBTeam(InTeamId));
+}
+
+void ACBBaseCharacter::OnRep_Team()
+{
+	OnTeamChangedDelegate.Broadcast(Team);
+}
+#pragma endregion
 
 bool ACBBaseCharacter::StartSystemInitialization()
 {

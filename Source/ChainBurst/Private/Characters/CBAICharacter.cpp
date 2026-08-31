@@ -24,6 +24,9 @@ ACBAICharacter::ACBAICharacter()
 	// AI 컨트롤러 자동 빙의 설정
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 
+	// 진영 기본값 (Outlaw·Rogue 모두 무법자 진영). 중립 AI 가 필요하면 자식이나 BP 에서 덮어씀.
+	Team = ECBTeam::Outlaw;
+
 	// 캐릭터의 회전이 컨트롤러 회전을 따르지 않음
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;

@@ -28,6 +28,7 @@ void UCBAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag& InInpu
 	for (FGameplayAbilitySpec& AbilitySpec : ActivatableAbilities.Items)
 	{
 		// 어빌리티의 동적 태그에 입력 태그가 정확히 포함되어 있는지 확인
+		// UCBChaserLoadout::Auth_GrantAbilitiesToASC(Chaser 전용 로드아웃 함수)에서 어빌리티에 입력 태그 동적 추가했음.
 		if (AbilitySpec.GetDynamicSpecSourceTags().HasTagExact(InInputTag))
 		{
 			UE_LOG(LogTemp, Log, TEXT("ASC: %s 의 %s 어빌리티에 %s 입력이 눌렸음."), *GetName(), *AbilitySpec.Ability->GetName(), *InInputTag.ToString());
@@ -73,6 +74,7 @@ void UCBAbilitySystemComponent::OnAbilityInputReleased(const FGameplayTag& InInp
 	for (FGameplayAbilitySpec& AbilitySpec : ActivatableAbilities.Items)
 	{
 		// 어빌리티의 동적 태그에 입력 태그가 정확히 포함되어 있는지 확인
+		// UCBChaserLoadout::Auth_GrantAbilitiesToASC(Chaser 전용 로드아웃 함수)에서 어빌리티에 입력 태그 동적 추가했음.
 		if (AbilitySpec.GetDynamicSpecSourceTags().HasTagExact(InInputTag))
 		{
 			// 입력히 해제되었음을 표시하는 플래그 설정

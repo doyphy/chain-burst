@@ -35,6 +35,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Gait_Walk, "Status.Movement.Gait.Walk", "걷기 개이트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Gait_Run, "Status.Movement.Gait.Run", "달리기 개이트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Gait_Sprint, "Status.Movement.Gait.Sprint", "전력 질주 개이트")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Strafe, "Status.Movement.Strafe", "타겟을 주시한 채 이동하는 상태(스트레이프)")
 
 	/** Event Tags. (애님노티파이 등 태그 이벤트) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_EquipWeapon, "Event.Combat.EquipWeapon", "무기 장착 이벤트")

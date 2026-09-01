@@ -56,10 +56,10 @@ void UCBCharacterAnimInstance::NativeThreadSafeUpdateAnimation(float DeltaSecond
 		LocalVelocity.Normalize();
 	}
 
-	// 로컬 속도를 보간하여 InputX, InputY에 적용
+	// 로컬 속도를 보간하여 MoveX, MoveY 적용
 	// 방향이 급변해도 블렌드 스페이스 샘플 지점이 부드럽게 이동(팝핑 방지)
-	// Input [X] -> LocalVelocity [Y] (축 스왑)
-	// Input [Y] -> LocalVelocity [X] (축 스왑)
+	// Move [X] -> LocalVelocity [Y] (축 스왑)
+	// Move [Y] -> LocalVelocity [X] (축 스왑)
 	// [축 스왑] 블렌드 스페이스 규약이 X축은 캐릭터 좌우, Y축은 캐릭터 앞뒤에 매핑되어 있기 때문
 	MoveX = FMath::FInterpTo(MoveX, LocalVelocity.Y, DeltaSeconds, 10.f);
 	MoveY = FMath::FInterpTo(MoveY, LocalVelocity.X, DeltaSeconds, 10.f);

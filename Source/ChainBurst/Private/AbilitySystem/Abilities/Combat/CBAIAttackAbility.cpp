@@ -4,10 +4,14 @@
 #include "Components/Combat/CBCombatComponent.h"
 #include "Components/Animation/CBActionComponent.h"
 #include "CBAbilitySystemLibrary.h"
+#include "Controllers/CBAIController.h"
 
 // engine
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "AbilitySystemComponent.h"
+#include "AIController.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "GameFramework/Pawn.h"
 
 UCBAIAttackAbility::UCBAIAttackAbility()
 {
@@ -107,6 +111,26 @@ int32 UCBAIAttackAbility::SelectActionMontageIndex()
 
 	const int32 MontageCount = ActionComp->GetMontageCount(BoundActionTag);
 	return MontageCount > 1 ? FMath::RandRange(0, MontageCount - 1) : 0;
+}
+
+// 모션 워핑 타겟을 큐 파라미터에 실음.
+void UCBAIAttackAbility::BuildActionCueParameters(FGameplayCueParameters& CueParams)
+{
+	if (!bWarpToTarget) return;
+
+	// 블랙보드 가져오기.
+	const APawn* Avatar = Cast<APawn>(GetAvatarActorFromActorInfo());
+	const AAIController* AIController = Avatar ? Cast<AAIController>(Avatar->GetController()) : nullptr;
+	const UBlackboardComponent* Blackboard = AIController ? AIController->GetBlackboardComponent() : nullptr;
+	if (!Blackboard) return;
+
+	// 블랙보드에서 타겟 액터 가져오기.
+	const AActor* TargetActor = Cast<AActor>(Blackboard->GetValueAsObject(ACBAIController::TargetActorKey));
+	if (!TargetActor) return;
+
+	// 큐 파라미터로 타겟 컴포넌트와 접근 거리 전달.
+	CueParams.TargetAttachComponent = TargetActor->GetRootComponent();
+	CueParams.NormalizedMagnitude = WarpStopDistance;
 }
 
 void UCBAIAttackAbility::OnTraceStart(FGameplayEventData Payload)

@@ -85,7 +85,11 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "ChainBurst|AI|Perception")
 	TObjectPtr<UAISenseConfig_Hearing> HearingConfig = nullptr;
 
-	/** 블랙보드 타겟 키 이름 (에디터 BB 키 이름과 반드시 일치). */
+public:
+	/**
+	 * 블랙보드 타겟 키 이름 (에디터 BB 키 이름과 반드시 일치).
+	 * EQS 컨텍스트 등 블랙보드에서 타겟을 읽는 쪽이 이 상수를 공유해 키 이름이 여러 곳에 중복 선언되는 것을 막음.
+	 */
 	static const FName TargetActorKey;
 #pragma endregion
 

@@ -1,11 +1,11 @@
 // project
 #include "GameplayCues/CBGCN_PlayAction.h"
-
 #include "CBGameplayTags.h"
 #include "Characters/CBBaseCharacter.h"
 
 // engine
 #include "MotionWarpingComponent.h"
+#include "RootMotionModifier.h"
 
 bool UCBGCN_PlayAction::OnExecute_Implementation(AActor* MyTarget, const FGameplayCueParameters& Parameters) const
 {
@@ -30,13 +30,23 @@ bool UCBGCN_PlayAction::OnExecute_Implementation(AActor* MyTarget, const FGamepl
 	{
 		if (ACBBaseCharacter* Char = Cast<ACBBaseCharacter>(MyTarget))
 		{
-			// 파라미터에서 모션 워핑 타겟 위치가 있는지 확인
-			if (!Parameters.Location.IsZero())
+			// 모션 워핑 타겟 등록. 워프 타겟 이름은 액션 태그 자체를 사용.
+			if (UMotionWarpingComponent* MotionWarpingComp = Char->GetMotionWarpingComponent())
 			{
-				// 모션 워핑 컴포넌트 가져오기
-				if (UMotionWarpingComponent* MotionWarpingComp = Char->GetMotionWarpingComponent())
+				// 파라미터에 대상 컴포넌트가 있으면 추종 워프.
+				if (USceneComponent* TargetComponent = Parameters.TargetAttachComponent.Get())
 				{
-					// 모션 워핑 타겟 등록, 워프 타겟 이름은 액션 태그 자체를 사용
+					// 좌표가 아니라 대상을 등록해 워프가 도는 동안 매 프레임 타겟 트랜스폼을 다시 읽음.
+					// NormalizedMagnitude = 타겟에서 멈출 거리(cm).
+					MotionWarpingComp->AddOrUpdateWarpTargetFromComponent(
+						ActionTag.GetTagName(), TargetComponent, NAME_None, /*bFollowComponent =*/ true,
+						EWarpTargetLocationOffsetDirection::VectorFromTargetToOwner,
+						FVector(Parameters.NormalizedMagnitude, 0.f, 0.f));
+				}
+				// 파라미터에 좌표가 있으면 고정 워프.
+				else if (!Parameters.Location.IsZero())
+				{
+					// 재생 시점에 고정된 좌표로 이동 (대시 등)
 					MotionWarpingComp->AddOrUpdateWarpTargetFromLocationAndRotation(
 						ActionTag.GetTagName(), Parameters.Location, Parameters.Normal.Rotation());
 				}

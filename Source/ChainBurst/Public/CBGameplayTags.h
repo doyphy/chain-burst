@@ -37,6 +37,7 @@ namespace  CBGameplayTags
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Movement_Gait_Walk)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Movement_Gait_Run)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Movement_Gait_Sprint)
+	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Movement_Strafe)
 	
 	/** Event Tags. (애님노티파이 등 태그 이벤트) */
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_EquipWeapon)

@@ -124,6 +124,10 @@ void ACBAIController::HandleTargetPerceptionUpdated(AActor* Actor, FAIStimulus S
 	}
 	else
 	{
+		// 콜백을 부른 감각은 상실해도, 다른 감각이 여전히 인지 중이면 타겟을 유지.
+		const UAIPerceptionComponent* Perception = GetAIPerceptionComponent();
+		if (Perception && Perception->HasAnyCurrentStimulus(*Actor)) return;
+
 		// 상실: 현재 타겟이 이 액터일 때만 클리어 (다른 타겟 추적 중이면 유지)
 		const UBlackboardComponent* BB = GetBlackboardComponent();
 		if (BB && BB->GetValueAsObject(TargetActorKey) == Actor)

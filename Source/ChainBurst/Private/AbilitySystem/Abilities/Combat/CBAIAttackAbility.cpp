@@ -8,6 +8,7 @@
 
 // engine
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
+#include "Abilities/GameplayAbilityTargetTypes.h"
 #include "AbilitySystemComponent.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -158,7 +159,7 @@ void UCBAIAttackAbility::OnAttackHit(FGameplayEventData Payload)
 	// 타겟 데이터 순회
 	for (int32 i = 0; i < Payload.TargetData.Num(); i++)
 	{
-		// 타겟 데이터 가져오기
+		// 타겟 데이터 하나씩 가져오기
 		const FGameplayAbilityTargetData* TargetData = Payload.TargetData.Get(i);
 		if (!TargetData) continue;
 
@@ -170,21 +171,31 @@ void UCBAIAttackAbility::OnAttackHit(FGameplayEventData Payload)
 		AActor* HitActor = HitResult->GetActor();
 		if (!HitActor) continue;
 
-		// 타겟 Actor 의 ASC 가져오기
+		// 타겟 Actor 의 ASC 가져오기 (ASC 가 없는 액터는 데미지 대상이 아님)
 		UAbilitySystemComponent* TargetASC = UCBAbilitySystemLibrary::GetASC(HitActor);
 		if (!TargetASC) continue;
 
-		// Context 만들기
-		FGameplayEffectContextHandle ContextHandle = GetAbilitySystemComponentFromActorInfo()->MakeEffectContext();
-		ContextHandle.AddHitResult(*HitResult);
-
-		// Spec 만들기
+		// Spec 만들기 (소스는 시전자 ASC 로 자동 세팅됨)
 		FGameplayEffectSpecHandle SpecHandle = MakeOutgoingGameplayEffectSpec(DamageEffectClass, GetAbilityLevel());
+		if (!SpecHandle.IsValid()) continue;
+
+		// 히트 정보를 스펙 컨텍스트에 실음 (피격 방향 등 소비자용).
+		SpecHandle.Data->GetContext().AddHitResult(*HitResult);
 
 		// 데미지 계수 설정 (SetByCaller 등록)
 		SpecHandle.Data->SetSetByCallerMagnitude(CBGameplayTags::Data_Damage_Coefficient, DamageCoefficient);
 
-		// GE 적용
-		ApplyGameplayEffectSpecToTarget(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, SpecHandle, Payload.TargetData);
+		// 이번 반복에서 가져온 타겟 하나만 담은 핸들.
+		FGameplayAbilityTargetDataHandle SingleTargetHandle;
+		SingleTargetHandle.Add(new FGameplayAbilityTargetData_SingleTargetHit(*HitResult));
+
+		// 타겟에게 GE 적용
+		ApplyGameplayEffectSpecToTarget(
+			CurrentSpecHandle, // 현재 어빌리티의 SpecHandle (출처 검사용)
+			CurrentActorInfo, // 현재 어빌리티의 ActorInfo (권한, 예측키 검사용 - 중복 적용 방지)
+			CurrentActivationInfo, // 현재 어빌리티의 ActivationInfo (권한, 예측키 검사용 - 중복 적용 방지)
+			SpecHandle,// 적용할 GE SpecHandle
+			SingleTargetHandle // 타겟 데이터 (실제 GE를 적용할 타겟 ASC, HitResult 포함)
+		);
 	}
 }

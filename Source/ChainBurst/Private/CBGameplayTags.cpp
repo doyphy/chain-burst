@@ -54,6 +54,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Weapon_AttackPower, "Data.Weapon.AttackPower", "무기 공격력 (SetByCaller 전용)")
 
 	/** Ability Tags. */
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack, "Ability.Combat.Attack", "공격 어빌리티 부모 태그 (하위 공격 전체를 한 번에 매칭할 때 사용)")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Basic, "Ability.Combat.Attack.Basic", "기본 공격 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_A, "Ability.Combat.Attack.Skill.A", "스킬 공격 A 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_B, "Ability.Combat.Attack.Skill.B", "스킬 공격 B 어빌리티 태그")

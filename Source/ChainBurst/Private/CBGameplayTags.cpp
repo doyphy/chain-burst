@@ -35,6 +35,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Gait_Walk, "Status.Movement.Gait.Walk", "걷기 개이트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Gait_Run, "Status.Movement.Gait.Run", "달리기 개이트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Gait_Sprint, "Status.Movement.Gait.Sprint", "전력 질주 개이트")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Dead, "Status.Dead", "사망 상태")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Strafe, "Status.Movement.Strafe", "타겟을 주시한 채 이동하는 상태(스트레이프)")
 
 	/** Event Tags. (애님노티파이 등 태그 이벤트) */
@@ -44,6 +45,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_TraceEnd, "Event.Combat.TraceEnd", "트레이스 종료 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_Attack_Hit, "Event.Combat.Attack.Hit", "공격 적중 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_HitReact, "Event.Combat.HitReact", "피격 반응 트리거 이벤트")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_Death, "Event.Combat.Death", "사망 트리거 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Action_EndAbility, "Event.Action.EndAbility", "액션 어빌리티 종료 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Action_CheckInput, "Event.Action.CheckInput", "액션 입력 확인 이벤트")
 
@@ -61,6 +63,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_C, "Ability.Combat.Attack.Skill.C", "스킬 공격 C 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_D, "Ability.Combat.Attack.Skill.D", "스킬 공격 D 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_EquipWeapon, "Ability.Combat.EquipWeapon", "무기 장착 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Death, "Ability.Combat.Death", "사망 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_UnequipWeapon, "Ability.Combat.UnequipWeapon", "무기 해제 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Dash, "Ability.Movement.Dash", "대시 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Sprint, "Ability.Movement.Sprint", "전력 질주 어빌리티 태그")
@@ -78,6 +81,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Attack_Skill_D, "Action.Combat.Attack.Skill.D", "스킬 공격 D 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Block, "Action.Combat.Block", "방어 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_HitReact, "Action.Combat.HitReact", "피격 반응 액션 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Death, "Action.Combat.Death", "사망 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Skill, "Action.Combat.Skill", "스킬 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_EquipWeapon, "Action.Combat.EquipWeapon", "무기 장착 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_UnequipWeapon, "Action.Combat.UnequipWeapon", "무기 해제 액션 태그")

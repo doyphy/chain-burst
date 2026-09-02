@@ -23,6 +23,7 @@ class UMotionWarpingComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCBTeamChanged, ECBTeam /* NewTeam */);
+DECLARE_MULTICAST_DELEGATE(FOnCBCharacterDied);
 
 /** 캐릭터 초기화 상태 */
 enum class ECBSystemState : uint8
@@ -44,6 +45,8 @@ public:
 
 	//~ Begin AActor Interface.
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	/** 사망 태그 구독과 디스폰 타이머를 정리. */
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	//~ End AActor Interface.
 
 #pragma region Ability System
@@ -197,5 +200,52 @@ protected:
 
 	/** 통합 초기화 완료 함수 (공용 데이터 적용 완료 시 1회. 델리게이트 방송 + 어트리뷰트 초기화) */
 	virtual void HandleCharacterSystemReady();
+#pragma endregion
+
+#pragma region Death
+	/**
+	 * 사망 라이프사이클. (Status.Dead 태그가 진입점)
+	 * 태그는 전 클라이언트에 복제되므로 서버·오너·시뮬 프록시가 같은 콜백에서 각자 자기 몫만 수행:
+	 * 서버는 권위 정리(이동·충돌·두뇌 정지·디스폰), 전 인스턴스는 표현 정리(머리 위 바 숨김 등).
+	 */
+public:
+	/** 사망 상태가 되었을 때 방송 (표현 정리용). 전 인스턴스에서 처리 */
+	FOnCBCharacterDied OnCharacterDiedDelegate;
+
+	/** 사망 상태인지 여부 (Status.Dead 보유 여부의 로컬 캐시) */
+	FORCEINLINE bool IsDead() const { return bIsDead; }
+
+protected:
+	/** [서버] 사망 시 권위 정리 (이동 정지·충돌 해제·자식 훅·디스폰 예약) */
+	virtual void Auth_HandleDeath();
+
+	/** [서버] 자식이 확장하는 사망 정리 훅 (AI = 두뇌 정지 등). 기본 구현은 비어 있음 */
+	virtual void Auth_OnDeath() {}
+
+	/** [서버] 디스폰 타이머 만료 시 액터를 파괴 */
+	virtual void Auth_Despawn();
+
+	/** 사망 로컬 정리 (전 인스턴스 각자 실행. 기본 구현은 델리게이트 방송) */
+	virtual void Local_ApplyDeathVisuals();
+
+	/** 사망 후 액터를 파괴하기까지의 지연(초). 0 이하면 자동 파괴하지 않음 (리스폰이 있는 플레이어 등) */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Death")
+	float DespawnDelay = 5.f;
+
+	/** 사망 상태 캐시 (Status.Dead 보유 여부) */
+	bool bIsDead = false;
+
+private:
+	/** Status.Dead 태그를 구독하고 현재 상태를 1회 반영하는 함수 (준비 완료 시점에 호출) */
+	void BindDeathStateEvent();
+
+	/** Status.Dead 태그 이벤트 콜백. 서버·오너·시뮬 프록시 전부에서 발화한다 */
+	void OnDeadTagChanged(const FGameplayTag CallbackTag, int32 NewCount);
+
+	/** 사망 태그 구독 해제용 핸들 (Chaser는 ASC가 PlayerState 소유라 폰보다 오래 살아남아 해제가 필수) */
+	FDelegateHandle DeadTagChangedHandle;
+
+	/** 디스폰 타이머 핸들 */
+	FTimerHandle DespawnTimerHandle;
 #pragma endregion
 };

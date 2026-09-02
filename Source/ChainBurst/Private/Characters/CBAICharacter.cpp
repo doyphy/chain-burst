@@ -8,6 +8,8 @@
 
 // engine
 #include "GameFramework/CharacterMovementComponent.h"
+#include "AIController.h"
+#include "BrainComponent.h"
 
 ACBAICharacter::ACBAICharacter()
 {
@@ -136,4 +138,22 @@ void ACBAICharacter::InitializeAISystem()
 			}
 		});
 	});
+}
+
+// [서버] 사망 시 호출되는 함수 (자식 확장 훅) AI 두뇌를 멈춤.
+void ACBAICharacter::Auth_OnDeath()
+{
+	Super::Auth_OnDeath();
+
+	AAIController* AIController = Cast<AAIController>(GetController());
+	if (!AIController) return;
+
+	// 진행 중인 이동 명령 취소
+	AIController->StopMovement();
+
+	// 비헤이비어 트리 정지
+	if (UBrainComponent* Brain = AIController->GetBrainComponent())
+	{
+		Brain->StopLogic(TEXT("Death"));
+	}
 }

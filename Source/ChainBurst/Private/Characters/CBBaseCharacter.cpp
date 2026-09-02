@@ -6,6 +6,7 @@
 #include "Components/UI/CBUIComponent.h"
 #include "Components/Perception/CBNoiseEmitterComponent.h"
 #include "AbilitySystem/CBAttributeSet.h"
+#include "CBGameplayTags.h"
 
 // engine
 #include "AbilitySystemBlueprintLibrary.h"
@@ -13,6 +14,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "MotionWarpingComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Components/CapsuleComponent.h"
+#include "TimerManager.h"
 
 ACBBaseCharacter::ACBBaseCharacter()
 {
@@ -137,6 +140,7 @@ bool ACBBaseCharacter::StartSystemInitialization()
 	return true;
 }
 
+// 자식 클래스에서 로드아웃 데이터 로드 완료 시점에 호출. 델리게이트 방송 + 어트리뷰트 초기화 + 사망 상태 구독.
 void ACBBaseCharacter::HandleCharacterSystemReady()
 {
 	// 이미 시스템이 준비되었으면 중복 실행 방지
@@ -151,9 +155,109 @@ void ACBBaseCharacter::HandleCharacterSystemReady()
 	// 어트리뷰트 초기화 (모든 비동기 로드 완료 후 실행되므로 MovementData 등 준비 완료 상태)
 	InitializeAttributes();
 
+	// 사망 상태 구독.
+	BindDeathStateEvent();
+
 	// Tick 활성화 (필요할 때)
 	// SetActorTickEnabled(true);
 }
+
+#pragma region Death
+// Status.Dead 태그를 구독하고, 이미 사망한 상태라면 현재 값을 OnDeadTagChanged로 전달하여 사망 처리 수행.
+void ACBBaseCharacter::BindDeathStateEvent()
+{
+	if (!CBASC) return;
+
+	// 태그 추가/제거 델리게이트 구독 (태그는 전 클라이언트에 복제되므로 서버·오너·프록시가 모두 이 콜백을 받음)
+	DeadTagChangedHandle = CBASC->RegisterGameplayTagEvent(
+		CBGameplayTags::Status_Dead, EGameplayTagEventType::NewOrRemoved)
+		.AddUObject(this, &ACBBaseCharacter::OnDeadTagChanged);
+
+	// 구독 이전에 태그가 이미 존재하면 NewCount > 0이므로 OnDeadTagChanged가 호출되어 사망 처리 수행
+	OnDeadTagChanged(CBGameplayTags::Status_Dead, CBASC->GetTagCount(CBGameplayTags::Status_Dead));
+}
+
+// Status.Dead 태그 델리게이트 콜백. (권위 정리는 서버에서만, 표현 정리는 전 인스턴스에서 수행)
+void ACBBaseCharacter::OnDeadTagChanged(const FGameplayTag /*CallbackTag*/, int32 NewCount)
+{
+	const bool bNowDead = NewCount > 0;
+
+	// 이미 사망 상태와 동일하면 처리하지 않음 (태그 추가/제거가 반복될 수 있음)
+	if (bIsDead == bNowDead) return;
+	bIsDead = bNowDead;
+
+	// 태그 제거(부활)은 따로 처리.
+	if (!bIsDead) return;
+
+	// 서버 정리 (파괴·두뇌 정지 등은 서버에서만)
+	if (HasAuthority())
+	{
+		Auth_HandleDeath();
+	}
+
+	// 로컬 정리 (서버·오너·시뮬 프록시 각자 수행)
+	Local_ApplyDeathVisuals();
+}
+
+// [서버] 사망 시 권위 정리.
+void ACBBaseCharacter::Auth_HandleDeath()
+{
+	// 이동 정지. 공중에서 죽으면 그 자리에 멈춤. (라그돌 도입 시 해소)
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		CMC->StopMovementImmediately();
+		CMC->DisableMovement();
+	}
+
+	// 시체를 통과할 수 있게 하고, 무기 트레이스(ECC_Pawn 채널)에도 더 이상 걸리지 않게 함
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	}
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		MeshComp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	}
+
+	// 자식 확장 훅 (AI = 두뇌 정지 등)
+	Auth_OnDeath();
+
+	// 디스폰 예약. 0 이하면 자동 파괴하지 않음 (폰이 사라지면 안 되는 플레이어 등)
+	if (DespawnDelay > 0.f)
+	{
+		GetWorldTimerManager().SetTimer(
+			DespawnTimerHandle, this, &ACBBaseCharacter::Auth_Despawn, DespawnDelay, false);
+	}
+}
+
+// [서버] 디스폰 타이머 만료 시 액터 파괴.
+void ACBBaseCharacter::Auth_Despawn()
+{
+	Destroy();
+}
+
+// 사망 로컬 정리. 구독 중인 컴포넌트에 알림 (머리 위 체력바 숨김 등).
+void ACBBaseCharacter::Local_ApplyDeathVisuals()
+{
+	OnCharacterDiedDelegate.Broadcast();
+}
+
+void ACBBaseCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 사망 태그 구독 해제. Chaser는 ASC가 PlayerState 소유라 폰보다 오래 살아남으므로 반드시 해제
+	if (CBASC && DeadTagChangedHandle.IsValid())
+	{
+		CBASC->RegisterGameplayTagEvent(CBGameplayTags::Status_Dead, EGameplayTagEventType::NewOrRemoved)
+			.Remove(DeadTagChangedHandle);
+	}
+	DeadTagChangedHandle.Reset();
+
+	// 디스폰 타이머 정리
+	GetWorldTimerManager().ClearTimer(DespawnTimerHandle);
+
+	Super::EndPlay(EndPlayReason);
+}
+#pragma endregion
 
 void ACBBaseCharacter::InitializeAttributes()
 {

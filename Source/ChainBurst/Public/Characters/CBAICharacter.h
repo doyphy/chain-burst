@@ -28,6 +28,11 @@ protected:
 	virtual void PossessedBy(AController* NewController) override;
 	//~ End APawn Interface
 
+	//~ Begin ACBBaseCharacter Interface
+	/* [서버] 사망 시 호출되는 함수 (자식 확장 훅) AI 두뇌를 멈춤. */
+	virtual void Auth_OnDeath() override;
+	//~ End ACBBaseCharacter Interface
+
 	/**
 	 * AI 캐릭터 초기화 진입점. 로드아웃을 1회 로드해 공용 데이터(전 인스턴스) + 서버 권위 데이터(서버)를 적용하고 준비 완료를 통지한다.
 	 * 서버는 PossessedBy(InitAbilityActorInfo 완료 후), 비권위(시뮬 프록시)는 BeginPlay에서 호출한다.

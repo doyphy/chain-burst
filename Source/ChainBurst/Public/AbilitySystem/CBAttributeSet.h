@@ -85,4 +85,10 @@ public:
 
 	void UpdateMovementSpeed(float NewValue);
 
+	/**
+	 * [서버] 사망 이벤트(Event.Combat.Death)를 발행하는 함수.
+	 * 사망 어빌리티가 이 태그를 트리거로 발동된다. 이미 Status.Dead면 재발행하지 않는다.
+	 * @param InInstigator 사망을 유발한 액터
+	 */
+	void Auth_SendDeathEvent(AActor* InInstigator);
 };

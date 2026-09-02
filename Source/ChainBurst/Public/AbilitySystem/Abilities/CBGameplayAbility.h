@@ -8,7 +8,6 @@ class UCBActionComponent;
 class UCBCombatComponent;
 class UCBAbilitySystemComponent;
 
-
 /** 활성화 정책 열거형 */
 UENUM(BlueprintType)
 enum class ECBAbilityActivationPolicy : uint8
@@ -24,8 +23,6 @@ enum class ECBAbilityActivationPolicy : uint8
 	 */
 	OnGiven UMETA(DisplayName = "On Given"),
 };
-
-
 
 UCLASS()
 class CHAINBURST_API UCBGameplayAbility : public UGameplayAbility
@@ -60,4 +57,11 @@ protected:
 	/** 어빌리티의 활성화 정책 (기본값 : OnTrigger) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|Ability")
 	ECBAbilityActivationPolicy AbilityActivationPolicy = ECBAbilityActivationPolicy::OnTrigger;
+
+	/**
+	 * 사망 상태(Status.Dead)에서도 활성화할 수 있는지 여부 (기본값 : false).
+	 * 사망·시체 관련 어빌리티만 true로 설정. 차단 검사는 CanActivateAbility에서 일괄 수행.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|Ability")
+	bool bActivatableWhileDead = false;
 };

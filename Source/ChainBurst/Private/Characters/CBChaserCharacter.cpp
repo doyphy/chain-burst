@@ -21,6 +21,10 @@
 
 ACBChaserCharacter::ACBChaserCharacter()
 {
+	// 리스폰 설계 전까지 플레이어 폰을 자동 파괴하지 않음.
+	// 파괴하면 PlayerController가 폰을 잃어 화면·입력이 끊김. (0 이하 = 디스폰 타이머 미사용)
+	DespawnDelay = 0.f;
+
 	// 캡슐 컴포넌트의 크기를 초기화 (충돌 영역 설정)
 	// 스폰 직후 fallback 값. 로드아웃 로드 후 UCBCharacterLoadout의 BodySetup 값으로 오버라이드됨.
 	GetCapsuleComponent()->InitCapsuleSize(30.f, 86.0f);

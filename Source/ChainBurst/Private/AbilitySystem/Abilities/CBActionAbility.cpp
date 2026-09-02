@@ -51,8 +51,9 @@ void UCBActionAbility::PlayActionMontage()
 // 몽타주 종료 이벤트 대기 콜백 함수 (애님노티파이 수신 시 어빌리티 종료)
 void UCBActionAbility::OnActionEnded(FGameplayEventData Payload)
 {
+	// 사망처럼 마지막 프레임을 유지해야 하는 액션은 정지 요청을 건너뜀 (몽타주가 그대로 남아 시체 포즈가 됨)
 	// 몽타주 정지 요청 (게임플레이 큐, 전 클라 동기화)
-	if (UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo())
+	if (UCBAbilitySystemComponent* CBASC = ShouldStopActionOnEnd() ? GetCBAbilitySystemComponentFromActorInfo() : nullptr)
 	{
 		// 태스크 콜백은 예측 윈도우 밖일 수 있으므로 명시적으로 연다.
 		// 없으면 소유 클라가 큐를 예측 실행하지 못해 서버 멀티캐스트를 기다리게 되고,

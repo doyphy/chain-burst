@@ -51,10 +51,17 @@ protected:
 	 */
 	virtual void CleanupActionState() {}
 
+	/**
+	 * 액션 종료 시 몽타주를 정지시킬지 여부 (기본 true).
+	 * 사망처럼 마지막 프레임을 유지해야 하는 액션은 false를 반환한다.
+	 * (false를 반환해도 몽타주가 끝에서 자동 블렌드 아웃되지 않으려면 몽타주 에셋의 Enable Auto Blend Out을 꺼야 함)
+	 */
+	virtual bool ShouldStopActionOnEnd() const { return true; }
+
 	/** 현재 재생 중인 액션의 길이 반환 (폴백 딜레이용) */
 	float CurrentActionDuration() const;
 
-	/** 액션 종료 이벤트(애님노티파이) 수신 시 호출 */
+	/** 액션 종료 이벤트(애님노티파이) 수신 시 호출. ShouldStopActionOnEnd()가 참일 때만 몽타주를 정지시킴 */
 	UFUNCTION()
 	virtual void OnActionEnded(FGameplayEventData Payload);
 

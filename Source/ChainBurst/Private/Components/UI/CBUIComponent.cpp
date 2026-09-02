@@ -2,6 +2,7 @@
 #include "Components/UI/CBUIComponent.h"
 #include "Characters/CBBaseCharacter.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
+#include "AbilitySystem/CBAttributeSet.h"
 #include "UI/Widgets/CBHealthBarWidget.h"
 #include "UI/CBHUD.h"
 #include "GameStates/CBLobbyGameState.h"
@@ -11,6 +12,9 @@
 #include "Components/WidgetComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Engine/Engine.h"
+#include "TimerManager.h"
 
 void UCBUIComponent::OnCharacterSystemReady()
 {
@@ -95,6 +99,9 @@ void UCBUIComponent::CreateOverheadWidget(UCBAbilitySystemComponent* InASC)
 
 	ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>();
 
+	// 사망 알림 구독 (시체 위에 체력바가 남지 않도록). 캐릭터가 Status.Dead 받아 전 인스턴스에서 방송함.
+	OwnerCharacter->OnCharacterDiedDelegate.AddUObject(this, &UCBUIComponent::OnOwnerDied);
+
 	// 위젯 인스턴스를 직접 생성해 SetWidget으로 연결 (ASC 바인딩 호출 지점을 확보하기 위함)
 	OverheadWidget = CreateWidget<UCBHealthBarWidget>(OwnerCharacter->GetWorld(), OverheadWidgetClass);
 	if (!OverheadWidget) return;
@@ -115,25 +122,175 @@ void UCBUIComponent::CreateOverheadWidget(UCBAbilitySystemComponent* InASC)
 
 	// ASC 바인딩 (초기값 반영 + 변경 구독)
 	OverheadWidget->InitializeWithASC(InASC);
+
+	// 평소 숨김 모드면 숨긴 채로 시작하고, 체력 감소를 구독해 피격 시에만 표시함.
+	// 캐릭터 준비 완료 후 작업이므로 ASC 준비되어 있음.
+	if (bHideOverheadBarUntilDamaged)
+	{
+		SetOverheadBarVisible(false); // 숨김 모드로 시작
+		BindOverheadDamageTrigger(InASC); // CurrentHealth 변경 구독
+	}
 }
 
+// 피격 시에만 머리 위 바를 표시하기 위해 CurrentHealth 변경을 구독하는 함수. (CreateOverheadWidget에서 호출)
+void UCBUIComponent::BindOverheadDamageTrigger(UCBAbilitySystemComponent* InASC)
+{
+	if (!InASC) return;
+
+	// 구독 해제용 캐시
+	OverheadTriggerASC = InASC;
+
+	// CurrentHealth 변경 시 HandleOwnerHealthChanged를 호출하도록 델리게이트 구독
+	OverheadHealthChangedHandle = InASC->GetGameplayAttributeValueChangeDelegate(UCBAttributeSet::GetCurrentHealthAttribute())
+		.AddUObject(this, &UCBUIComponent::HandleOwnerHealthChanged);
+}
+
+// CurrentHealth 변경 구독을 해제하고 캐시를 비우는 함수. (EndPlay에서 호출)
+void UCBUIComponent::UnbindOverheadDamageTrigger()
+{
+	// 구독 중이던 델리게이트 해제 (댕글링 방지)
+	if (OverheadTriggerASC.IsValid())
+	{
+		OverheadTriggerASC->GetGameplayAttributeValueChangeDelegate(UCBAttributeSet::GetCurrentHealthAttribute()).Remove(OverheadHealthChangedHandle);
+	}
+
+	// 캐시·핸들 초기화
+	OverheadTriggerASC = nullptr;
+	OverheadHealthChangedHandle.Reset();
+}
+
+// CurrentHealth 변경 델리게이트 내부 콜백. 감소(=피격)일 때만 머리 위 바를 표시함.
+void UCBUIComponent::HandleOwnerHealthChanged(const FOnAttributeChangeData& Data)
+{
+	// 감소(=피격)일 때만 표시. 회복이나 초기화로 늘어난 경우는 무시함
+	if (Data.NewValue >= Data.OldValue) return;
+
+	// 거리 밖이면 아예 켜지 않음.
+	// 켜고 나서 거리 타이머가 끄게 두면 먼 곳에서 한 틱 동안 깜빡임.
+	if (!IsWithinOverheadBarDistance()) return;
+
+	// 머리 위 바를 표시하고 유지·거리 검사 타이머를 (재)시작
+	ShowOverheadBarTemporarily();
+}
+
+// 머리 위 바를 표시하고 유지·거리 검사 타이머를 (재)시작하는 함수
+void UCBUIComponent::ShowOverheadBarTemporarily()
+{
+	// 머리 위 위젯이 없는 캐릭터(로컬 플레이어 등)면 할 일 없음
+	if (!OverheadWidgetComponent) return;
+
+	// 머리 위 바를 표시
+	SetOverheadBarVisible(true);
+
+	FTimerManager& TimerManager = GetWorld()->GetTimerManager();
+
+	// 유지 타이머 (표시 중에 다시 맞으면 SetTimer가 덮어써 시간이 리셋됨. 0 이하면 시간 만료로는 숨기지 않음)
+	if (OverheadBarShowDuration > 0.f)
+	{
+		// 유지 시간 만료 시 HideOverheadBar를 호출하도록 타이머를 설정 (한 번만)
+		TimerManager.SetTimer(OverheadHideTimerHandle, this, &UCBUIComponent::HideOverheadBar, OverheadBarShowDuration, false);
+	}
+
+	// 거리 검사 타이머 (표시 중일 때만 돌려 평상시 비용을 없앰. 이미 돌고 있으면 주기를 흐트러뜨리지 않도록 그대로 둠)
+	if (!TimerManager.IsTimerActive(OverheadDistanceTimerHandle))
+	{
+		// 일정 주기마다 CheckOverheadBarDistance를 호출하도록 타이머를 설정 (반복)
+		TimerManager.SetTimer(OverheadDistanceTimerHandle, this, &UCBUIComponent::CheckOverheadBarDistance, OverheadBarDistanceCheckInterval, true);
+	}
+}
+
+// 머리 위 바를 숨기고 유지·거리 검사 타이머를 초기화하는 함수 (유지 시간 만료·거리 초과 공용)
+void UCBUIComponent::HideOverheadBar()
+{
+	SetOverheadBarVisible(false);
+
+	// 숨은 동안은 타이머를 돌리지 않음 (다음 피격 때 다시 시작)
+	if (UWorld* World = GetWorld())
+	{
+		FTimerManager& TimerManager = World->GetTimerManager();
+		TimerManager.ClearTimer(OverheadHideTimerHandle);
+		TimerManager.ClearTimer(OverheadDistanceTimerHandle);
+	}
+}
+
+// 로컬 시점이 머리 위 바가 보이는 거리 안에 있는지 반환하는 함수. (true: 거리안에 있거나 판단 불가, false: 거리 밖)
+bool UCBUIComponent::IsWithinOverheadBarDistance() const
+{
+	// 로컬 시점 기준의 거리이므로
+	const APlayerController* LocalPC = GEngine ? GEngine->GetFirstLocalPlayerController(GetWorld()) : nullptr;
+	if (!LocalPC) return true;
+
+	// 로컬 플레이어의 폰 위치를 얻음.
+	FVector ViewLocation;
+	if (const APawn* LocalPawn = LocalPC->GetPawn())
+	{
+		ViewLocation = LocalPawn->GetActorLocation();
+	}
+	// 로컬 플레이어가 Pawn을 갖고 있지 않으면 카메라의 위치를 얻음.
+	else if (const APlayerCameraManager* CameraManager = LocalPC->PlayerCameraManager)
+	{
+		ViewLocation = CameraManager->GetCameraLocation();
+	}
+	// 둘 다 없으면 판단 불가이므로 true를 반환.
+	else
+	{
+		return true;
+	}
+
+	// 로컬 시점과 오너 액터 사이의 거리를 계산
+	// 제곱 거리로 비교 (sqrt 회피)
+	const float DistanceSqr = FVector::DistSquared(ViewLocation, GetOwner()->GetActorLocation());
+	
+	// 머리 위 바가 보이는 거리 안이면 true, 밖이면 false
+	return DistanceSqr <= FMath::Square(OverheadBarVisibleDistance);
+}
+
+// 거리 검사 타이머 콜백. 보이는 거리를 벗어나면 숨김
+void UCBUIComponent::CheckOverheadBarDistance()
+{
+	// 보이는 거리를 벗어났으면 숨김
+	if (!IsWithinOverheadBarDistance())
+	{
+		HideOverheadBar();
+	}
+}
+
+// 오너 사망 콜백. 머리 위 바를 숨기고 다시 뜨지 않게 함.
+void UCBUIComponent::OnOwnerDied()
+{
+	// 피격 구독을 먼저 끊기. (이후의 값 변동으로 바가 되살아나지 않음)
+	UnbindOverheadDamageTrigger();
+
+	HideOverheadBar();
+}
+
+// 머리 위 바를 표시하거나 숨기는 함수. (Show/Hide 공용)
 void UCBUIComponent::SetOverheadBarVisible(bool bVisible)
 {
 	// 머리 위 위젯이 없는 캐릭터(로컬 플레이어 등)면 무시
-	if (OverheadWidgetComponent)
-	{
-		OverheadWidgetComponent->SetVisibility(bVisible);
-	}
+	if (!OverheadWidgetComponent) return;
+
+	// 숨기면 NativeDestruct 호출되어 구독을 정리.
+	// 표시하면 NativeConstruct 호출되어 구독을 재설정.
+	OverheadWidgetComponent->SetVisibility(bVisible);
 }
 
 void UCBUIComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// HUD 위젯 정리 — 컴포넌트의 오너 액터(=캐릭터)가 파괴된 경우(사망·재스폰)만 스택에서 뺌.
+	// HUD 위젯 정리. 컴포넌트의 오너 액터(=캐릭터)가 파괴된 경우(사망·재스폰)만 스택에서 뺌.
 	// 월드가 통째로 끝나는 경우(맵 전환·PIE 종료)엔 HUD도 함께 파괴되므로 정리가 무의미함.
 	if (HUDWidget && EndPlayReason == EEndPlayReason::Destroyed)
 	{
 		Local_RemoveHUDWidgetFromStack();
 		HUDWidget = nullptr;
+	}
+
+	// 머리 위 바 표시 제어 정리 (구독·타이머). 위젯 컴포넌트를 없애기 전에 먼저 끊음
+	UnbindOverheadDamageTrigger();
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(OverheadHideTimerHandle);
+		World->GetTimerManager().ClearTimer(OverheadDistanceTimerHandle);
 	}
 
 	// 머리 위 위젯 컴포넌트 정리

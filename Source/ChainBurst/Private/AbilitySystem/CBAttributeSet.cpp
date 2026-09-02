@@ -44,8 +44,12 @@ void UCBAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallback
 		// 데미지(음수 변화)가 아니면 피격 반응 처리 안 함 (회복 등)
 		if (Data.EvaluatedData.Magnitude >= 0.f) return;
 
-		// 사망(체력 0)이면 피격 반응 처리 안 함 (사망 연출은 별도)
-		if (GetCurrentHealth() <= 0.f) return;
+		// 사망(체력 0)이면 피격 반응 대신 사망 이벤트를 발행하고 끝냄
+		if (GetCurrentHealth() <= 0.f)
+		{
+			Auth_SendDeathEvent(Data.EffectSpec.GetContext().GetInstigator());
+			return;
+		}
 
 		// 이 GE가 "피격 반응을 유발"한다고 선언했는지 확인 (Opt-in)
 		// 지속 데미지(DoT)/환경 데미지 등 Effect.HitReact 태그가 없는 GE는 체력만 깎고 반응 X
@@ -68,6 +72,27 @@ void UCBAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallback
 			}
 		}
 	}
+}
+
+// [서버] 사망 이벤트를 발행하는 함수. 사망 어빌리티(UCBDeathAbility)가 이 태그를 트리거로 발동됨.
+void UCBAttributeSet::Auth_SendDeathEvent(AActor* InInstigator)
+{
+	UAbilitySystemComponent* TargetASC = GetOwningAbilitySystemComponent();
+	if (!TargetASC) return;
+
+	// 이미 사망 처리된 대상이면 재발행하지 않음 (시체에 추가 타격이 들어와도 어빌리티가 다시 발동되지 않게)
+	if (TargetASC->HasMatchingGameplayTag(CBGameplayTags::Status_Dead)) return;
+
+	AActor* TargetActor = TargetASC->GetAvatarActor();
+	if (!TargetActor) return;
+
+	FGameplayEventData Payload;
+	Payload.EventTag = CBGameplayTags::Event_Combat_Death;
+	Payload.Instigator = InInstigator;
+	Payload.Target = TargetActor;
+
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+		TargetActor, CBGameplayTags::Event_Combat_Death, Payload);
 }
 
 void UCBAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

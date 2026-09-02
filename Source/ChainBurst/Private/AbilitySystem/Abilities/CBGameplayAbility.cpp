@@ -1,5 +1,6 @@
 // project
 #include "AbilitySystem/Abilities/CBGameplayAbility.h"
+#include "CBGameplayTags.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Components/Combat/CBCombatComponent.h"
 #include "Characters/CBBaseCharacter.h"
@@ -58,6 +59,13 @@ bool UCBGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Han
 	
 	if (ASC)
 	{
+		// 사망 상태면 사망 관련 어빌리티를 제외한 전부 차단.
+		// 모든 어빌리티의 루트라 여기 한 곳만 둠.
+		if (!bActivatableWhileDead && ASC->HasMatchingGameplayTag(CBGameplayTags::Status_Dead))
+		{
+			return false;
+		}
+
 		// 현재 어빌리티 태그 (Asset Tags)의 부모 태그들 가져오기
 		FGameplayTagContainer ParentTags = GetAssetTags().GetGameplayTagParents();
 

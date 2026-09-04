@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "GameplayTagContainer.h"
+#include "Types/CBDelegates.h"
 #include "Types/CBEnumTypes.h"
 #include "CBChaserController.generated.h"
 
@@ -18,6 +19,19 @@ UCLASS()
 class CHAINBURST_API ACBChaserController : public APlayerController
 {
 	GENERATED_BODY()
+
+#pragma region PlayerState
+public:
+	/** [로컬] 이 컨트롤러의 PlayerState 가 확정됐음을 알리는 델리게이트. */
+	UPROPERTY(BlueprintAssignable, Category = "ChainBurst|Player")
+	FCBOnLocalPlayerStateSet OnLocalPlayerStateSet;
+
+protected:
+	//~ Begin AController Interface.
+	/** [클라이언트] PlayerState 참조가 도착했을 때 호출됨. 확정 신호를 방송함. */
+	virtual void OnRep_PlayerState() override;
+	//~ End AController Interface.
+#pragma endregion
 
 #pragma region Cosmetic
 public:

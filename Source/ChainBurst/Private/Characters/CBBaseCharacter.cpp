@@ -30,7 +30,25 @@ ACBBaseCharacter::ACBBaseCharacter()
 	
 	// 캐릭터의 메시가 데칼(총알 자국, 피 등)을 받지 않도록 설정
 	GetMesh()->bReceivesDecals = false;
-	
+
+#pragma region 캐릭터 간 충돌
+	// 캐릭터 위에는 설 수 없게 한다.
+	// 캡슐 윗면에 착지하면 그 캐릭터가 무빙 베이스가 되어서 해당 캐릭터의 속도에 영향을 받음.
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		// 걸을 수 없는 면으로 선언해야 베이스 자체가 성립하지 않음.
+		// (WalkableSlope_Unwalkable, 0.f)로 설정하면 캡슐 위에 올라가도 걸을 수 없고, 캐릭터는 그 위에서 미끄러짐.
+		Capsule->SetWalkableSlopeOverride(FWalkableSlopeOverride(WalkableSlope_Unwalkable, 0.f));
+
+		// 옆에서 부딪혔을 때 기어오르는 경로도 막음 (위 설정과 짝)
+		Capsule->CanCharacterStepUpOn = ECB_No;
+	}
+
+	// 캡슐이 겹쳤을 때 프레임당 밀려나는 최대 거리 (엔진 기본 100cm).
+	// 루트모션으로 계속 밀고 들어오면 매 프레임 이만큼 텔레포트되므로, 기본값이면 튕겨나가는 것처럼 보임.
+	GetCharacterMovement()->MaxDepenetrationWithPawn = 20.f;
+#pragma endregion
+
 	CBLocomotionProcessor = CreateDefaultSubobject<UCBLocomotionProcessor>(TEXT("CBLocomotionProcessor"));
 	CBActionComponent = CreateDefaultSubobject<UCBActionComponent>(TEXT("CBActionComponent"));
 	CBUIComponent = CreateDefaultSubobject<UCBUIComponent>(TEXT("CBUIComponent"));
@@ -202,11 +220,21 @@ void ACBBaseCharacter::OnDeadTagChanged(const FGameplayTag /*CallbackTag*/, int3
 // [서버] 사망 시 권위 정리.
 void ACBBaseCharacter::Auth_HandleDeath()
 {
-	// 이동 정지. 공중에서 죽으면 그 자리에 멈춤. (라그돌 도입 시 해소)
+	// 이동 정지.
 	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
 	{
-		CMC->StopMovementImmediately();
-		CMC->DisableMovement();
+		// 공중에서 죽었다면 여기서 멈추지 않고 Landed() 에서 정지
+		if (CMC->IsFalling())
+		{
+			// 수평 이동만 죽여 수직으로 떨어지게 함. 사망 후에는 입력·두뇌가 멈춰 가속이 들어오지 않음.
+			CMC->Velocity.X = 0.f;
+			CMC->Velocity.Y = 0.f;
+		}
+		else
+		{
+			// 착지 상태라면 즉시 이동 정지
+			Auth_StopMovementForDeath();
+		}
 	}
 
 	// 시체를 통과할 수 있게 하고, 무기 트레이스(ECC_Pawn 채널)에도 더 이상 걸리지 않게 함
@@ -227,6 +255,28 @@ void ACBBaseCharacter::Auth_HandleDeath()
 	{
 		GetWorldTimerManager().SetTimer(
 			DespawnTimerHandle, this, &ACBBaseCharacter::Auth_Despawn, DespawnDelay, false);
+	}
+}
+
+// 착지 콜백. 공중 사망 후 낙하하던 시체가 바닥에 닿으면 그때 이동을 정지시킨다.
+void ACBBaseCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+
+	// 살아 있으면 평소 착지. 정지는 권위에서만 결정하고 클라는 이동 복제로 처리.
+	if (!bIsDead || !HasAuthority()) return;
+
+	// 착지할 때 사망 상태인 경우 이동 정지
+	Auth_StopMovementForDeath();
+}
+
+// [서버] 이동을 완전히 정지 (사망 확정 시점 또는 공중 사망 후 착지 시점)
+void ACBBaseCharacter::Auth_StopMovementForDeath()
+{
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		CMC->StopMovementImmediately();
+		CMC->DisableMovement();
 	}
 }
 

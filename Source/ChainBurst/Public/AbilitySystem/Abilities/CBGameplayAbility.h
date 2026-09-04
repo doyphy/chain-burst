@@ -42,6 +42,10 @@ protected:
 	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr,
 		FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
+		/** 태그 요구·차단 검사. bIgnoreAbilityBlocking 이면 검사 자체를 건너뜀. */
+	virtual bool DoesAbilitySatisfyTagRequirements(const UAbilitySystemComponent& AbilitySystemComponent,
+		const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr,
+		FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
 	//~ End UGameplayAbility Interface
 
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Ability")
@@ -64,4 +68,15 @@ protected:
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|Ability")
 	bool bActivatableWhileDead = false;
+
+	/**
+	 * 다른 어빌리티가 걸어둔 차단(BlockAbilitiesWithTag)을 무시하고 활성화할지 여부 (기본값 : false).
+	 * 반드시 발동해야 하는 어빌리티(사망)만 true로 설정.
+	 *
+	 * 주의: 켜면 태그 요구·차단 검사를 통째로 건너뛴다. 즉 이 어빌리티의 ActivationRequiredTags /
+	 * ActivationBlockedTags / SourceBlockedTags 등도 함께 무시되므로, BP에서 설정해도 걸리지 않음.
+	 * (엔진이 요구·차단을 한 함수에서 한꺼번에 판정하므로 차단만 골라 빼낼 수 없음)
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChainBurst|Ability")
+	bool bIgnoreAbilityBlocking = false;
 };

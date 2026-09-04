@@ -50,6 +50,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnSessionOperationFailed, const F
 UDELEGATE()
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnPlayerNicknameChanged, const FString&, Nickname);
 
+/** [로컬] 이 컨트롤러의 PlayerState 가 확정됐음. */
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnLocalPlayerStateSet);
+
 /** 접속한 플레이어 목록이 바뀌었음. (받는 쪽이 PlayerArray 를 다시 읽음) */
 UDELEGATE()
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnPlayerListChanged);

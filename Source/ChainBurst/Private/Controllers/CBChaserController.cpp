@@ -18,6 +18,18 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 
+// [클라이언트] PlayerState 참조가 도착한 시점.
+void ACBChaserController::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	// PC 의 Player State 가 복제됨을 방송
+	// 캐릭터 의 Player State 복제보다 PC 의 Player State 가 늦을 수도 있음.
+	// 캐릭터의 초기화는 OnRep_PlayerState 호출과 동시에 수행되므로,
+	// PC 의 Player State 가 복제된 후에 초기화 작업을 수행해야하는 경우 이 방송을 구독하면 됨.
+	OnLocalPlayerStateSet.Broadcast();
+}
+
 // [서버] 로비 등에서 클라이언트가 의상을 고르면 호출 (서버에서 실행)
 void ACBChaserController::Server_RequestCosmeticPart_Implementation(ECBCosmeticSlot InSlot, FGameplayTag InPartId)
 {

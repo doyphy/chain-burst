@@ -22,6 +22,11 @@ UCBDeathAbility::UCBDeathAbility()
 
 	// 사망 상태에서도 활성화되어야 하는 유일한 어빌리티 (공통 차단 게이트의 예외)
 	bActivatableWhileDead = true;
+
+	// 공격 어빌리티가 BlockAbilitiesWithTag 로 Ability.Combat 을 막고 있으면 그 하위인 사망(Ability.Combat.Death)까지 걸린다.
+	// 그러면 시전 중 죽었을 때 사망 어빌리티가 아예 발동하지 못하고, 사망 이벤트는 1회성이라 다시 오지도 않아 체력 0인 채로 살아남음.
+	// 죽음은 어떤 차단도 뚫어야 하므로 차단 검사를 무시함
+	bIgnoreAbilityBlocking = true;
 }
 
 void UCBDeathAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,

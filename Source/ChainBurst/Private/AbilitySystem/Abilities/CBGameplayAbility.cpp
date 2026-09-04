@@ -69,8 +69,9 @@ bool UCBGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Han
 		// 현재 어빌리티 태그 (Asset Tags)의 부모 태그들 가져오기
 		FGameplayTagContainer ParentTags = GetAssetTags().GetGameplayTagParents();
 
-		// ASC의 Block된 태그에 내 부모 태그가 있는지 검사 
-		if (ASC->AreAbilityTagsBlocked(ParentTags))
+		// ASC의 Block된 태그에 내 부모 태그가 있는지 검사.
+		// 차단 무시 어빌리티(사망)는 이 검사도 건너뜀 — 엔진 검사만 뚫고 여기서 막히면 의미가 없음
+		if (!bIgnoreAbilityBlocking && ASC->AreAbilityTagsBlocked(ParentTags))
 		{
 			// 어빌리티 활성화 거부
 			return false;
@@ -78,6 +79,21 @@ bool UCBGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Han
 	}
 	// 어빌리티 활성화 허용
 	return true;
+}
+
+// 태그 요구·차단 검사. 반드시 발동해야 하는 어빌리티는 검사를 건너뛴다.
+bool UCBGameplayAbility::DoesAbilitySatisfyTagRequirements(const UAbilitySystemComponent& AbilitySystemComponent,
+	const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags,
+	FGameplayTagContainer* OptionalRelevantTags) const
+{
+	// 진행 중인 공격이 BlockAbilitiesWithTag 로 자기 계열 전체(Ability.Combat 등)를 막고 있어도 발동해야 하는 어빌리티.
+	// 엔진이 요구·차단을 한 덩어리로 판정하므로 차단만 골라 뺄 수 없음을 주의.
+	if (bIgnoreAbilityBlocking)
+	{
+		return true;
+	}
+
+	return Super::DoesAbilitySatisfyTagRequirements(AbilitySystemComponent, SourceTags, TargetTags, OptionalRelevantTags);
 }
 
 UCBCombatComponent* UCBGameplayAbility::GetCBCombatComponentFromActorInfo() const

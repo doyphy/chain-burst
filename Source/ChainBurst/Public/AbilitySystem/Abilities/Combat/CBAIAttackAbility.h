@@ -37,7 +37,7 @@ protected:
 
 	/**
 	 * 이 액션 태그에 등록된 변형 몽타주 중 하나를 무작위로 재생할지 여부.
-	 * 서버에서만 뽑히고 그 인덱스가 GameplayCue 로 전파되므로 전 클라이언트가 같은 모션을 본다.
+	 * 서버에서만 뽑히고 그 인덱스가 GameplayCue 로 전파되므로 전 클라이언트가 같은 모션을 봄.
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")
 	bool bRandomizeMontage = false;

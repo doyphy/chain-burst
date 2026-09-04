@@ -32,6 +32,9 @@ void UCBActionAbility::PlayActionMontage()
 
 	// 게임플레이 큐 실행 (몽타주 재생, 전 클라 동기화)
 	CBASC->ExecuteGameplayCue(CBGameplayTags::GameplayCue_PlayAction, CueParams);
+
+	// 캔슬로 끝났을 때 정지시킬 대상이 있음을 표시
+	bActionMontageStarted = true;
 	
 	// 몽타주 종료 이벤트 대기 (애님노티파이 수신 시 어빌리티 종료)
 	EndActionTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
@@ -51,18 +54,8 @@ void UCBActionAbility::PlayActionMontage()
 // 몽타주 종료 이벤트 대기 콜백 함수 (애님노티파이 수신 시 어빌리티 종료)
 void UCBActionAbility::OnActionEnded(FGameplayEventData Payload)
 {
-	// 사망처럼 마지막 프레임을 유지해야 하는 액션은 정지 요청을 건너뜀 (몽타주가 그대로 남아 시체 포즈가 됨)
-	// 몽타주 정지 요청 (게임플레이 큐, 전 클라 동기화)
-	if (UCBAbilitySystemComponent* CBASC = ShouldStopActionOnEnd() ? GetCBAbilitySystemComponentFromActorInfo() : nullptr)
-	{
-		// 태스크 콜백은 예측 윈도우 밖일 수 있으므로 명시적으로 연다.
-		// 없으면 소유 클라가 큐를 예측 실행하지 못해 서버 멀티캐스트를 기다리게 되고,
-		// 그만큼 클라 몽타주가 더 재생되어 루트 모션이 어긋날 수 있음.
-		FScopedPredictionWindow ScopedPrediction(CBASC, true);
-		
-		// 게임플레이 큐 실행 (몽타주 정지, 전 클라 동기화)
-		CBASC->ExecuteGameplayCue(CBGameplayTags::GameplayCue_StopAction, FGameplayCueParameters());
-	}
+	// 몽타주 정지 요청
+	StopActionMontage();
 
 	// 자식 상태 정리 (몽타주가 끝까지 재생됨 → 체인 종료)
 	CleanupActionState();
@@ -91,6 +84,24 @@ float UCBActionAbility::CurrentActionDuration() const
 	return 5.f;
 }
 
+// 몽타주 정지 요청 (게임플레이 큐, 전 클라 동기화).
+void UCBActionAbility::StopActionMontage()
+{
+	// 사망처럼 마지막 프레임을 유지해야 하는 액션은 정지 요청을 건너뜀 (몽타주가 그대로 남아 시체 포즈가 됨)
+	if (!ShouldStopActionOnEnd()) return;
+
+	UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo();
+	if (!CBASC) return;
+
+	// 태스크 콜백은 예측 윈도우 밖일 수 있으므로 명시적으로 연다.
+	// 없으면 소유 클라가 큐를 예측 실행하지 못해 서버 멀티캐스트를 기다리게 되고,
+	// 그만큼 클라 몽타주가 더 재생되어 루트 모션이 어긋날 수 있음.
+	FScopedPredictionWindow ScopedPrediction(CBASC, true);
+
+	// 게임플레이 큐 실행 (몽타주 정지, 전 클라 동기화)
+	CBASC->ExecuteGameplayCue(CBGameplayTags::GameplayCue_StopAction, FGameplayCueParameters());
+}
+
 void UCBActionAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
 	bool bReplicateEndAbility, bool bWasCancelled)
@@ -98,8 +109,19 @@ void UCBActionAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	// 캔슬로 끊긴 경우 자식 상태 정리 (정상 종료 정리는 OnActionEnded/OnDelayFinished가 담당)
 	if (bWasCancelled)
 	{
+		// 몽타주가 재생 중이면 정지 요청
+		// 캔슬은 서버에서만 처리되므로 권한이 있는 경우에만 정지 요청
+		if (bActionMontageStarted && HasAuthority(&ActivationInfo))
+		{
+			// 몽타주 정지 요청 (게임플레이 큐, 전 클라 동기화)
+			StopActionMontage();
+		}
+
 		CleanupActionState();
 	}
+
+	// 다음 활성화를 위해 되돌림 (어빌리티는 InstancedPerActor 라 인스턴스가 재사용됨)
+	bActionMontageStarted = false;
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

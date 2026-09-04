@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "CBPlayerListWidget.generated.h"
 
+class ACBChaserController;
 class ACBGameStateBase;
 class UCBPlayerListEntryWidget;
 class UPanelWidget;
@@ -39,6 +40,19 @@ private:
 	UFUNCTION()
 	void HandlePlayerListChanged();
 
+	/** 로컬 PlayerState 확정 콜백 (다이내믹 델리게이트라 UFUNCTION 필수) */
+	UFUNCTION()
+	void HandleLocalPlayerStateSet();
+
+	/**
+	 * 소유 컨트롤러의 PlayerState 확정 신호를 구독하는 함수 (중복 구독 방지 포함).
+	 * 이미 확정돼 있으면 신호가 오지 않으므로, 구독만 걸고 목록은 호출자가 채운다.
+	 */
+	void BindToOwningController();
+
+	/** 컨트롤러 신호 구독을 해제하는 함수 */
+	void UnbindFromOwningController();
+
 	/**
 	 * 게임 스테이트의 목록 변경 신호를 구독하는 함수 (중복 구독 방지 포함).
 	 * 게임 스테이트가 아직 복제되지 않았으면 도착 시점을 기다렸다가 다시 시도함.
@@ -59,4 +73,7 @@ private:
 
 	/** 게임 스테이트 도착 이벤트 구독 핸들. 유효하면 도착을 기다리는 중이라는 뜻 */
 	FDelegateHandle GameStateSetHandle;
+
+	/** 구독 해제용 소유 컨트롤러 캐시 */
+	TWeakObjectPtr<ACBChaserController> CachedOwningController;
 };

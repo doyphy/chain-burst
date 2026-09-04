@@ -14,6 +14,10 @@ UCBHitReactAbility::UCBHitReactAbility()
 	// 피격 시 진행 중인 전투 액션(공격 등) 캔슬
 	CancelActionTag = CBGameplayTags::Action_Combat;
 
+	// 슈퍼아머(스킬 시전 등) 중에는 피격 반응 무시.
+	// 데미지 GE는 그대로 적용되고 반응 모션만 생략.
+	ActivationBlockedTags.AddTag(CBGameplayTags::Status_Combat_SuperArmor);
+
 	// Event.Combat.HitReact 이벤트로 자동 발동되도록 트리거 등록
 	RegisterEventTrigger(CBGameplayTags::Event_Combat_HitReact);
 }

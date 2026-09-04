@@ -225,5 +225,8 @@ void UCBCharacterAnimInstance::InitAnimData()
 			CBGameplayTags::Status_Combat_InCombat,
 			EGameplayTagEventType::NewOrRemoved)
 		.AddUObject(this, &UCBCharacterAnimInstance::OnCombatTagChanged);
+
+		// 현재 상태를 1회 반영.
+		bIsCombatMode = ASC->HasMatchingGameplayTag(CBGameplayTags::Status_Combat_InCombat);
 	}
 }

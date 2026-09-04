@@ -9,6 +9,7 @@
 #include "AnimInstances/CBCharacterAnimInstance.h"
 #include "PlayerState/CBPlayerState.h"
 #include "AssetManager/CBAssetManager.h"
+#include "GameModes/CBGameplayGameMode.h"
 
 // engine
 #include "Components/CapsuleComponent.h"
@@ -21,8 +22,8 @@
 
 ACBChaserCharacter::ACBChaserCharacter()
 {
-	// 리스폰 설계 전까지 플레이어 폰을 자동 파괴하지 않음.
-	// 파괴하면 PlayerController가 폰을 잃어 화면·입력이 끊김. (0 이하 = 디스폰 타이머 미사용)
+	// 시체를 스스로 파괴하지 않음. 파괴하면 PlayerController가 폰을 잃어 화면·입력이 끊기기 때문.
+	// 시체 정리는 리스폰 시점에 게임모드가 폰을 교체하면서 함께 처리함. (0 이하 = 디스폰 타이머 미사용)
 	DespawnDelay = 0.f;
 
 	// 캡슐 컴포넌트의 크기를 초기화 (충돌 영역 설정)
@@ -211,6 +212,18 @@ void ACBChaserCharacter::InitializePlayerSystem()
 			}
 		});
 	});
+}
+
+// [서버] 사망 시 게임모드에 리스폰 요청.
+void ACBChaserCharacter::Auth_OnDeath()
+{
+	Super::Auth_OnDeath();
+
+	// 리스폰 지연·스폰 지점 규칙은 게임모드가 소유. 게임플레이 레벨이 아니면(로비 등) 리스폰하지 않음
+	if (ACBGameplayGameMode* GameplayGameMode = GetWorld()->GetAuthGameMode<ACBGameplayGameMode>())
+	{
+		GameplayGameMode->Auth_HandlePlayerDeath(GetController());
+	}
 }
 
 // [공용] ASC/AttributeSet 캐싱 및 ActorInfo 초기화 함수

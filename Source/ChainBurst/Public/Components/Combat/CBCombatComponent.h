@@ -167,6 +167,19 @@ protected:
 
 	/** 비전투 모드로 전환 로직 */
 	virtual void OnExitCombatMode();
+
+	/**
+	 * 이 인스턴스가 전투 상태 태그(Status.Combat.InCombat)를 직접 부여했는지 여부.
+	 * 루스 태그는 넣은 인스턴스가 빼야 하므로, 복제로 태그만 받은 시뮬 프록시가 제거하지 않도록 가른다.
+	 */
+	bool bCombatTagApplied = false;
+
+private:
+	/**
+	 * 이 인스턴스가 붙인 전투 상태 태그를 걷어내는 함수. (EndPlay·비전투 전환에서 호출)
+	 * 플레이어 ASC 는 PlayerState 소유라 폰보다 오래 살아남으므로, 정리하지 않으면 다음 폰까지 태그가 이월된다.
+	 */
+	void ClearCombatModeTag();
 #pragma endregion
 
 #pragma region WeaponTrace
@@ -191,6 +204,13 @@ protected:
 
 	/** 누적된 히트를 한 번에 처리하는 함수 */
 	void FlushPendingHits();
+
+	/**
+	 * 타격 대상으로 유효한 진영인지 판정 (적대만 true)
+	 * 판정 기준은 ACBAIController::IsValidTarget 과 동일하게 전역 attitude solver 를 따름.
+	 * 팀 인터페이스가 없는 액터·중립은 Neutral 로 떨어져 걸러짐.
+	 */
+	bool IsHostileTarget(const AActor* InActor) const;
 
 	/** 트레이스 범위 (구형 트레이스 반지름) */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Trace")

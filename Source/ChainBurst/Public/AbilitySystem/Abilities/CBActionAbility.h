@@ -61,6 +61,12 @@ protected:
 	/** 현재 재생 중인 액션의 길이 반환 (폴백 딜레이용) */
 	float CurrentActionDuration() const;
 
+	/**
+	 * 몽타주 정지 요청 (GameplayCue.StopAction, 전 클라 동기화).
+	 * ShouldStopActionOnEnd()가 false면 아무것도 하지 않음.
+	 */
+	void StopActionMontage();
+
 	/** 액션 종료 이벤트(애님노티파이) 수신 시 호출. ShouldStopActionOnEnd()가 참일 때만 몽타주를 정지시킴 */
 	UFUNCTION()
 	virtual void OnActionEnded(FGameplayEventData Payload);
@@ -79,4 +85,10 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UAbilityTask_WaitDelay> DelayTask;
+
+	/**
+	 * 이 어빌리티가 액션 몽타주 재생을 시작했는지 여부.
+	 * 캔슬로 끝날 때 자기 몽타주만 정지시키기 위한 표식.
+	 */
+	bool bActionMontageStarted = false;
 };

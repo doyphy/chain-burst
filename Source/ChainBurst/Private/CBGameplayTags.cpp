@@ -27,6 +27,7 @@ namespace CBGameplayTags
 	
 	/** Status Tags. (캐릭터 상태 — 소유자·복제 규칙은 Docs/Tech/GameplayTags.md 참고) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_InCombat, "Status.Combat.InCombat", "현재 전투 상태")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_SuperArmor, "Status.Combat.SuperArmor", "슈퍼아머 상태 — 피격 반응에 끊기지 않음 (어빌리티가 ActivationOwnedTags로 부여)")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Overridden, "Status.Movement.Overridden", "GE에 의해 이동속도가 오버라이드 된 상태")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Dashing, "Status.Movement.Dashing", "대시 중 상태")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Idle, "Status.Movement.Idle", "지상 정지(이동 없음) 파생 상태 — 공중에서는 부여되지 않음 (InAir와 배타)")
@@ -63,8 +64,9 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_C, "Ability.Combat.Attack.Skill.C", "스킬 공격 C 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack_Skill_D, "Ability.Combat.Attack.Skill.D", "스킬 공격 D 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_EquipWeapon, "Ability.Combat.EquipWeapon", "무기 장착 어빌리티 태그")
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Death, "Ability.Combat.Death", "사망 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_UnequipWeapon, "Ability.Combat.UnequipWeapon", "무기 해제 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_HitReact, "Ability.Combat.HitReact", "피격 반응 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Death, "Ability.Combat.Death", "사망 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Dash, "Ability.Movement.Dash", "대시 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Sprint, "Ability.Movement.Sprint", "전력 질주 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Walk, "Ability.Movement.Walk", "걷기 어빌리티 태그")

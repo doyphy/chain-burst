@@ -9,6 +9,7 @@
 // engine
 #include "Net/UnrealNetwork.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "GenericTeamAgentInterface.h"
 #include "GameplayEffect.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
@@ -28,6 +29,9 @@ UCBCombatComponent::UCBCombatComponent()
 // 컴포넌트가 끝날 때 호출됨 (캐릭터 파괴·맵 전환·종료)
 void UCBCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// 이 인스턴스가 붙인 전투 상태 태그 정리 (플레이어 ASC 는 PlayerState 소유라 폰이 파괴되어도 태그가 남아 있음)
+	ClearCombatModeTag();
+
 	// 스폰·파괴는 서버 권위. 클라이언트는 복제로 사라짐
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
@@ -335,12 +339,18 @@ void UCBCombatComponent::TickWeaponTrace()
 				{
 					AActor* HitActor = Hit.GetActor();
 
-					// 충돌한 액터가 유효하고, 충돌한 기록이 없다면 배칭 목록에 추가
-					// 배칭 목록에 담아두고 일정 간격 마다 한 번에 처리함.
+					// 충돌한 액터가 유효하고, 충돌한 기록이 없다면 처리
 					if (HitActor && !AlreadyHitActors.Contains(HitActor))
 					{
+						// 진영 판정 결과와 무관하게 기록해, 같은 대상을 서브디비전마다 다시 검사하지 않게 함
 						AlreadyHitActors.Add(HitActor);
-						PendingHits.Add(Hit);
+
+						// 적대 진영만 배칭 목록에 추가 (아군·중립·팀 없는 액터는 여기서 걸러짐)
+						// 배칭 목록에 담아두고 일정 간격 마다 한 번에 처리함.
+						if (IsHostileTarget(HitActor))
+						{
+							PendingHits.Add(Hit);
+						}
 					}
 				}
 			}
@@ -543,6 +553,9 @@ void UCBCombatComponent::OnEnterCombatMode()
 
 	// 전투 상태 태그 추가
 	ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagOnly);
+
+	// 이 인스턴스가 붙였음을 기록 (EndPlay 에서 자기 것만 걷어내기 위함)
+	bCombatTagApplied = true;
 }
 
 void UCBCombatComponent::OnExitCombatMode()
@@ -569,7 +582,21 @@ void UCBCombatComponent::OnExitCombatMode()
 	}
 
 	// 전투 상태 태그 제거
-	ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagOnly);
+	ClearCombatModeTag();
+}
+
+// 이 인스턴스가 붙인 전투 상태 태그를 걷어냄. 붙인 적이 없으면 아무것도 하지 않음.
+void UCBCombatComponent::ClearCombatModeTag()
+{
+	// 복제로 태그만 받은 인스턴스(시뮬 프록시)는 제거 주체가 아님
+	if (!bCombatTagApplied) return;
+
+	if (UCBAbilitySystemComponent* ASC = GetCachedOwnerASC())
+	{
+		ASC->RemoveLooseGameplayTag(CBGameplayTags::Status_Combat_InCombat, 1, EGameplayTagReplicationState::TagOnly);
+	}
+
+	bCombatTagApplied = false;
 }
 
 void UCBCombatComponent::ProcessHit(const FGameplayAbilityTargetDataHandle& TargetDataHandle)
@@ -614,6 +641,14 @@ void UCBCombatComponent::Server_NotifyAttackHit_Implementation(const FGameplayAb
 		AActor* HitActor = HitResult->GetActor();
 		if (!HitActor) continue;
 
+		// 진영 검증. 클라가 보낸 데이터는 신뢰할 수 없으므로 서버에서 다시 판정.
+		if (!IsHostileTarget(HitActor))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[%s] 히트 검증 실패: 적대 진영이 아님 (타겟: %s)"),
+				*GetOwner()->GetName(), *HitActor->GetName());
+			continue;
+		}
+
 		// 히트한 액터와 내 캐릭터 사이의 거리를 계산해서 허용 거리보다 멀면 유효하지 않은 히트로 간주
 		const float ActualDistance = FVector::Distance(GetOwner()->GetActorLocation(), HitActor->GetActorLocation());
 		if (ActualDistance > AllowedDistance)
@@ -653,6 +688,16 @@ void UCBCombatComponent::FlushPendingHits()
 	// 배칭 목록 초기화
 	PendingHits.Reset();
 	HitBatchAccumulator = 0.0f;
+}
+
+// 타격 대상으로 유효한 진영인지 판정 (적대만 true)
+bool UCBCombatComponent::IsHostileTarget(const AActor* InActor) const
+{
+	if (!IsValid(InActor)) return false;
+
+	// 진영이 적대인 대상만 타격. (A:공격자, B:피격 대상), 규칙은 CBGameInstance 에서 커스텀한 규칙을 따름.
+	// 팀 인터페이스를 구현하지 않은 액터는 엔진 구현상 Neutral 로 떨어져 걸러짐.
+	return FGenericTeamId::GetAttitude(GetOwner(), InActor) == ETeamAttitude::Hostile;
 }
 
 

@@ -1,5 +1,6 @@
 // project
 #include "UI/Widgets/CBPlayerListWidget.h"
+#include "Controllers/CBChaserController.h"
 #include "GameStates/CBGameStateBase.h"
 #include "PlayerState/CBPlayerState.h"
 #include "UI/Widgets/CBPlayerListEntryWidget.h"
@@ -14,6 +15,9 @@ void UCBPlayerListWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	// 로컬 PlayerState 확정 신호 구독. 목록 변경 방송보다 늦게 오는 경우를 여기서 받음
+	BindToOwningController();
+
 	// 구독 + 현재 목록 반영. 위젯이 화면에서 빠졌다 돌아와도 여기서 다시 맞춰짐
 	BindToGameState();
 }
@@ -22,6 +26,7 @@ void UCBPlayerListWidget::NativeDestruct()
 {
 	// 슬레이트가 사라지는 동안은 구독을 끊음 (댕글링 방지)
 	UnbindFromGameState();
+	UnbindFromOwningController();
 
 	Super::NativeDestruct();
 }
@@ -67,6 +72,36 @@ void UCBPlayerListWidget::UnbindFromGameState()
 	GameStateSetHandle.Reset();
 }
 
+// 소유 컨트롤러의 PlayerState 확정 신호를 구독.
+void UCBPlayerListWidget::BindToOwningController()
+{
+	// 재호출·재구성 대비: 기존 구독이 있으면 먼저 해제
+	UnbindFromOwningController();
+
+	ACBChaserController* OwningController = Cast<ACBChaserController>(GetOwningPlayer());
+	if (!OwningController) return;
+
+	CachedOwningController = OwningController;
+
+	// 다이내믹이라 중복 구독은 AddUnique 로 방지
+	OwningController->OnLocalPlayerStateSet.AddUniqueDynamic(this, &UCBPlayerListWidget::HandleLocalPlayerStateSet);
+}
+
+void UCBPlayerListWidget::UnbindFromOwningController()
+{
+	if (ACBChaserController* OwningController = CachedOwningController.Get())
+	{
+		OwningController->OnLocalPlayerStateSet.RemoveDynamic(this, &UCBPlayerListWidget::HandleLocalPlayerStateSet);
+	}
+	CachedOwningController.Reset();
+}
+
+// 로컬 PlayerState 가 확정됐으면 자기 자신을 가려낼 수 있으므로 목록을 다시 만듦.
+void UCBPlayerListWidget::HandleLocalPlayerStateSet()
+{
+	Local_RefreshEntries();
+}
+
 // 게임 스테이트가 늦게 도착한 경우. 이제 구독할 수 있음
 void UCBPlayerListWidget::HandleGameStateSet(AGameStateBase* /*InGameState*/)
 {
@@ -90,9 +125,12 @@ void UCBPlayerListWidget::Local_RefreshEntries()
 	// 이전 행을 모두 비움 (행 위젯의 구독은 각자 NativeDestruct 에서 정리됨)
 	EntryContainer->ClearChildren();
 
-	// 자기 자신을 목록에서 빼기 위한 기준. 아직 확정되지 않았어도 목록 변경 때마다 다시 평가되므로 스스로 복구됨
+	// 로컬 플레이어 스테이트 가져오기 (로컬 판정용)
 	const APlayerController* OwningPlayerController = GetOwningPlayer();
 	const APlayerState* LocalPlayerState = OwningPlayerController ? OwningPlayerController->PlayerState : nullptr;
+	// PC 의 PlayerState 가 복제되기 전에 위젯이 먼저 생성될 수 있으므로, 아직 없으면 목록을 만들지 않음
+	// PC 의 PlayerState 가 복제되면 OnLocalPlayerStateSet 신호가 오므로, 그때 목록을 다시 만듦
+	if (!LocalPlayerState) return;
 
 	for (APlayerState* PlayerState : CBGameState->PlayerArray)
 	{

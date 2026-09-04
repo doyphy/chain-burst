@@ -87,6 +87,11 @@ protected:
 
 	/** 통합 초기화 완료 처리 (모든 초기화 완료 후 입력 잠금 해제) */
 	virtual void HandleCharacterSystemReady() override;
+
+	//~ Begin ACBBaseCharacter Interface
+	/** [서버] 사망 시 게임모드에 리스폰을 요청함 (지연·스폰 지점 규칙은 게임모드가 소유). */
+	virtual void Auth_OnDeath() override;
+	//~ End ACBBaseCharacter Interface
 	
 public:
 	//~ Begin ICBCombatInterface Interface.

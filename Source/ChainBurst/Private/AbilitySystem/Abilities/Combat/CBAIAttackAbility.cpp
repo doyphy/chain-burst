@@ -68,17 +68,17 @@ void UCBAIAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle
 	PlayActionMontage();
 
 	UAbilityTask_WaitGameplayEvent* WaitTraceStart = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
-		this, CBGameplayTags::Event_Combat_TraceStart, nullptr, true);
+		this, CBGameplayTags::Event_Combat_TraceStart, nullptr, false);
 	WaitTraceStart->EventReceived.AddDynamic(this, &ThisClass::OnTraceStart);
 	WaitTraceStart->ReadyForActivation();
 
 	UAbilityTask_WaitGameplayEvent* WaitTraceEnd = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
-		this, CBGameplayTags::Event_Combat_TraceEnd, nullptr, true);
+		this, CBGameplayTags::Event_Combat_TraceEnd, nullptr, false);
 	WaitTraceEnd->EventReceived.AddDynamic(this, &ThisClass::OnTraceEnd);
 	WaitTraceEnd->ReadyForActivation();
-
+ 
 	UAbilityTask_WaitGameplayEvent* WaitAttackHit = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
-		this, CBGameplayTags::Event_Combat_Attack_Hit, nullptr, true);
+		this, CBGameplayTags::Event_Combat_Attack_Hit, nullptr, false);
 	WaitAttackHit->EventReceived.AddDynamic(this, &ThisClass::OnAttackHit);
 	WaitAttackHit->ReadyForActivation();
 }

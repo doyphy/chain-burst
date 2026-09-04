@@ -217,8 +217,19 @@ public:
 	FORCEINLINE bool IsDead() const { return bIsDead; }
 
 protected:
+	//~ Begin ACharacter Interface.
+	/**
+	 * 착지 콜백. 공중에서 죽어 낙하 중이던 시체가 바닥에 닿는 시점에 이동을 정지.
+	 * 사망 시점에 바로 멈추면 MOVE_None 이라 중력이 안 먹어 공중에 떠 버리기 때문.
+	 */
+	virtual void Landed(const FHitResult& Hit) override;
+	//~ End ACharacter Interface.
+
 	/** [서버] 사망 시 권위 정리 (이동 정지·충돌 해제·자식 훅·디스폰 예약) */
 	virtual void Auth_HandleDeath();
+
+	/** [서버] 이동을 완전히 정지 (사망 확정 시점 또는 공중 사망 후 착지 시점) */
+	void Auth_StopMovementForDeath();
 
 	/** [서버] 자식이 확장하는 사망 정리 훅 (AI = 두뇌 정지 등). 기본 구현은 비어 있음 */
 	virtual void Auth_OnDeath() {}

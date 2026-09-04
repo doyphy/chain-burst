@@ -70,7 +70,7 @@ void UCBChaserAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Ha
 				this,
 				CBGameplayTags::Event_Combat_TraceStart,
 				nullptr,
-				true
+				false
 		);
 		WaitTraceStart->EventReceived.AddDynamic(this, &ThisClass::OnTraceStart);
 		WaitTraceStart->ReadyForActivation();
@@ -80,7 +80,7 @@ void UCBChaserAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Ha
 				this,
 				CBGameplayTags::Event_Combat_TraceEnd,
 				nullptr,
-				true
+				false
 			);
 		WaitTraceEnd->EventReceived.AddDynamic(this, &ThisClass::OnTraceEnd);
 		WaitTraceEnd->ReadyForActivation();
@@ -95,7 +95,7 @@ void UCBChaserAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Ha
 				this,
 				CBGameplayTags::Event_Combat_Attack_Hit,
 				nullptr,
-				true
+				false
 			);
 		WaitAttackHit->EventReceived.AddDynamic(this, &ThisClass::OnAttackHit);
 		WaitAttackHit->ReadyForActivation();

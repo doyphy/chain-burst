@@ -18,6 +18,10 @@ void UCBAIAnimInstance::OnCharacterSystemReady()
 			CBGameplayTags::Status_Movement_Strafe,
 			EGameplayTagEventType::NewOrRemoved)
 		.AddUObject(this, &UCBAIAnimInstance::OnStrafeTagChanged);
+
+		// 구독은 과거 변화를 소급 발화하지 않으므로 현재 상태를 1회 반영.
+		// 없으면 이미 스트레이프 중인 AI 에 뒤늦게 관련성을 얻은 클라가 주시하지 않는 모션으로 시작한다
+		bIsStrafing = ASC->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Strafe);
 	}
 }
 

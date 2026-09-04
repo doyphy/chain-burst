@@ -1,16 +1,17 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameStateBase.h"
+#include "GameStates/CBGameStateBase.h"
 #include "Types/CBDelegates.h"
 #include "CBLobbyGameState.generated.h"
 
 /**
  * 로비 레벨의 게임 스테이트.
  * 준비 인원 집계를 들고 전 클라이언트에 복제하고, 고를 수 있는 캐릭터 클래스를 각 인스턴스가 미리 로드하게 함.
+ * 플레이어 목록 변경 신호는 베이스(ACBGameStateBase)가 제공함.
  */
 UCLASS()
-class CHAINBURST_API ACBLobbyGameState : public AGameStateBase
+class CHAINBURST_API ACBLobbyGameState : public ACBGameStateBase
 {
 	GENERATED_BODY()
 

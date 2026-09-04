@@ -13,6 +13,7 @@ class UCBCharacterMovementData;
 class UCBActionMontageData;
 class ACBBaseCharacter;
 class UCBHealthBarWidget;
+class UCBNamePlateWidget;
 
 /**
  * 캐릭터의 바디(크기) 셋업.
@@ -70,8 +71,7 @@ public:
 	 * 로드아웃에 소프트 참조가 생기면 여기에 모은다 — "무엇을 더 로드해야 하는지"는 로드아웃이 알고,
 	 * "언제 준비 완료인지"는 캐릭터가 정하게 하기 위함이다. 캐릭터는 완료 콜백만 기다리면 된다.
 	 *
-	 * **어떤 경로로 끝나든 OnComplete 를 반드시 호출할 것.** 빠뜨리면 캐릭터가 영구히 준비 완료되지 않고,
-	 * 화면이 검은 채로 멈춘다 → [SystemReady.md]
+	 * 어떤 경로로 끝나든 OnComplete 를 반드시 호출할 것. 빠뜨리면 캐릭터가 영구히 준비 완료되지 않고, 화면이 검은 채로 멈춤.
 	 *
 	 * 기본 구현은 소프트 참조가 없다고 보고 즉시 완료한다.
 	 * @param OnComplete 로드·적용이 끝난 뒤 호출할 콜백
@@ -160,6 +160,22 @@ protected:
 	/** 머리 위 체력바 위젯 클래스 (전 클라이언트에서 필요. UCBUIComponent에 주입되어 준비 완료 후 생성됨) */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|UI")
 	TSubclassOf<UCBHealthBarWidget> OverheadHealthBarWidgetClass = nullptr;
+
+	/** 발밑 이름표 사용 여부 (끄면 로비에서도 이름표를 만들지 않음) */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|UI")
+	bool bShowNamePlate = true;
+
+	/** 발밑 이름표 위젯 클래스 (로비에서만 생성됨. UCBUIComponent에 주입되어 준비 완료 후 생성됨) */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|UI", meta = (EditCondition = "bShowNamePlate"))
+	TSubclassOf<UCBNamePlateWidget> NamePlateWidgetClass = nullptr;
+
+	/** 발밑 이름표의 부착 높이 여유값 (캡슐 하단에서 추가로 더 내릴 높이). 캡슐 크기가 캐릭터마다 달라 로드아웃에서 함께 조정 */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|UI", meta = (EditCondition = "bShowNamePlate"))
+	float NamePlateZMargin = 30.f;
+
+	/** 발밑 이름표가 보이는 거리(cm). 로컬 시점이 이 안에 있을 때만 표시됨. 0 이하면 거리 컬링 없음 */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|UI", meta = (EditCondition = "bShowNamePlate"))
+	float NamePlateVisibleDistance = 1500.f;
 
 	// =========================================================
 	// 기본 스탯 (Stats & Attributes)

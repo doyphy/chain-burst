@@ -16,6 +16,7 @@ class UCBAttributeSet;
  * 플레이어의 상태를 관리하는 클래스. 주로 어빌리티 시스템과 관련된 데이터를 저장하고 관리하는 역할을 함.
  * 플레이어가 소유한 [ASC]와 [AttributeSet]을 보유하며, IAbilitySystemInterface를 구현하여 다른 클래스에서 ASC에 접근할 수 있도록 함.
  * 로비에서 고른 값(의상 조합·캐릭터 선택·준비 상태)도 여기에 두어 전 클라이언트가 보고, 맵을 넘어 게임플레이 레벨까지 이관함.
+ * 닉네임은 엔진의 PlayerName 을 그대로 쓰고(복제·이관이 엔진에 내장), 값이 바뀐 시점만 델리게이트로 알림.
  */
 UCLASS()
 class CHAINBURST_API ACBPlayerState : public APlayerState, public IAbilitySystemInterface
@@ -32,6 +33,9 @@ public:
 	//~ Begin APlayerState Interface.
 	/** seamless travel 시 새로 만들어지는 PlayerState 로 값을 옮김 (오버라이드하지 않으면 커스텀 값이 사라짐). */
 	virtual void CopyProperties(APlayerState* NewPlayerState) override;
+
+	/** 닉네임(엔진 PlayerName)이 바뀌었을 때 호출됨. 표시를 갱신하도록 델리게이트로 알림. */
+	virtual void OnRep_PlayerName() override;
 	//~ End APlayerState Interface.
 
 protected:
@@ -178,5 +182,19 @@ protected:
 	/** 로비에서의 준비 여부. */
 	UPROPERTY(ReplicatedUsing = OnRep_IsReady)
 	bool bIsReady = false;
+#pragma endregion
+
+#pragma region Nickname
+	/**
+	 * 플레이어의 표시 이름. 값 자체는 엔진의 PlayerName 을 그대로 사용.
+	 * 복제도 CopyProperties 를 통한 맵 이관도 APlayerState 가 이미 해주고, 이 클래스는 변경 신호만 처리.
+	 */
+public:
+	/**
+	 * 닉네임이 바뀌었음을 알리는 델리게이트. (로비 플레이어 목록·이름표 위젯에서 구독)
+	 * 리슨 서버에서는 SetPlayerName 이 OnRep 을 직접 호출해 주므로 호스트 화면도 같은 경로로 갱신됨.
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "ChainBurst|Lobby")
+	FCBOnPlayerNicknameChanged OnPlayerNicknameChanged;
 #pragma endregion
 };

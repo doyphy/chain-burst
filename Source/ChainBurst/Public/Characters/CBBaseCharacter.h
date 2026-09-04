@@ -25,6 +25,7 @@ DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCBTeamChanged, ECBTeam /* NewTeam */);
 DECLARE_MULTICAST_DELEGATE(FOnCBCharacterDied);
 
+
 /** 캐릭터 초기화 상태 */
 enum class ECBSystemState : uint8
 {

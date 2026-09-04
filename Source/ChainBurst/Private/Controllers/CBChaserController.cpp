@@ -115,6 +115,43 @@ void ACBChaserController::Server_RequestToggleReady_Implementation()
 	LobbyGameMode->Auth_RefreshReadyState();
 }
 
+// [서버] 로비에서 닉네임 입력을 확정하면 호출 (서버에서 실행)
+void ACBChaserController::Server_RequestSetNickname_Implementation(const FString& InNickname)
+{
+	const UWorld* World = GetWorld();
+	if (!World) return;
+
+	// 로비 레벨이 아니면 무시 (게임플레이 중에는 닉네임을 바꿀 수 없음)
+	ACBLobbyGameMode* LobbyGameMode = World->GetAuthGameMode<ACBLobbyGameMode>();
+	if (!LobbyGameMode) return;
+
+	ACBPlayerState* CBPlayerState = GetPlayerState<ACBPlayerState>();
+	if (!CBPlayerState) return;
+
+	// 준비를 마친 뒤에는 바꿀 수 없음 (무기·의상 변경과 같은 정책)
+	if (CBPlayerState->IsReady())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 준비 상태에서 닉네임 변경을 요청해 무시함"), *GetNameSafe(this));
+		return;
+	}
+
+	// 공백·제어문자·길이 검사와 중복 검사는 게임모드가 담당해서 수정 처리.
+	// 쓸 수 있는 이름이 안 나오면(공백뿐인 입력 등) 거부.
+	FString Nickname;
+	if (!LobbyGameMode->Auth_SanitizeNickname(InNickname, CBPlayerState, Nickname))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 쓸 수 없는 닉네임 요청: %s"), *GetNameSafe(this), *InNickname);
+		return;
+	}
+
+	// 요청한 결과가 지금 이름과 같으면 복제 갱신을 낼 이유가 없음.
+	if (CBPlayerState->GetPlayerName().Equals(Nickname, ESearchCase::CaseSensitive)) return;
+
+	// 엔진 경로로 반영 (SetPlayerName + K2_OnChangeName 훅).
+	// 리슨 서버면 SetPlayerName 이 OnRep 을 직접 호출해 주므로 호스트 화면도 같은 경로로 갱신됨
+	LobbyGameMode->ChangeName(this, Nickname, true);
+}
+
 // [서버] 로비에서 시작 버튼을 누르면 호출 (서버에서 실행)
 void ACBChaserController::Server_RequestStartMatch_Implementation()
 {

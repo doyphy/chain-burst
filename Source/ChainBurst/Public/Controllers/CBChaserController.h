@@ -54,6 +54,15 @@ public:
 	void Server_RequestToggleReady();
 
 	/**
+	 * [클라 → 서버] 닉네임 변경 요청. (서버에서만 실행)
+	 * 서버가 게임모드에 다듬기·중복 검사를 맡기고, 통과하면 PlayerState 의 이름(엔진 PlayerName)을 바꿈.
+	 * 로비 게임모드가 없는 레벨이거나 이미 준비를 마쳤으면 아무것도 하지 않음.
+	 * @param InNickname 입력창에 적은 원본 문자열 (검증 및 수정은 서버가 함)
+	 */
+	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "ChainBurst|Lobby")
+	void Server_RequestSetNickname(const FString& InNickname);
+
+	/**
 	 * [클라 → 서버] 게임 시작 요청. (서버에서만 실행)
 	 * 호스트 여부·전원 준비·최소 인원 검증은 로비 게임모드가 함.
 	 */

@@ -75,6 +75,18 @@ void ACBPlayerState::CopyProperties(APlayerState* NewPlayerState)
 		// 고른 캐릭터도 함께 이관. 빠지면 게임플레이 레벨에서 기본 폰 클래스로 스폰됨
 		NewCBPlayerState->SelectedCharacterId = SelectedCharacterId;
 	}
+
+	// 닉네임(PlayerName)은 Super 의 CopyProperties 가 이미 옮기므로 여기서 처리 안해도 됨.
+}
+
+// 닉네임이 바뀌었을 때 호출되는 콜백. 리슨 서버에서는 SetPlayerName 이 이 함수를 직접 호출해 줌.
+void ACBPlayerState::OnRep_PlayerName()
+{
+	// 이전 이름 갱신·환영 메시지 등 엔진 기본 처리를 먼저 수행
+	Super::OnRep_PlayerName();
+
+	// 닉네임 변경을 방송. 위젯이 구독해 이름 표기를 갱신하도록 함
+	OnPlayerNicknameChanged.Broadcast(GetPlayerName());
 }
 
 // [서버] 컨트롤러가 요청을 검증한 뒤 호출 (서버에서 실행)

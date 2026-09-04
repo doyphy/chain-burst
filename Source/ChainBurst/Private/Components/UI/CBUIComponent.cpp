@@ -4,6 +4,7 @@
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "AbilitySystem/CBAttributeSet.h"
 #include "UI/Widgets/CBHealthBarWidget.h"
+#include "UI/Widgets/CBNamePlateWidget.h"
 #include "UI/CBHUD.h"
 #include "GameStates/CBLobbyGameState.h"
 
@@ -21,7 +22,10 @@ void UCBUIComponent::OnCharacterSystemReady()
 	// 데디케이트 서버는 화면이 없으므로 UI 생성 안 함 (프로젝트는 리슨 서버 전제지만 안전 가드)
 	if (GetNetMode() == NM_DedicatedServer) return;
 
-	// 로비에서는 캐릭터 부착 UI(HUD·머리 위 바)를 만들지 않음.
+	// 이름표는 로비·게임플레이 공통. 게임플레이에서는 자기 자신을 빼고 거리 컬링 처리 (CreateNamePlateWidget 참고)
+	CreateNamePlateWidget();
+
+	// 로비에서는 체력 UI(HUD·머리 위 바)를 만들지 않음.
 	if (GetWorld()->GetGameState<ACBLobbyGameState>()) return;
 
 	ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>();
@@ -102,7 +106,7 @@ void UCBUIComponent::CreateOverheadWidget(UCBAbilitySystemComponent* InASC)
 	// 사망 알림 구독 (시체 위에 체력바가 남지 않도록). 캐릭터가 Status.Dead 받아 전 인스턴스에서 방송함.
 	OwnerCharacter->OnCharacterDiedDelegate.AddUObject(this, &UCBUIComponent::OnOwnerDied);
 
-	// 위젯 인스턴스를 직접 생성해 SetWidget으로 연결 (ASC 바인딩 호출 지점을 확보하기 위함)
+	// 위젯 인스턴스 생성
 	OverheadWidget = CreateWidget<UCBHealthBarWidget>(OwnerCharacter->GetWorld(), OverheadWidgetClass);
 	if (!OverheadWidget) return;
 
@@ -130,6 +134,98 @@ void UCBUIComponent::CreateOverheadWidget(UCBAbilitySystemComponent* InASC)
 		SetOverheadBarVisible(false); // 숨김 모드로 시작
 		BindOverheadDamageTrigger(InASC); // CurrentHealth 변경 구독
 	}
+}
+
+// [로비 전용] 이름표 위젯 생성 및 부착
+void UCBUIComponent::CreateNamePlateWidget()
+{
+	// 꺼두었거나 위젯 클래스 미지정이면 생성하지 않음
+	if (!bShowNamePlate || !NamePlateWidgetClass) return;
+
+	ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>();
+
+	// 이름은 PlayerState 에서 옴. Chaser 는 초기화 진입점이 PossessedBy(서버)/OnRep_PlayerState(클라)라
+	// 준비 완료 시점엔 이미 유효하지만, PlayerState 가 없는 대상(AI 등)은 여기서 걸러짐.
+	APlayerState* OwnerPlayerState = OwnerCharacter->GetPlayerState();
+	if (!OwnerPlayerState) return;
+
+	// 위젯 인스턴스 생성
+	NamePlateWidget = CreateWidget<UCBNamePlateWidget>(OwnerCharacter->GetWorld(), NamePlateWidgetClass);
+	if (!NamePlateWidget) return;
+
+	// 로비인지 판단. 로비는 라인업을 함께 보는 화면이라 자기 이름표도 띄우고 거리 컬링도 하지 않음
+	const UWorld* World = GetWorld();
+	const bool bIsLobby = World && World->GetGameState<ACBLobbyGameState>() != nullptr;
+
+	// 이 이름표 위젯의 소유자가 로컬 플레이어인지 판정.
+	// 클라이언트 입장에서 Controller 복제가 아직 채워지지 않은 상태라면 GetLocalRole() == ROLE_AutonomousProxy 로 판단.
+	// 클라의 캐릭터 초기화의 진입점이 OnRep_PlayerState 이기 때문에, 컨트롤러는 아직 복제되지 않은 상태일 수 있음. (즉, IsLocallyControlled()가 false)
+	const bool bIsLocalTarget = OwnerCharacter->IsLocallyControlled()
+		|| OwnerCharacter->GetLocalRole() == ROLE_AutonomousProxy;
+
+	// 게임플레이에서는 자기 발밑 이름표가 화면 한가운데를 계속 차지하므로 만들지 않음.
+	// 로비는 라인업에서 자기 자리를 확인해야 하므로 그대로 띄움.
+	if (bIsLocalTarget && !bIsLobby)
+	{
+		NamePlateWidget = nullptr;
+		return;
+	}
+
+	// 대상 바인딩 (현재 이름 반영 + 변경 구독). 위젯의 Construct 보다 먼저 끝나도록 컴포넌트 등록 전에 수행
+	NamePlateWidget->InitializeWithPlayerState(OwnerPlayerState, bIsLocalTarget);
+
+	// 위젯 컴포넌트 런타임 생성 (Screen 모드: 항상 카메라를 향하고 위젯 원본 크기로 렌더)
+	NamePlateWidgetComponent = NewObject<UWidgetComponent>(OwnerCharacter, TEXT("CBNamePlate"));
+	NamePlateWidgetComponent->SetupAttachment(OwnerCharacter->GetRootComponent()); // 캐릭터의 루트(캡슐)에 부착
+	NamePlateWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen); // 2D로 그리고, 항상 카메라를 향함
+	NamePlateWidgetComponent->SetDrawAtDesiredSize(true); // 위젯 원본 크기로 렌더
+	NamePlateWidgetComponent->SetWidget(NamePlateWidget); // 컴포넌트에 위젯 설정
+
+	// 부착 높이 = 캡슐 하단(발밑) - 여유값. 준비 완료 시점이라 로드아웃 바디 셋업이 끝나 캡슐 크기가 확정 상태
+	const UCapsuleComponent* Capsule = OwnerCharacter->GetCapsuleComponent();
+	const float CapsuleHalfHeight = Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.f;
+	NamePlateWidgetComponent->SetRelativeLocation(FVector(0.f, 0.f, -(CapsuleHalfHeight + NamePlateZMargin)));
+
+	NamePlateWidgetComponent->RegisterComponent();
+
+	// 게임플레이에서는 멀리 있는 이름표를 숨김. 로비는 전원이 가까이 모여 있어 컬링할 것이 없음
+	if (!bIsLobby)
+	{
+		// 위젯 등록하고 거리 검사 타이머 시작.
+		StartNamePlateDistanceCheck();
+	}
+}
+
+// [게임플레이 전용] 거리 검사 타이머 시작
+void UCBUIComponent::StartNamePlateDistanceCheck()
+{
+	// 거리 제한이 없으면 항상 표시 (타이머도 돌리지 않음)
+	if (NamePlateVisibleDistance <= 0.f) return;
+
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	// 첫 판정 (시작할 때 멀리 있는 이름표가 보이는 것을 막음)
+	CheckNamePlateDistance();
+
+	// 거리 검사 주기마다 CheckNamePlateDistance를 호출하도록 타이머를 설정 (반복)
+	World->GetTimerManager().SetTimer(NamePlateDistanceTimerHandle, this,
+		&UCBUIComponent::CheckNamePlateDistance, NamePlateDistanceCheckInterval, true);
+}
+
+// 닉네임 거리 검사 타이머 콜백.
+void UCBUIComponent::CheckNamePlateDistance()
+{
+	if (!NamePlateWidgetComponent) return;
+
+	// NamePlateVisibleDistance 거리 안에 있는지 검사.
+	const bool bShouldBeVisible = IsWithinDistanceFromLocalViewer(NamePlateVisibleDistance);
+
+	// 같은 상태면 건드리지 않음 (Screen 모드는 숨길 때마다 위젯이 파괴·재생성됨)
+	if (NamePlateWidgetComponent->IsVisible() == bShouldBeVisible) return;
+
+	// 안에 있으면 보이게, 밖이면 숨김. (Screen 모드는 숨길 때마다 위젯이 파괴·재생성됨)
+	NamePlateWidgetComponent->SetVisibility(bShouldBeVisible);
 }
 
 // 피격 시에만 머리 위 바를 표시하기 위해 CurrentHealth 변경을 구독하는 함수. (CreateOverheadWidget에서 호출)
@@ -216,6 +312,13 @@ void UCBUIComponent::HideOverheadBar()
 // 로컬 시점이 머리 위 바가 보이는 거리 안에 있는지 반환하는 함수. (true: 거리안에 있거나 판단 불가, false: 거리 밖)
 bool UCBUIComponent::IsWithinOverheadBarDistance() const
 {
+	// 머리 위 바 기준 거리로 공용 판정을 수행
+	return IsWithinDistanceFromLocalViewer(OverheadBarVisibleDistance);
+}
+
+// 로컬 시점(폰 → 없으면 카메라)과 이 위젯의 소유 액터 사이의 거리 판정. (InDistance 이하이면 true, 판단 불가면 true)
+bool UCBUIComponent::IsWithinDistanceFromLocalViewer(float InDistance) const
+{
 	// 로컬 시점 기준의 거리이므로
 	const APlayerController* LocalPC = GEngine ? GEngine->GetFirstLocalPlayerController(GetWorld()) : nullptr;
 	if (!LocalPC) return true;
@@ -241,11 +344,11 @@ bool UCBUIComponent::IsWithinOverheadBarDistance() const
 	// 제곱 거리로 비교 (sqrt 회피)
 	const float DistanceSqr = FVector::DistSquared(ViewLocation, GetOwner()->GetActorLocation());
 	
-	// 머리 위 바가 보이는 거리 안이면 true, 밖이면 false
-	return DistanceSqr <= FMath::Square(OverheadBarVisibleDistance);
+	// 기준 거리 안이면 true, 밖이면 false
+	return DistanceSqr <= FMath::Square(InDistance);
 }
 
-// 거리 검사 타이머 콜백. 보이는 거리를 벗어나면 숨김
+// 체력바 거리 검사 타이머 콜백. 보이는 거리를 벗어나면 숨김
 void UCBUIComponent::CheckOverheadBarDistance()
 {
 	// 보이는 거리를 벗어났으면 숨김
@@ -291,6 +394,7 @@ void UCBUIComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		World->GetTimerManager().ClearTimer(OverheadHideTimerHandle);
 		World->GetTimerManager().ClearTimer(OverheadDistanceTimerHandle);
+		World->GetTimerManager().ClearTimer(NamePlateDistanceTimerHandle);
 	}
 
 	// 머리 위 위젯 컴포넌트 정리
@@ -300,6 +404,14 @@ void UCBUIComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		OverheadWidgetComponent = nullptr;
 	}
 	OverheadWidget = nullptr;
+
+	// 발밑 이름표 위젯 컴포넌트 정리
+	if (NamePlateWidgetComponent)
+	{
+		NamePlateWidgetComponent->DestroyComponent();
+		NamePlateWidgetComponent = nullptr;
+	}
+	NamePlateWidget = nullptr;
 
 	Super::EndPlay(EndPlayReason);
 }

@@ -1,5 +1,6 @@
 // project
 #include "Core/CBSessionSubsystem.h"
+#include "Core/CBAuthSubsystem.h"
 
 // engine
 #include "Engine/Engine.h"
@@ -15,6 +16,11 @@
 #include "Online/OnlineServices.h"
 #include "Online/Sessions.h"
 #include "SocketSubsystem.h"
+
+// EOS 세션 검색용 버킷 키·값.
+// 생성과 검색이 같은 값을 써야 서로를 찾는다.
+const FName   CB_BucketIdKey   = TEXT("EOSGS_BUCKET_ID_ATTRIBUTE_KEY");
+const FString CB_BucketIdValue = TEXT("ChainBurst");
 
 using namespace UE::Online;
 
@@ -79,58 +85,23 @@ void UCBSessionSubsystem::Deinitialize()
 // [로컬] 세션 인터페이스 조회
 ISessionsPtr UCBSessionSubsystem::Local_ResolveSessionsInterface() const
 {
-	const UGameInstance* OwningGameInstance = GetGameInstance();
-	if (!OwningGameInstance) return nullptr;
-
-	// PIE로 테스트 시 한 프로세스에 게임 인스턴스가 여럿이라, 월드 컨텍스트 이름으로 서비스 인스턴스를 구분해야 함.
-	const FWorldContext* WorldContext = OwningGameInstance->GetWorldContext();
-	const FName InstanceName = WorldContext ? WorldContext->ContextHandle : NAME_None;
-
-	// 해당 게임 인스턴스의 온라인 서비스 가져오기. 제공자(Null/EOS)는 ini 의 [OnlineServices] DefaultServices 가 정함
-	const IOnlineServicesPtr Services = GetServices(EOnlineServices::Default, InstanceName);
+	const UGameInstance* GI = GetGameInstance();
+	const UCBAuthSubsystem* AuthSubsystem = GI ? GI->GetSubsystem<UCBAuthSubsystem>() : nullptr;
+	const IOnlineServicesPtr Services = AuthSubsystem ? AuthSubsystem->ResolveServices() : nullptr;
 	if (!Services)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[Session] 온라인 서비스를 찾을 수 없음. [OnlineServices] DefaultServices 설정과 플러그인 활성화를 확인할 것"));
+		UE_LOG(LogTemp, Error, TEXT("[Session] 온라인 서비스를 찾을 수 없음."));
 		return nullptr;
 	}
-
-	// 온라인 서비스의 세션 인터페이스 가져오기
 	return Services->GetSessionsInterface();
 }
 
-// [로컬] 로컬 플레이어의 계정 ID 조회
+// [로컬] 로컬 플레이어의 계정 ID 조회 (로그인 서브시스템이 보관한 값을 그대로 씀)
 FAccountId UCBSessionSubsystem::Local_ResolveLocalAccountId() const
 {
-	const UGameInstance* OwningGameInstance = GetGameInstance();
-	if (!OwningGameInstance) return FAccountId();
-
-	const FWorldContext* WorldContext = OwningGameInstance->GetWorldContext();
-	const FName InstanceName = WorldContext ? WorldContext->ContextHandle : NAME_None;
-
-	// 온라인 서비스 가져오기
-	const IOnlineServicesPtr Services = GetServices(EOnlineServices::Default, InstanceName);
-	if (!Services) return FAccountId();
-
-	// 온라인 서비스의 인증 인터페이스 가져오기
-	const IAuthPtr Auth = Services->GetAuthInterface();
-	if (!Auth) return FAccountId();
-
-	// 첫 번째 로컬 플레이어 기준. 분할 화면은 아직 고려하지 않음
-	const ULocalPlayer* LocalPlayer = OwningGameInstance->GetFirstGamePlayer();
-	if (!LocalPlayer) return FAccountId();
-
-	// 로컬 플레이어의 플랫폼 계정 ID 조회. Null 제공자는 로그인 없이 바로 얻어짐. EOS 는 로그인 후에야 유효해짐
-	const TOnlineResult<FAuthGetLocalOnlineUserByPlatformUserId> Result =
-		Auth->GetLocalOnlineUserByPlatformUserId({ LocalPlayer->GetPlatformUserId() });
-
-	if (!Result.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[Session] 로컬 계정을 얻지 못함: %s"), *Result.GetErrorValue().GetLogString());
-		return FAccountId();
-	}
-
-	// 로컬 계정 ID 반환
-	return Result.GetOkValue().AccountInfo->AccountId;
+	const UGameInstance* GI = GetGameInstance();
+	const UCBAuthSubsystem* AuthSubsystem = GI ? GI->GetSubsystem<UCBAuthSubsystem>() : nullptr;
+	return AuthSubsystem ? AuthSubsystem->GetLocalAccountId() : FAccountId();
 }
 
 // [로컬][호스트] 자기 PC의 IP를 문자열로 만들어 반환함 (호스트가 세션에 실어 참가자에게 알려주는 용도)
@@ -219,12 +190,11 @@ bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLo
 	Params.SessionSettings.NumMaxConnections = PendingMaxPlayers;
 	Params.SessionSettings.JoinPolicy = ESessionJoinPolicy::Public;
 
-
-	// 호스트 주소를 세션에 실어 보냄. 참가 측은 이 값을 그대로 접속 주소로 씀
+	// EOS 세션 검색용 버킷 키·값을 세션에 실어 보냄. 참가 측은 이 값을 그대로 검색용으로 씀
 	Params.SessionSettings.CustomSettings.Emplace(
-		HostAddressSettingKey,
-		FCustomSessionSetting{ FSchemaVariant(Local_ResolveHostAddress()), ESchemaAttributeVisibility::Public });
-
+		CB_BucketIdKey,
+		FCustomSessionSetting{ FSchemaVariant(CB_BucketIdValue), ESchemaAttributeVisibility::Public });
+	
 	// 목록에 보일 방 이름
 	const FString DisplayName = InSessionDisplayName.TrimStartAndEnd().IsEmpty()
 		? LOCTEXT("DefaultSessionName", "ChainBurst 방").ToString()
@@ -342,6 +312,12 @@ bool UCBSessionSubsystem::Local_FindSessions(int32 InMaxResults /* = 20 */)
 	Params.MaxResults = static_cast<uint32>(FMath::Max(1, InMaxResults));
 	Params.bFindLANSessions = bUseLANSessions;
 
+	// [EOS] 검색 버킷 필터. 생성과 검색이 같은 값을 써야 서로를 찾음
+	Params.Filters.Emplace(FFindSessionsSearchFilter{
+		CB_BucketIdKey,
+		ESchemaAttributeComparisonOp::Equals,
+		FSchemaVariant(CB_BucketIdValue) });
+	
 	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 검색 요청 (LAN=%d)"), bUseLANSessions ? 1 : 0);
 
 	// 검색 요청. 완료 콜백에서 결과를 표시용 목록으로 옮기고 방송함
@@ -444,6 +420,12 @@ FCBSessionSearchEntry UCBSessionSubsystem::Local_BuildSearchEntry(const ISession
 // [로컬] 검색 결과의 세션에 참가
 bool UCBSessionSubsystem::Local_JoinFoundSession(int32 InSearchResultIndex)
 {
+	// 이미 세션을 들고 있으면 먼저 떠남 (EOS_Sessions_SessionAlreadyExists 방지)
+	if (bHasActiveSession)
+	{
+		Local_LeaveActiveSession();
+	}
+	
 	if (!FoundSessionIds.IsValidIndex(InSearchResultIndex))
 	{
 		Local_HandleSessionFailure(LOCTEXT("JoinFailedBadIndex", "선택한 방을 찾을 수 없습니다."),

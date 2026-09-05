@@ -45,3 +45,7 @@ CLAUDE.md
 
 # --- [ Docs ] ---
 Docs/
+
+# --- [ 로컬 자격증명 ] ---
+# EOS 자격증명. 저장소에 올리지 않음.
+Config/Windows/WindowsEngine.ini

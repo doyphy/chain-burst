@@ -109,7 +109,7 @@ public:
 	/** 세션 작업 실패 신호. 레벨 이동 없이 사유만 알림. */
 	UPROPERTY(BlueprintAssignable, Category = "ChainBurst|Session")
 	FCBOnSessionOperationFailed OnSessionOperationFailed;
-
+	
 private:
 	/** [로컬] 세션 인터페이스를 반환함. 온라인 서비스가 없으면 nullptr. */
 	UE::Online::ISessionsPtr Local_ResolveSessionsInterface() const;

@@ -25,6 +25,9 @@ public:
 
 	/** 게임 인스턴스 종료. 등록한 진영 판정 규칙을 엔진 기본값으로 되돌린다. */
 	virtual void Shutdown() override;
+
+	/** 게임 인스턴스 시작. */
+	virtual void OnStart() override;
 	//~ End UGameInstance Interface.
 
 	/** UCBGameInstance 에서 사용할 온라인 세션 클래스를 지정함. */

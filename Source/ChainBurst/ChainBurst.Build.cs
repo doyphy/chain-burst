@@ -14,8 +14,11 @@ public class ChainBurst : ModuleRules
 			"GameplayTags", "GameplayAbilities", "GameplayTasks", "UMG", "AIModule"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore", "EngineSettings", "MotionWarping", "NavigationSystem" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore", "EngineSettings", "MotionWarping", "NavigationSystem", "OnlineServicesCommon" });
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "CoreOnline", "OnlineServicesInterface", "Sockets" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "CoreOnline", "OnlineServicesInterface", "Sockets"});
+		
+		// EOS Device ID 로그인용 (SDK 직접 호출)
+		PrivateDependencyModuleNames.AddRange(new string[] { "EOSShared", "EOSSDK" });
 	}
 }

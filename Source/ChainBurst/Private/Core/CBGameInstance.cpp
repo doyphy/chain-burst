@@ -2,6 +2,7 @@
 #include "Core/CBGameInstance.h"
 #include "Core/CBOnlineSession.h"
 #include "Types/CBEnumTypes.h"
+#include "Core/CBAuthSubsystem.h"
 
 // engine
 #include "GenericTeamAgentInterface.h"
@@ -40,6 +41,17 @@ void UCBGameInstance::Shutdown()
 	FGenericTeamId::ResetAttitudeSolver();
 
 	Super::Shutdown();
+}
+
+void UCBGameInstance::OnStart()
+{
+	Super::OnStart();
+	
+	// 로컬 플레이어가 만들어진 뒤라 이 시점에 로그인할 수 있음
+	if (UCBAuthSubsystem* AuthSubsystem = GetSubsystem<UCBAuthSubsystem>())
+	{
+		AuthSubsystem->RequestLogin();
+	}
 }
 
 // UCBGameInstance 에서 사용할 온라인 세션 클래스 지정

@@ -48,7 +48,7 @@ protected:
 	 */
 	virtual UClass* GetDefaultPawnClassForController_Implementation(AController* InController) override;
 
-	/** [서버] 접속한 플레이어를 초기화함. 접속 옵션에 이름이 없으면 기본 닉네임(Player1, Player2 ...)을 부여. */
+	/** [서버] 접속한 플레이어를 초기화함. 접속 옵션의 이름(?Name=)은 쓰지 않고 항상 기본 닉네임(Player1, Player2 ...)을 부여. */
 	virtual FString InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal) override;
 	//~ End AGameModeBase Interface.
 

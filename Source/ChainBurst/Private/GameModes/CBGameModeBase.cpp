@@ -11,7 +11,6 @@
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
-#include "Kismet/GameplayStatics.h"
 
 ACBGameModeBase::ACBGameModeBase()
 {
@@ -40,20 +39,9 @@ FString ACBGameModeBase::InitNewPlayer(APlayerController* NewPlayerController, c
 	APlayerState* NewPlayerState = NewPlayerController ? NewPlayerController->PlayerState : nullptr;
 	if (!NewPlayerState) return ErrorMessage;
 
-	// 접속 URL 이 이름을 실어 보냈으면(?Name=...) 그 값을 존중하고 중복만 처리.
-	// 옵션 이름 "Name" 은 엔진이 InitNewPlayer 에서 읽는 키라 바꿀 수 없음.
-	const FString RequestedName = UGameplayStatics::ParseOption(Options, TEXT("Name"));
-
-	// 옵션이 없거나 공백뿐이면 들어온 순서대로 기본 닉네임을 부여
-	FString Nickname;
-	
-	// 닉네임 공백 및 제어문자 제거 및 길이 제한, 중복 해소까지 Auth_SanitizeNickname 에서 처리
-	// true : 규칙에 맞게 수정됨, false : 규칙에 맞는 닉네임을 만들지 못함(공백뿐인 입력 등)
-	if (!Auth_SanitizeNickname(RequestedName, NewPlayerState, Nickname))
-	{
-		// 규칙에 맞는 닉네임을 만들지 못한 경우, 기본 닉네임을 사용
-		Nickname = Auth_MakeDefaultNickname(NewPlayerState);
-	}
+	// 접속 시점에는 항상 들어온 순서대로 기본 닉네임을 매기고,
+	// 실제 이름은 로비의 변경 요청(ACBChaserController::Server_RequestSetNickname)으로만 정함.
+	const FString Nickname = Auth_MakeDefaultNickname(NewPlayerState);
 
 	// 엔진 경로로 닉네임 반영 (SetPlayerName + K2_OnChangeName 훅)
 	ChangeName(NewPlayerController, Nickname, false);

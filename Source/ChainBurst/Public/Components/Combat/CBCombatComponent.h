@@ -129,7 +129,10 @@ protected:
 	/** [서버 전용] 무기 AttackPower GE를 ASC에 적용하는 함수 */
 	void Auth_ApplyWeaponAttackPowerEffect(UCBWeaponData* InWeaponData);
 
-	/** [서버 전용] 무기 AttackPower GE를 ASC에서 제거하는 함수 */
+	/**
+	 * [서버 전용] 이 인스턴스가 적용한 무기 AttackPower GE를 ASC에서 제거하는 함수. EndPlay 에서 호출됨.
+	 * 폰보다 오래 사는 ASC(Chaser=PlayerState)에서만 실제로 제거하고, 폰이 ASC를 소유하면(AI) 건너뜀.
+	 */
 	void Auth_RemoveWeaponAttackPowerEffect();
 
 	/** 등록 가능한 최대 무기 수 (쌍수 무기 = 2) */

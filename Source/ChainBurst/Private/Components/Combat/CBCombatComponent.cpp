@@ -35,6 +35,10 @@ void UCBCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// 스폰·파괴는 서버 권위. 클라이언트는 복제로 사라짐
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
+		// 이 인스턴스가 적용한 무기 공격력 GE 회수.
+		// 폰보다 오래 사는 ASC(Chaser=PlayerState)에서만 실제로 걷어냄 (폰이 파괴되면 ASC도 같이 사라지므로 걷어낼 필요 없음)
+		Auth_RemoveWeaponAttackPowerEffect();
+
 		// 무기는 부착·소유 어느 쪽으로도 캐릭터와 함께 파괴되지 않으므로 직접 정리함.
 		Auth_DestroyAllWeapons();
 	}
@@ -484,10 +488,24 @@ void UCBCombatComponent::Auth_ApplyWeaponAttackPowerEffect(UCBWeaponData* InWeap
 
 void UCBCombatComponent::Auth_RemoveWeaponAttackPowerEffect()
 {
+	// 회수할 게 없으면 ASC 조회도 하지 않음
+	if (WeaponAttackPowerEffectHandles.IsEmpty())
+	{
+		return;
+	}
+
 	// ASC 가져오기
 	UCBAbilitySystemComponent* ASC = GetCachedOwnerASC();
 	if (!ASC)
 	{
+		return;
+	}
+
+	// ASC 가 내 오너(폰)에 붙어 있으면 폰과 함께 사라지므로 회수할 필요가 없음 (AI).
+	// 폰 바깥(Chaser=PlayerState)에 있는 ASC 만 GE 가 살아남으므로 직접 걷어냄
+	if (ASC->GetOwnerActor() == GetOwner())
+	{
+		WeaponAttackPowerEffectHandles.Reset();
 		return;
 	}
 

@@ -115,23 +115,31 @@ void UCBUIComponent::CreateOverheadWidget(UCBAbilitySystemComponent* InASC)
 	OverheadWidgetComponent->SetupAttachment(OwnerCharacter->GetRootComponent()); // 캐릭터의 루트(캡슐)에 부착
 	OverheadWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen); // 2D로 그리고, 항상 카메라를 향함
 	OverheadWidgetComponent->SetDrawAtDesiredSize(true); // 위젯 원본 크기로 렌더
-	OverheadWidgetComponent->SetWidget(OverheadWidget); // 컴포넌트에 위젯 설정
 
-	// 부착 높이 = 캡슐 상단 + 여유값. 준비 완료 시점엔 로드아웃 바디 셋업이 적용된 뒤라 캡슐 크기가 확정 상태
+	// 부착 높이 = 캡슐 상단 + 여유값. 준비 완료 시점엔 로드아웃 바디 셋업이 적용된 뒤라 캡슐 크기가 확정 상태.
+	// 위젯을 붙이기 전에 잡아야 첫 프레임이 캐릭터 원점에 뜨지 않음
 	const UCapsuleComponent* Capsule = OwnerCharacter->GetCapsuleComponent();
 	const float CapsuleHalfHeight = Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.f;
 	OverheadWidgetComponent->SetRelativeLocation(FVector(0.f, 0.f, CapsuleHalfHeight + OverheadZMargin));
 
+	// 평소 숨김 모드면 위젯을 붙이기 전에 숨겨 둠.
+	if (bHideOverheadBarUntilDamaged)
+	{
+		// 위젯을 붙이기 전에 숨기기. (첫 프레임에 멀리 있는 이름표가 화면에 잠깐 올라오는 것을 방지)
+		SetOverheadBarVisible(false); // 숨김 모드로 시작
+	}
+
+	// 위젯 부착
+	OverheadWidgetComponent->SetWidget(OverheadWidget); // 컴포넌트에 위젯 설정
 	OverheadWidgetComponent->RegisterComponent();
 
 	// ASC 바인딩 (초기값 반영 + 변경 구독)
 	OverheadWidget->InitializeWithASC(InASC);
 
-	// 평소 숨김 모드면 숨긴 채로 시작하고, 체력 감소를 구독해 피격 시에만 표시함.
+	// 평소 숨김 모드면 체력 감소를 구독해 피격 시에만 표시함.
 	// 캐릭터 준비 완료 후 작업이므로 ASC 준비되어 있음.
 	if (bHideOverheadBarUntilDamaged)
 	{
-		SetOverheadBarVisible(false); // 숨김 모드로 시작
 		BindOverheadDamageTrigger(InASC); // CurrentHealth 변경 구독
 	}
 }
@@ -179,21 +187,24 @@ void UCBUIComponent::CreateNamePlateWidget()
 	NamePlateWidgetComponent->SetupAttachment(OwnerCharacter->GetRootComponent()); // 캐릭터의 루트(캡슐)에 부착
 	NamePlateWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen); // 2D로 그리고, 항상 카메라를 향함
 	NamePlateWidgetComponent->SetDrawAtDesiredSize(true); // 위젯 원본 크기로 렌더
-	NamePlateWidgetComponent->SetWidget(NamePlateWidget); // 컴포넌트에 위젯 설정
 
-	// 부착 높이 = 캡슐 하단(발밑) - 여유값. 준비 완료 시점이라 로드아웃 바디 셋업이 끝나 캡슐 크기가 확정 상태
+	// 부착 높이 = 캡슐 하단(발밑) - 여유값. 준비 완료 시점이라 로드아웃 바디 셋업이 끝나 캡슐 크기가 확정 상태.
+	// 위젯을 붙이기 전에 잡아야 첫 프레임이 캐릭터 원점에 뜨지 않음
 	const UCapsuleComponent* Capsule = OwnerCharacter->GetCapsuleComponent();
 	const float CapsuleHalfHeight = Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.f;
 	NamePlateWidgetComponent->SetRelativeLocation(FVector(0.f, 0.f, -(CapsuleHalfHeight + NamePlateZMargin)));
 
-	NamePlateWidgetComponent->RegisterComponent();
-
-	// 게임플레이에서는 멀리 있는 이름표를 숨김. 로비는 전원이 가까이 모여 있어 컬링할 것이 없음
+	// 게임플레이에서는 멀리 있는 이름표를 숨김.
 	if (!bIsLobby)
 	{
-		// 위젯 등록하고 거리 검사 타이머 시작.
+		// 첫 판정으로 거리 밖이면 미리 숨기고, 거리 검사 타이머를 시작
+		// 위젯을 붙이기 전에 숨기기. (첫 프레임에 멀리 있는 이름표가 화면에 잠깐 올라오는 것을 방지)
 		StartNamePlateDistanceCheck();
 	}
+
+	// 위젯 부착
+	NamePlateWidgetComponent->SetWidget(NamePlateWidget);
+	NamePlateWidgetComponent->RegisterComponent();
 }
 
 // [게임플레이 전용] 거리 검사 타이머 시작
@@ -205,7 +216,8 @@ void UCBUIComponent::StartNamePlateDistanceCheck()
 	UWorld* World = GetWorld();
 	if (!World) return;
 
-	// 첫 판정 (시작할 때 멀리 있는 이름표가 보이는 것을 막음)
+	// 첫 판정 (시작할 때 멀리 있는 이름표가 보이는 것을 막음).
+	// 호출자가 SetWidget 전에 불러 주므로 여기서 숨기면 화면에 아예 올라가지 않음
 	CheckNamePlateDistance();
 
 	// 거리 검사 주기마다 CheckNamePlateDistance를 호출하도록 타이머를 설정 (반복)

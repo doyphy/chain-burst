@@ -9,19 +9,19 @@
 
 ---
 
-### 🎬 데모 영상 (v0.14.2 기준)
+## 🎬 데모 영상 (v0.14.2 기준)
 
 [![Watch the video](https://img.youtube.com/vi/Nx3biih8VoA/maxresdefault.jpg)](https://www.youtube.com/watch?v=Nx3biih8VoA)
 
 ---
 
-### 📖 프로젝트 상세 기획 및 개발 일지
+## 📖 프로젝트 상세 기획 및 개발 일지
 
 [![Notion](https://img.shields.io/badge/Notion-Project_CB_개발문서-000000?style=for-the-badge&logo=notion&logoColor=white)](https://sprout-whitefish-298.notion.site/project-cb?source=copy_link)
 
 ---
 
-## 프로젝트 개요
+## 🔎 프로젝트 개요
 
 | 항목 | 내용 |
 |---|---|
@@ -36,575 +36,136 @@
 
 ---
 
-## 폴더 구조
+## 📁 폴더 구조
 
 ```
 Source/ChainBurst/
 ├── AbilitySystem/        ASC, AttributeSet, 어빌리티 계층, 데미지 ExecCalc
 │   └── Abilities/        Combat(공격·사망·피격·장착) / Movement(대시·점프·속도)
 ├── Characters/           캐릭터 5종 계층
-├── Components/           캐릭터 기능 단위 (Combat / Movement / Animation / Camera / Input / Mesh / UI)
+├── Components/           캐릭터 기능 단위 (Combat / Movement / Animation / Camera / Input / Mesh / Perception / UI)
+├── AnimInstances/        애님 인스턴스 계층 (Base → Character → Player/AI)
 ├── Controllers/          플레이어·AI 컨트롤러 계층
+├── PlayerState/          플레이어 ASC·AttributeSet 소유
 ├── Core/                 GameInstance, 세션 서브시스템
 ├── DataAssets/           로드아웃·무기·몽타주·의상·이동·입력 데이터
 ├── GameModes/            Base → Lobby / Gameplay
 ├── GameplayCues/         PlayAction / StopAction (몽타주 전 클라 동기화)
-├── AI/                   BehaviorTree 태스크, EQS
+├── AI/                   BehaviorTree 태스크·서비스, EQS
 ├── Spawn/                적 스포너
 ├── Items/Weapons/        무기 액터
 └── UI/                   HUD·머리 위 위젯
 ```
 
-**컴포넌트는 전부 `UCBExtensionComponent`를 상속**함. 이 베이스가 "캐릭터 초기화 완료 신호를 구독하거나, 이미 끝났으면 즉시 실행"하는 처리를 한 곳에서 담당하므로, 개별 컴포넌트는 `OnCharacterSystemReady()`만 오버라이드하면 초기화 순서를 신경 쓰지 않아도 됨.
+**캐릭터에 붙는 기능 컴포넌트는 전부 `UCBExtensionComponent`를 상속**함. 이 베이스가 "캐릭터 초기화 완료 신호를 구독하거나, 이미 끝났으면 즉시 실행"하는 처리를 한 곳에서 담당하므로, 개별 컴포넌트는 `OnCharacterSystemReady()`만 오버라이드하면 초기화 순서를 신경 쓰지 않아도 됨.
 
 ---
 
-## 목차
+## 💡 주요 시스템 요약
 
-- [1. 캐릭터 아키텍처](#1-캐릭터-아키텍처)
-- [2. 어빌리티 아키텍처](#2-어빌리티-아키텍처)
-- [3. 액션 시스템](#3-액션-시스템)
-- [4. 이동/로코모션 시스템](#4-이동로코모션-시스템)
-- [5. 입력 시스템](#5-입력-시스템)
-- [6. 전투 시스템](#6-전투-시스템)
-- [7. 멀티플레이 구조](#7-멀티플레이-구조)
-- [8. AI 전투](#8-ai-전투)
-- [9. 의상 시스템](#9-의상-시스템)
-
----
-
-## 1. 캐릭터 아키텍처
-
-### 1.1 캐릭터 계층
-<img src="./img/Character/캐릭터클래스구조.png" width="750">
-
-공통 베이스 하나에서 플레이어와 AI 로 갈라짐.
-
-플레이어와 AI 의 ASC 와 Attribute 소유 주체가 달라짐.
-- 플레이어 : Player State 에서 소유
-- AI : 캐릭터 자신이 소유
-
-### 1.2 베이스 캐릭터 클래스
-<img src="./img/Character/베이스캐릭터구조.png" width="750">
-
-플레이어와 AI 모두 사용하는 컴포넌트와 데이터 소유
-
-(캐릭터 초기화 관련 작업이나 진영(아군,적,중립), 사망 처리 등 공통되는 작업도 담당)
-
-### 1.3 플레이어 캐릭터 클래스
-<img src="./img/Character/플레이어캐릭터구조.png" width="750">
-
-플레이어 캐릭터만 사용하는 컴포넌트와 데이터 소유
-
-### 1.4 로드아웃 구조
-<img src="./img/Loadout/로드아웃클래스.png" width="750">
-
-캐릭터가 사용하는 모든 에셋과 데이터를 한 곳에서 관리하고 등록하기 위함.
-- 한 곳에서 관리안하면 컴포넌트가 많아지고 사용하는 데이터가 많아질수록 세팅이 오래걸려 만듦.
-
-**개발자는 로드아웃만 신경쓰면 됨**
-- 로드아웃에서 캐릭터의 필요한 모든 데이터를 설정하고 캐릭터 로드 시 전부 적용함.
-- 새로운 캐릭터 만들 시 로드아웃만 채워주면 끝
-
-### 1.5 로드아웃 적용 과정
-<img src="./img/Loadout/로드아웃적용.png" width="750">
-
-**서버와 로컬로 구분해서 적용해야 함.**
-- 서버에서만 적용해야 하는 데이터
-  - 엔진이나 컴포넌트의 복제 경로가 타거나, 서버에서만 동작하는 데이터 (BT)
-- 로컬에서만 적용해야 하는 데이터
-  - 입력 관련 데이터나 HUD 는 로컬에만 적용
-
-### 1.6 캐릭터 초기화 과정
-<img src="./img/Character/캐릭터초기화.png" width="750">
-
-서버와 클라이언트 모두 초기화 작업 진입점은 같음.
-- 공용 초기화 로직은 같이 처리
-- 서버 분기, 클라이언트 분기로 나눠서 맞는 초기화 로직 처리
-
-캐릭터의 로드아웃 처리는 비동기 로드로 진행.
-
-**캐릭터의 준비가 끝나면 캐릭터 준비 완료 델리게이트 방송 및 핸들러 호출**
-- 캐릭터 준비 완료되면 여러 컴포넌트나 UI, 애님인스턴스 등 다양한 곳에서 초기화 시작하고 작업을 수행함.
-- 준비 전까지는 메시 숨기고, 입력 잠금하고, 그 외 시스템도 함부로 시작하지 않음.
+| 문서 | 내용 |
+|---|---|
+| [1. 캐릭터 아키텍처](Docs/SubReadme/01-character-architecture.md) | 캐릭터 계층 구조와 로드아웃 |
+| [2. 어빌리티 아키텍처](Docs/SubReadme/02-ability-architecture.md) | 어빌리티 계층 구조 |
+| [3. 액션 시스템](Docs/SubReadme/03-action-system.md) | 액션 시스템과 액션 어빌리티 동기화 |
+| [4. 이동/로코모션 시스템](Docs/SubReadme/04-locomotion-system.md) | 이동/로코모션 동작 구조와 애님BP |
+| [5. 입력 시스템](Docs/SubReadme/05-input-system.md) | 입력 시스템 구조와 역할 분리 |
+| [6. 전투 시스템](Docs/SubReadme/06-combat-system.md) | 무기 클래스 및 생성과 등록, 트레이스 처리 |
+| [7. 멀티플레이 구조](Docs/SubReadme/07-multiplayer-architecture.md) | 리슨 서버 설계 및 세션 시스템 |
+| [8. AI 전투](Docs/SubReadme/08-AI-combat.md) | AI BT 배선과 타겟팅 계산 |
+| [9. 의상 시스템](Docs/SubReadme/09-cosmetic-system.md) | 의상 구조와 교체 및 복제 |
 
 ---
 
-## 2 어빌리티 아키텍처
+## 📄 기술 문서
 
-### 2.1 어빌리티 계층 구조
-<img src="./img/Ability/어빌리티계층.png" width="750">
+설계 규칙과 시스템별 상세 구조를 담은 문서.
 
-`Action Ability`
-- 몽타주 재생, 종료 요청
-- 몽타주 끝나면 어빌리티 종료함
-- 태그 이벤트 대기 (애님 노티파이에서 전송 `Event_Action_EndAbility`)
-  - 어빌리티 종료 태그
+### Claude
 
-`Event Action Ability` (서버 전용)
-- 게임플레이 이벤트로 트리거되는 액션 어빌리티.
-- 이벤트는 서버에서 발행되므로 기본적으로 서버에서만 활성화함.
-- 피격 어빌리티, 사망 어빌리티 등이 있음 (이벤트 받으면 실행됨)
+| 문서 | 내용 |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | 프로젝트 전역 규칙 |
 
-`AI Attack Ability` (서버 전용)
-- AI 공격 어빌리티는 BT 태스크 노드에서 활성화함
-  - `UCBBTTask_ActivateAbility`, `UCBBTTask_ActivateAbilityAndWait`
-- AI 관련 작업은 모두 서버에서 처리함.
-- 데미지 GE 와 데미지 계수 설정 (어빌리티 마다 데미지 다르게 가능)
-- **랜덤 공격 여부 (공격 액션 랜덤으로 재생)**
-- 태그 이벤트 대기 (애님 노티파이에서 전송 `UCBAN_SendGameplayEventToOwner`)
-  - `Event_Combat_TraceStart`, `Event_Combat_TraceEnd` 이벤트 대기
-  - 몽타주의 노티파이 스테이트 구간에서 트레이스 활성화 (`UCBANS_WeaponTraceWindow`)
+### 설계 원칙
 
-`Input Action Ability`
-- 입력으로 활성화하는 액션 어빌리티
-- 입력을 누르고 있으면 계속 활성화할지 설정
-- 태그 이벤트 대기 (애님 노티파이에서 전송 `UCBAN_SendGameplayEventToOwner`)
-  - `Event_Action_CheckInput` 이벤트 대기
-  - 입력 감지 시작 (이때 입력을 누르거나 누르고 있으면 재활성화)
+| 문서 | 내용 |
+|---|---|
+| [Multiplayer.md](Docs/Tech/Multiplayer.md) | 서버 권위 구조, 함수 접두사(`Auth_`/`Local_`) 규칙, 어빌리티 네트워크 정책 |
+| [CodingConventions.md](Docs/Tech/CodingConventions.md) | 주석 스타일, `#pragma region` 구조, 컴포넌트 결합 최소화 규칙 |
+| [GameplayTags.md](Docs/Tech/GameplayTags.md) | 태그 4역할 분류(식별·속성·상태·이벤트), 상태 태그 소유권과 복제 규칙 |
+| [AssetReference.md](Docs/Tech/AssetReference.md) | 하드/약한/소프트 참조 선택 기준과 비동기 로드 경계 |
 
-`Chaser Attack Ability`
-- 플레이어 공격 어빌리티
-- 데미지 GE 와 데미지 계수 설정 (어빌리티 마다 데미지 다르게 가능)
-- **콤보 공격 여부 (재활성화할때마다 다음 콤보 시작)**
-- 태그 이벤트 대기 (애님 노티파이에서 전송 `UCBAN_SendGameplayEventToOwner`)
-  - `Event_Combat_TraceStart`, `Event_Combat_TraceEnd` 이벤트 대기
-  - 몽타주의 노티파이 스테이트 구간에서 트레이스 활성화 (`UCBANS_WeaponTraceWindow`)
+### 캐릭터 · 초기화
 
----
+| 문서 | 내용 |
+|---|---|
+| [ASC-Ownership.md](Docs/Tech/ASC-Ownership.md) | ASC·AttributeSet 소유 주체(플레이어=PlayerState / AI=Character)와 복제 모드 |
+| [Loadout.md](Docs/Tech/Loadout.md) | 캐릭터 에셋을 로드아웃 하나로 일괄 등록·적용하는 데이터 에셋 패턴 |
+| [SystemReady.md](Docs/Tech/SystemReady.md) | 비동기 초기화 완료 신호. 의존 로직을 준비 완료까지 미루는 게이트 패턴 |
+| [Components.md](Docs/Tech/Components.md) | 캐릭터에 붙는 주요 컴포넌트와 각자의 책임 |
 
-## 3 액션 시스템
+### 어빌리티 · 전투
 
-### 3.1 액션 시스템 구조
-<img src="./img/Action/액션시스템.png" width="750">
+| 문서 | 내용 |
+|---|---|
+| [Abilities.md](Docs/Tech/Abilities.md) | 어빌리티 베이스 계층과 상속 선택 기준, `NetExecutionPolicy` 결정 |
+| [Combat.md](Docs/Tech/Combat.md) | 무기 스폰·수명 소유, 트레이스와 서버 히트 검증, 콤보 상태 |
+| [Montage.md](Docs/Tech/Montage.md) | 액션 태그+인덱스 몽타주 조회, GameplayCue 기반 전 클라 동기화 |
 
-캐릭터가 사용하는 모든 몽타주를 한 곳에 모아두고, 액션 컴포넌트와 액션 어빌리티를 통해 재생함.
-- 몽타주는 데이터 에셋에 태그와 몽타주 쌍으로 등록
-- 액션 어빌리티 등 외부에서 액션 태그를 통해 몽타주 재생 요청
-- 하나의 태그에 여러 몽타주 등록 가능
-  - 콤보 공격, 랜덤 공격, 전투/비전투별 애니메이션 등
-  - 재생 요청하는 곳에서 어느 몽타주를 재생할지 담아서 요청
-- 공격 속도 영향 받는 몽타주 설정 여부
-  - 몽타주 재생할 때 공격 속도 (Attribute) 를 확인해 PlayRate 적용
+### 이동 · 애니메이션
 
-### 3.2 액션 어빌리티 동기화
-<img src="./img/Action/액션어빌리티동기화.png" width="750">
+| 문서 | 내용 |
+|---|---|
+| [Locomotion.md](Docs/Tech/Locomotion.md) | 개이트·출발/정지 판정·피벗·대시/스프린트·점프, ABP 상태 머신 배선 |
+| [AnimInstance.md](Docs/Tech/AnimInstance.md) | 애님 인스턴스 계층(Base→Character→Player/AI)과 로직 배치 기준 |
+| [Input.md](Docs/Tech/Input.md) | EnhancedInput 기반 입력 태그 바인딩과 InputConfig 주입 |
 
-어빌리티는 시뮬 프록시에서만 활성화 되지 않기 때문에 몽타주 재생/중지가 로컬과 서버에서만 됨.
+### AI · 적
 
-게임플레이 큐를 통해 시뮬 프록시까지 신호를 보내 몽타주 재생/중지를 맞추도록 함.
+| 문서 | 내용 |
+|---|---|
+| [AI.md](Docs/Tech/AI.md) | AI 컨트롤러 계층과 두뇌 시작 게이트, BT/StateTree·이동 책임 분리 |
+| [Teams.md](Docs/Tech/Teams.md) | 진영 enum, 캐릭터가 복제 소유하는 팀 데이터, 전역 attitude solver |
+| [Spawner.md](Docs/Tech/Spawner.md) | 범위 안 플레이어 수 기반 웨이브 소환, 내비메시 소환 지점 탐색 |
 
-태그 이벤트나, 애님 노티파이, 트레이스 등 무거운 작업은 시뮬 프록시에서는 처리 안함.
-- 서버 복제 경로를 통해 결과만 받아서 동기화
+### 게임 흐름
 
----
+| 문서 | 내용 |
+|---|---|
+| [GameFlow.md](Docs/Tech/GameFlow.md) | 메인메뉴→로비→게임플레이 전환, 세션 접속, 맵을 넘어 살아남는 데이터 |
 
-## 4 이동/로코모션 시스템
+### UI
 
-### 4.1 이동/로코모션 구조
-<img src="./img/Locomotion/로코모션구조.png" width="750">
+| 문서 | 내용 |
+|---|---|
+| [UI.md](Docs/Tech/UI.md) | 캐릭터 UI(HUD 체력·머리 위 체력바) 구조. 값 동기화는 어트리뷰트 복제 전담 |
+| [EasyGameUI.md](Docs/Tech/EasyGameUI.md) | 시스템 UI(메인메뉴·일시정지·옵션) 에셋팩 채택 범위와 위젯 스택 규칙 |
 
-**입력을 통해 ASC 와 CMC 에 태그 추가/제거 및 속도를 추가하면 이동/회전 컴포넌트에서 실시간으로 읽어서 상태 업데이트하고 관련 작업 처리함**
-- 걷기, 대시, 전력질주 모두 어빌리티로 태그 추가함.
-- 태그를 통해 캐릭터에 이동 속도 적용함.
+### 리소스
 
-`Input Manager Component`
-- 사용자의 모든 입력을 받아 처리하는 컴포넌트
-- 사용자의 입력 방향과 카메라 방향을 계산해 피벗 감지 및 입력 잠금 처리
-
-`Locomotion Processor`
-- 캐릭터의 이동 관련 데이터를 처리하는 컴포넌트
-- 개이트별 가속/감속 처리, 개이트(Walk/Run/Sprint) 판정 및 처리, 개이트 태그 부여/제거
-- Idle / InAir 판단 및 태그 부여/제거
-
-`Character Rotation Component`
-- 캐릭터의 회전 관련 데이터를 처리하는 컴포넌트
-- 개이트별 회전 속도 및 회전 보간
-
-
-**+) 무브먼트 데이터 에셋에서 이동,회전속도 및 피벗 각도, 잠금 시간 등 커스텀 가능**
-
-**+) 애님 BP 에서는 매 프레임 ASC와 CMC를 읽어서 애니메이션 전환 및 재생에 사용**
-
-### 4.2 캐릭터 애님
-<img src="./img/Locomotion/애님BP템플릿.png" width="750">
-
-**애님BP 관련 설정**
-
-- 블렌드 설정 - [Notion - 블렌드 회전 규칙 변경](https://app.notion.com/p/39d2a74e9c6f8080abb7e82b08f6aefd?source=copy_link)
-
-- 관성화 설정 - [Notion - 애니메이션 전환 개선](https://app.notion.com/p/v1-6_-39a2a74e9c6f807b98d0f05389a31183?source=copy_link)
-
-- 싱크 설정 - [Notion - 애니메이션 싱크 맞추기](https://app.notion.com/p/v2-2-39f2a74e9c6f801f8d31d31705d246f5?source=copy_link)
-
-- 슬롯 채널 설정 - [Notion - 소스 포즈 업데이트 설정](https://app.notion.com/p/3c52a74e9c6f80288516fb62f5b60f1e?source=copy_link)
-
-- 스냅샷 설정 - [Notion - 직전 상태 저장](https://app.notion.com/p/v1-9-39b2a74e9c6f80f2a119fedcd56840d5?source=copy_link)
+| 문서 | 내용 |
+|---|---|
+| [Cosmetic.md](Docs/Tech/Cosmetic.md) | 부위 슬롯×파츠 태그 의상 교체. 조합 태그만 복제하고 조립은 로컬 |
+| [SkeletonCompatibility.md](Docs/Tech/SkeletonCompatibility.md) | 새 메시와 애니메이션 스켈레톤 호환 진단, 커스텀 본 추가·리타게팅 |
 
 ---
 
-## 5 입력 시스템
+## 🔧 주요 트러블슈팅
 
-### 5.1 입력 시스템 구조
-<img src="./img/Input/입력시스템구조.png" width="750">
+겪은 문제와 그 원인·해결. 각 항목은 노션 개발 문서의 상세 페이지.
 
-**플레이어의 모든 입력 처리는 Input Manager Component 에서 처리한다.**
-
-- 플레이어의 모든 입력(`InputAction`)은 입력 태그(`Input.*`)와 함께 바인딩함.
-- 입력 태그를 통해 어빌리티를 활성화하도록 설계함.
-
-### 5.2 입력 데이터 에셋 (Input Config)
-<img src="./img/Input/입력데이터에셋.png" height="500">
-
-**플레이어의 모든 입력을 하나로 관리하고, 그대로 로드아웃에 등록하면 알아서 적용**
-
-**IMC 등록**
-
-- 여러 개 등록 가능 (우선 순위 설정)
-
-**하나의 입력 태그에 Input Action 과 Trigger 방식을 같이 설정**
-
-- 하나로 묶어서 입력 컴포넌트에 바인딩함.
-
-### 5.3 입력 컴포넌트
-<img src="./img/Input/입력컴포넌트.png" width="750">
-
-**⭐ [엔진의 기본 입력 컴포넌트를 커스텀한 이유]**
-
-**Enhanced Input 의 입력 바인딩 함수를 프로젝트에 맞게 커스텀해서 사용하기 위함.**
-
-- 입력 데이터 에셋에서 데이터를 가져와 적용하도록 커스텀.
-- 입력(`InputAction`)과 입력 태그(`Input.*`)를 함께 바인딩하는 함수를 새로 만들어서 제공.
-    - 어빌리티 입력은 입력 태그로 연결된 어빌리티를 호출하도록 설계함.
-
-BindAction 함수의 인자를 추가로 넘기면 콜백 함수에 매개 변수로 같이 넘김 :
-```
-EnhancedInputComponent->BindAction(
-    const UInputAction* Action,       // 1. 어떤 액션인지 (에셋 포인터)
-    ETriggerEvent TriggerEvent,       // 2. 언제 실행할지 (눌렀을 때, 떼었을 때)
-    UserObject,                       // 3. 누가 실행할지 (보통 this)
-    Func,                             // 4. 콜백 함수 (함수 포인터)
-    ...Varargs                        // 5. (선택) 추가로 넘길 매개변수들
-);
-```
-
-### 5.4 입력 매니저 컴포넌트
-<img src="./img/Input/입력매니저컴포넌트.png" width="750">
-
-**플레이어의 입력 관련 처리는 모두 입력 매니저 컴포넌트에서 담당**
-
-- 로드아웃과 연계해서 로드 시 모든 입력 등록 및 바인딩 처리
-- 플레이어의 입력을 감지해서 피벗 판단, 이동 잠금도 여기서 판단.
-
----
-
-## 6 전투 시스템
-
-### 6.1 전투 시스템 구조
-<img src="./img/Combat/전투시스템구조.png" width="750">
-
-**캐릭터의 전투 관련된 모든 데이터 처리는 컴뱃 컴포넌트에서 처리한다.**
-
-- 컴뱃 컴포넌트에 무기를 등록하면 무기와 연계해 무기 부착, 충돌 판정, 데미지 적용 처리
-- 컴뱃 컴포넌트에서 전투 관련 API 를 제공하고, 공격 어빌리티에서 사용함.
-
-### 6.2 무기 클래스 구조
-<img src="./img/Combat/무기클래스.png" width="750">
-
-#### 6.2.1 무기 소켓
-<img src="./img/Combat/무기소켓.png" width="750">
-
-**무기는 소켓 데이터를 관리하고, 무기 부착과 소켓 위치 API를 제공함.**
-
-- 무기 부착 외 스스로 처리하는 작업은 없음.
-- 전투 관련 데이터 처리는 컴뱃 컴포넌트에서 무기의 API를 사용해서 처리함.
-- 무기의 Root 와 Tip 소켓을 설정 - 트레이스 범위에 사용
-
-#### 6.2.2 트레이스 소켓
-<img src="./img/Combat/무기트레이스소켓.png" width="750">
-
-#### 6.2.3 무기 소켓 데이터 에셋
-<img src="./img/Combat/무기소켓데이터에셋.png" height="500">
-
-모든 무기의 소켓 이름을 모아둠 (외부 조회용)
-- 무기 클래스에서 데이터 에셋을 읽어서 소켓 타입만 맞춰주면 소켓 이름 반영해줌 (에디터용)
-
-#### 6.2.4 무기 데이터 에셋
-<img src="./img/Combat/무기데이터에셋.png" height="500">
-
-**실제 로드아웃에 무기를 등록할 때 무기 데이터 에셋에 담아서 등록**
-
-- 무기 데이터 에셋에 무기 타입과 무기 클래스 그리고 무기 공격력 설정
-
-#### 6.2.5 무기 생성과 등록
-<img src="./img/Combat/무기생성과등록과정.png" width="750">
-
-**로드아웃에 넘겨받은 무기 데이터 에셋을 통해 무기를 생성하고 배열에 등록 후 부착한다.**
-
-로드아웃 안에 무기 데이터 에셋을 넣으면 로드 시 컴뱃 컴포넌트의 무기 등록 API 와 함께 넘김
-
-### 6.3 컴뱃 컴포넌트
-<img src="./img/Combat/컴뱃컴포넌트.png" width="750">
-
-**주요 기능 4가지**
-
-무기 관리
-
-- 컴뱃 컴포넌트에 무기를 등록하고 배열로 관리하고 있음. (무기 여러 개 등록 가능)
-- 무기 생성과 파괴는 컴뱃 컴포넌트에서 처리.
-- 무기 등록 API 제공 - 로드아웃에서 무기 등록할 때 사용함.
-
-전투 상태 관리
-
-- 전투/비전투 전환은 컴뱃 컴포넌트에서 처리.
-- `Status_Combat_InCombat` (전투 상태 태그) 태그 부여/제거를 통해 전투/비전투 전환
-- 전투/비전투 전환 및 상태 확인 API 제공 - 외부에서 사용해서 전투 상태에 따른 로직 처리
-
-트레이스 검사
-
-- 현재 등록된 무기 모두 트레이스 검사 시작.
-- 무기 클래스의 API 를 통해 무기의 트레이스 소켓 위치를 받아와 처리.
-- 트레이스 시작/종료 API 제공 - 공격 어빌리티에서 사용함.
-
-콤보 관리
-
-- 현재 재생중인 액션의 콤보 인덱스 관리
-- 콤보 증가 / 콤보 인덱스 반환 / 콤보 초기화 API 제공 - 공격 어빌리티에서 사용함.
-
-#### 6.3.1 트레이스 검사 방식
-<img src="./img/Combat/무기트레이스범위.png" width="750">
-
-#### 6.3.2 트레이스 범위 커스텀
-<img src="./img/Combat/트레이스커스텀.png" width="750">
-
-#### 6.3.3 트레이스 검증 방식
-<img src="./img/Combat/트레이스검증방식.png" width="750">
-
-**트레이스 감지는 로컬에서, 데미지 적용은 서버에서**
-
-컴뱃 컴포넌트에서 처리
-
-- [ 1.트레이스 검사 ] - 로컬에서 트레이스 검사 (적 진영의 액터만 처리)
-- [ 2.결과 전송 ] - 클라에서 히트한 액터 정보를 서버에서 전송
-- [ 3.검증 ] - 서버에서 적 진영이 맞는지 검사하고, 히트한 액터와의 거리를 계산해 무기 공격 범위안에 있는지 검증
-- [ 4.히트 이벤트 ] - 검증에 통과한 액터 정보와 함께 Hit 태그 이벤트 전송
-
-공격 어빌리티에서 처리
-
-- **[ 5.데미지 적용 ] - 공격 어빌리티에서 Hit 태그 이벤트 받으면 파라미터로 딸려온 액터에게 데미지 GE 적용 (적용할 데미지는 각 공격 어빌리티마다 다르고 데미지 설정 가능)**
-
-#### ⭐ 6.3.4 트레이스 레이턴시 보정
-<img src="./img/Combat/트레이스레이턴시.png" width="750">
-
-- 클라이언트와 서버간의 위치가 미세하게 다르기 때문에 어디까지 보정해줄지 설정
-- 클라에서 히트한 액터를 서버에서 검증할 때 공격 범위(+보정값)로 검증함.
-
-**트레이스 결과 적용 흐름**
-
-- 로컬 실행 및 결과 전달 → 서버 검증 및 데미지 GE 적용
-
-### 6.4 공격 어빌리티
-<img src="./img/Combat/공격어빌리티.png" width="750">
-
-**트레이스 요청과 데미지 적용은 공격 어빌리티에서 처리한다.**
-
-- 트레이스 시작과 종료 그리고 데미지 적용 모두 태그 이벤트로 처리.
-
-<img src="./img/Combat/공격몽타주노티파이설정.png" width="750">
-
-**공격 어빌리티와 연결된 액션(몽타주)에서 노티파이 스테이트를 통해 트레이스 태그 이벤트 전송**
-
-- 몽타주에서 트레이스를 시작할 타이밍과 종료할 타이밍을 정하면 됨.
-
-<img src="./img/Combat/공격어빌리티데미지설정.png" height="500">
-
-**공격 어빌리티의 데미지 계수 설정**
-
-- 공격 어빌리티마다 데미지 계수를 설정할 수 있음 (기본값 1.0)
-- 현재 캐릭터의 공격력(Attribute) 에 얼만큼의 계수로 데미지 적용할지 설정 가능
-
----
-
-## 7 멀티플레이 구조
-
-### 7.1 리슨 서버 및 서버 권위 설계
-
-<img src="./img/Multiplay/멀티플레이구조.png" width="750">
-
-**무거운 작업은 로컬에서 처리하고 GAS 와 가벼운 신호를 통해 동기화하기**
-
-- 로컬에서 처리할 무거운 작업 ex) 트레이스 검사, 몽타주 처리
-- 서버와 로컬에서 복제하는 가벼운 신호 ex) 트레이스 시작/종료 요청, 몽타주 주소
-
-**⭐ 프로젝트의 네트워크 동기화 설계 원칙**
-
-- 복제할 데이터는 최대한 가볍게 설계하고, 로컬에서 복제받은 데이터를 읽어 무거운 작업 처리하도록 설계.
-- 이벤트 신호와 가벼운 데이터로 서버와 클라 모두 같은 타이밍에 동기화 하도록 설계
-
-### 7.2 멀티플레이 접속 흐름
-
-<img src="./img/Multiplay/멀티플레이접속흐름.png" width="750">
-
-```
-1. 메인 메뉴 = 세션 생성 및 검색
-
-2. 로비 참가 = 세션 참가
-
-3. 로비 = 시작 시 로비의 설정 값 가지고 게임플레이 레벨로 모두 이동
-```
-
-`Player State` 를 이용해 각 플레이어가 로컬에서 설정한 값을 동기화
-
-- `CB Player State` : 플레이어의 상태를 관리하는 클래스.
-    - 주로 어빌리티 시스템과 관련된 데이터를 저장하고 관리하는 역할을 함.
-    - 로비에서 고른 값(의상 조합·캐릭터 선택·준비 상태)도 여기에 두어 전 클라이언트가 보고, 맵을 넘어 게임플레이 레벨까지 이관함
-
-`Game Instance` 를 이용해 세션 관련 작업 처리
-
-- `CB Session Subsystem` : 멀티플레이 접속 창구 서브시스템.
-    - 세션(방 생성·검색·참가·광고 갱신)과 실제 접속(레벨 열기·travel)을 모두 담당함.
-
-### 7.3 세션 시스템
-
-<img src="./img/Multiplay/세션시스템.png" width="750">
-
-**세션 서브시스템 클래스** (`UGameInstanceSubsystem` 상속)
-
-- 멀티플레이 접속 창구 서브시스템.
-- 세션(방 생성·검색·참가·광고 갱신)과 실제 접속(레벨 열기·travel)을 모두 담당함.
-
-**공개 API - (UI 에서 호출)**
-
-- `Local_CreateAndHostSession()` : 세션을 생성하고 호스트하는 함수
-- `Local_FindSessions()` : 현재 세션을 조회하는 함수
-- `Local_JoinFoundSession()` : 검색한 세션에 참가하는 함수
-
-**내부의 핵심 함수**
-
-- `Local_HostLobby()` : 로비 레벨을 리슨 서버로 여는 함수
-- `Local_JoinServerByAddress()` : 넘겨받은 주소로 서버에 접속하는 함수
-
-### 7.4 접속 실패 처리
-
-<img src="./img/Multiplay/접속실패처리.png" width="750">
-
-**네트워크 접속 실패 및 맵 이동 실패에 따른 처리**
-
-- 실패 시 현재 레벨에 남을 지, 메인 메뉴 레벨로 돌아갈 지, 어떤 문구를 보여줄지 등 상황에 맞게 실패 처리를 설계함.
-
----
-
-## 8 AI 전투
-
-### 8.1 AI BT 배선
-<img src="./img/AI/BT배선.png" width="750">
-
-### 8.2 타겟팅 계산
-<img src="./img/AI/타겟팅계산1.png" width="750">
-
-<img src="./img/AI/타겟팅계산2.png" width="750">
-
-#### 8.2.1 AI 퍼셉션 세팅 (시각과 청각 설정)
-
-| 감각 | 범위 | 시야 차단(LOS) | 감지 조건 |
-|---|---|---|---|
-| **Sight** | 전방 부채꼴(좌우 각 60° = 전체 120°), 반경 1500 | **적용** (벽 뒤 못 봄) | 시야 안 + 가림 없음 + 진영이 적 |
-| **Hearing** | **전방위**, 기준 반경 1500 | 무관 | 대상이 **소음을 낼 때만** + 진영이 적 |
-
-소음은 `UCBNoiseEmitterComponent`가 이동 중에만 보고하고, **개이트별 Loudness**로 들리는 거리를 조절 (유효 청취 거리 = 청취자의 `HearingRange` × Loudness).
-
-| 개이트 | Loudness | 유효 거리 |
+| 주제 | 증상 | 원인 → 해결 |
 |---|---|---|
-| 정지 | 소음 없음 | — |
-| Walk | 0.3 | 450 |
-| Run | 0.65 | 975 |
-| Sprint | 1.0 | 1500 |
-
-
-#### 8.2.2 타겟 점수화
-
-```
-Score = BaseTargetScore (1.0)
-      + DistanceWeight (1.0)    × (1 − Clamp(거리 / MaxScoreDistance(2000), 0, 1))
-      + SightBonus (0.5)        × (시야 감각이 현재 인지 중이면 1)
-      + RecentDamageBonus (1.0) × (최근 5초 내 나를 때린 대상이면 1)
-```
-
-| 항 | 무엇을 반영하나 | 빼면 생기는 일 |
-|---|---|---|
-| 거리 | 가까울수록 높게 (기준 거리로 0~1 정규화) | 멀리 있는 적을 향해 지나쳐 감 |
-| 시야 보너스 | **보이는 적 > 소리만 들리는 적** | 벽 뒤 발소리를 눈앞의 적보다 우선 |
-| 최근 피격 | 나를 때린 대상을 일정 시간 기억 | 등 뒤에서 맞으면서 앞의 적만 계속 때림 |
-| 기본 점수 | 모든 후보의 바닥값 | 히스테리시스가 배수로 계산하기에 0이면 안됨  |
-
-
-#### 8.2.3 전환 안정화 방법
-
-타겟이 튀는 것을 막기 위한 방법.
-
-| 장치 | 값 | 무엇을 막나 |
-|---|---|---|
-| **재평가 주기** | 0.5초 ± 0.1 | 매 틱 전체 후보 순회. 편차는 **AI 여럿의 순회가 한 프레임에 몰리는 것** |
-| **점수 히스테리시스** | `SwitchScoreRatio` 1.25배 | 점수가 엎치락뒤치락할 때 평가마다 타겟이 뒤바뀌는 것 |
-| **전환 금지 구간** | `TargetLockAbilityTags` (`Ability.Combat.Attack`) | 공격 몽타주 도중 결정이 바뀌어, **끝나자마자 반대쪽으로 튀는 것** |
-
----
-
-## 9 의상 시스템
-
-### 9.1 모듈러 메시 컴포넌트
-
-<img src="./img/Cosmetic/모듈러메시컴포넌트.png" width="750">
-
-**모듈러 메시 컴포넌트에서 본체 메시에 붙일 메시 컴포넌트를 생성하고 팔로우 함.**
-
-- 원하는 만큼 메시를 생성하고 본체 메시를 리더로 삼아 팔로우.
-- 본체 메시를 리더 포즈로 연결해서 팔로우 메시 모두 본체 메시의 포즈를 따라가도록 설정.
-
-**의상 적용과 교체에 사용되는 공개 API**
-
-- `SetCosmeticForSlot(Slot, Mesh)` : 해당 슬롯(부위)에 직접 메시를 넘겨 적용
-- `RequestCosmeticPart(Slot, PartID)` : 해당 슬롯(부위)에 파츠ID를 넘겨 카탈로그에서 조회 후 메시를 가져와 적용
-
-#### 9.1.1 로드아웃에서 본체 메시에 붙일 피부 메시와 의상 메시 설정 가능
-
-<img src="./img/Cosmetic/로드아웃-의상태그설정.png" height="500">
-
-의상 메시는 태그로 관리 (카탈로그에서 태그와 메시 쌍으로 관리함)
-
-### 9.2 의상 카탈로그
-
-<img src="./img/Cosmetic/의상카탈로그.png" width="750">
-
-**게임에서 사용하는 모든 의상 메시를 담아둔 곳**
-
-- 캐릭터가 사용할 모든 의상을 한 곳에서 모아두기 위함.
-- 의상을 가져오거나 교체할 때 등록된 의상 카탈로그에서 태그로 조회해서 가져옴
-
-#### 9.2.1 카탈로그에서 하나의 태그에 메시와 UI 에 표시할 이름 설정
-
-<img src="./img/Cosmetic/카탈로그데이터에셋.png" height="500">
-
-### 9.3 의상 교체 경로
-
-<img src="./img/Cosmetic/의상교체경로.png" width="750">
-
-**일반적으로 의상 교체를 요청할 때 사용하는 API**
-
-- `RequestCosmeticPart(Slot, PartID)` : 해당 슬롯(부위)에 파츠ID를 넘겨 카탈로그에서 조회 후 메시를 가져와 적용
-
-### 9.4 의상 복제 경로
-
-<img src="./img/Cosmetic/의상복제경로.png" width="750">
-
-**CB Player State 의 슬롯별 파츠 태그만 복제함.**
-
-- 복제는 최대한 가볍게, 무거운 작업은 로컬에서 읽고 처리.
-
-**의상 복제 경로에 관여하는 클래스 3가지**
-
-- `CB Chaser Controller` : 플레이어의 요청을 받고 검증. (**진입점**)
-- `CB Player State` : 플레이어가 요청한 파츠 태그를 관리하고 적용 요청함. (**관리자**)
-- `CB Modular Mesh Component` : `CB Player State` 에게 요청 받으면 적용. (**작업자**)
-
----
+| 트레이스 | [빠른 스윙이 적을 그대로 통과](https://sprout-whitefish-298.notion.site/v1-2_-3792a74e9c6f807e97a3e9c42c4720f2?pvs=143) | 몽타주가 빨라 프레임 간 무기 이동량이 커지면서 트레이스 사이에 빈 공간 발생 → 무기의 세로선 대신 **이전 프레임과 현재 프레임 위치 사이**를 분할 스윕 |
+| 트레이스 | [2배속 재생 시 스윙 후반부가 판정되지 않음](https://sprout-whitefish-298.notion.site/3902a74e9c6f80d2b8c1eb5027a39905?pvs=143) | 몽타주 카운터는 2배로 도는데 Blend In 0.25초가 노티파이 구간 전체를 덮어 실제 포즈가 못 따라옴 → 재생 속도에 맞춰 블렌드 인 시간 축소 |
+| 애니메이션 | [출발·정지 도중 개이트가 바뀌면 동작이 끊김](https://sprout-whitefish-298.notion.site/v1-9-39b2a74e9c6f80f2a119fedcd56840d5?pvs=143) | Select 노드가 매 프레임 재평가되어 재생 중 클립이 스왑됨 → 스테이트 진입 시점(On Become Relevant)에 개이트를 스냅샷해 그 값으로 고정 출력 |
+| 애니메이션 | [모션 워핑이 멀어지는 타겟을 끝까지 따라감](https://sprout-whitefish-298.notion.site/AI-v1-3-3ce2a74e9c6f80ad84e4fa63a07b81eb?pvs=143) | 엔진 SkewWarp의 속도 상한은 루트모션 이동이 있는 클립에만 걸려 제자리 클립엔 제한이 없음 → SkewWarp를 상속해 워프 시작점 기준 최대 거리 초과분만 잘라내는 모디파이어 작성(회전은 유지해 타겟은 계속 조준) |
+| 애니메이션 | [급격한 방향 전환에서 상체가 뒤틀림](https://sprout-whitefish-298.notion.site/v1-6_-39a2a74e9c6f807b98d0f05389a31183?pvs=143) | 블렌드 타임 동안 좌·우 반대 방향 포즈가 그대로 섞임 → 트랜지션 블렌드를 전부 관성화로 교체해 직전 포즈 스냅샷에서 이어붙이도록 변경 |
+| 애니메이션 | [무기 장착 몽타주가 끝난 뒤에야 전투 포즈로 바뀜](https://sprout-whitefish-298.notion.site/3c52a74e9c6f80288516fb62f5b60f1e?pvs=143) | FullBody 슬롯 재생 중 소스 포즈가 갱신되지 않아 하위 로코모션 전환이 멈춰 있음 → 슬롯의 소스 포즈 상시 업데이트 옵션을 켜서 재생 중에도 전환 진행 |
+| 애니메이션 | [이동 중 루트모션을 재생하면 방향이 끌려감](https://sprout-whitefish-298.notion.site/3c52a74e9c6f808aab36d946d38cb144?pvs=143) | 회전 컴포넌트가 매 틱 액터 회전을 덮어써, 다음 틱 루트모션을 월드로 변환하는 기준 자체가 바뀜 → 루트모션 재생 중에는 회전 덮어쓰기를 차단 |
+| 멀티플레이 | [원격 화면에서만 전투/비전투 전환이 한 박자 늦음](https://sprout-whitefish-298.notion.site/3ca2a74e9c6f800c99d7e2ca11afb3b9?pvs=143) | 태그 복제는 ASC를 소유한 PlayerState의 갱신 주기를 따르는데 그 기본값이 1Hz → PlayerState 갱신 주기 상향. **복제 컴포넌트는 자기 주기 없이 소유 액터를 따른다** |
+| 멀티플레이 | [원격 화면에서 캐릭터 메시가 공중에 뜸](https://sprout-whitefish-298.notion.site/3a32a74e9c6f8005bb5ed2b06222a3bb?pvs=143) | 시뮬 프록시 스무딩이 기준으로 쓰는 오프셋은 스폰 시 1회만 캐싱되어, 로드아웃이 런타임에 적용한 메시 오프셋이 반영되지 않음 → 오프셋 적용과 함께 캐시도 재계산 |
+| 멀티플레이 | [클라이언트에서 재생한 몽타주가 중간에 끊김](https://sprout-whitefish-298.notion.site/3c42a74e9c6f80dabefefbf3b84ab0fa?pvs=143) | 종료 이벤트를 먼저 받은 쪽이 어빌리티 종료를 복제해 반대쪽까지 정리 → 서버가 몽타주 중지 전에 끝남. 몽타주 재생·중지를 어빌리티에서 떼어내 GameplayCue로 이관 |
+| 멀티플레이 | [이미 닫힌 방이 세션 목록에 계속 남음](https://sprout-whitefish-298.notion.site/3ca2a74e9c6f804b9f02dd80c6c56b11?pvs=143) | 엔진 LAN 비콘이 검색으로 발견한 세션까지 캐시에 영구 보관하고, 소유자 검사 없이 캐시 전체를 광고 → 방 개설 직전 온라인 서비스 인스턴스를 재생성해 캐시를 비움(LAN 한정) |
+| 충돌 | [적과 부딪히면 멀리 튕겨나감](https://sprout-whitefish-298.notion.site/3d12a74e9c6f80299a41fb8452c610bb?pvs=143) | 적 캡슐 위에 착지하면 그 적이 무빙 베이스가 되어 루트모션·모션워프 속도가 그대로 더해짐 → 캡슐을 걸을 수 없는 면으로 선언하고 캡슐 겹침 시 밀어내기 거리 축소 |

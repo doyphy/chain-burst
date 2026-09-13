@@ -9,6 +9,8 @@
 class ACharacter;
 class UCharacterMovementComponent;
 class UCBAbilitySystemComponent;
+class UCBCharacterMovementData;
+struct FCBGaitMovementData;
 
 UCLASS()
 class CHAINBURST_API UCBLocomotionProcessor : public UCBExtensionComponent
@@ -22,8 +24,23 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	float CalculateMaxAcceleration();
-	float CalculateBrakingDeceleration();
+	/**
+	 * 현재 개이트 태그에 해당하는 이동 데이터를 조회한다. (틱당 1회)
+	 * @return 개이트 데이터 포인터 반환, 캐릭터/데이터 에셋/태그가 없으면 nullptr (호출부에서 폴백 처리).
+	 */
+	const FCBGaitMovementData* ResolveCurrentGaitData();
+
+	/**
+	 * CMC에 적용할 최대 가속도를 계산한다.
+	 * @param InGaitData 현재 개이트 이동 데이터. nullptr이거나 값이 유효하지 않으면 DefaultMaxAcceleration 폴백.
+	 */
+	float CalculateMaxAcceleration(const FCBGaitMovementData* InGaitData) const;
+
+	/**
+	 * CMC에 적용할 제동 감속도를 계산한다. 대시 중(+linger)이면 개이트보다 우선해 대시 감속을 반환.
+	 * @param InGaitData 현재 개이트 이동 데이터. nullptr이거나 값이 유효하지 않으면 DefaultBrakingDeceleration 폴백.
+	 */
+	float CalculateBrakingDeceleration(const FCBGaitMovementData* InGaitData);
 
 #pragma region DerivedMovementTags
 	// 파생 이동 태그 로컬 미러링
@@ -55,19 +72,16 @@ private:
 	
 	TWeakObjectPtr<UCBAbilitySystemComponent> CachedASC;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Acceleration")
-	float WalkMaxAcceleration = 1000.0f;
-	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Acceleration")
-	float RunMaxAcceleration = 1000.0f;
-	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Acceleration")
-	float SprintMaxAcceleration = 1000.0f;
+	/** 이동 데이터 에셋 캐시. 로드아웃이 주입한 뒤 런타임에 바뀌지 않으므로 1회 조회 후 재사용. */
+	TWeakObjectPtr<UCBCharacterMovementData> CachedMovementData;
 
+	/** 최대 가속도 폴백 값 (개이트 데이터가 없을 때 사용). 개이트별 값은 이동 데이터 에셋에서 조회한다. */
+	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Acceleration")
+	float DefaultMaxAcceleration = 1000.0f;
+
+	/** 제동 감속도 폴백 값 (개이트 데이터가 없을 때 사용). 개이트별 값은 이동 데이터 에셋에서 조회한다. */
 	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Deceleration")
-	float WalkBrakingDeceleration = 1000.0f;
-	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Deceleration")
-	float RunBrakingDeceleration = 1000.0f;
-	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Deceleration")
-	float SprintBrakingDeceleration = 1000.0f;
+	float DefaultBrakingDeceleration = 1000.0f;
 
 	/** 대시 중(Status.Movement.Dashing) 감속. 루트모션 대시는 속도가 매우 높아 개이트 감속과 별도로 튜닝 — 개이트보다 우선 적용 */
 	UPROPERTY(EditDefaultsOnly, Category = "Locomotion|Deceleration")
@@ -107,6 +121,12 @@ protected:
 	 * @return 성공적으로 가져왔거나 이미 유효하면 true 반환
 	 */
 	bool GetCachedCMC(TWeakObjectPtr<UCharacterMovementComponent>& OutCMC);
+
+	/**
+	 * 이동 데이터 에셋을 지연 캐싱해서 가져오는 함수. (런타임 불변 — 로드아웃 주입 후 교체되지 않음)
+	 * @return 이미 유효한 캐시가 있으면 그대로, 없으면 캐싱 시도 후 반환. 실패하면 nullptr.
+	 */
+	UCBCharacterMovementData* GetCachedMovementData();
 
 	/**
 	 * CBLocomotionProcessor 전용 내부 헬퍼 함수. ASC 를 지연 캐싱해서 가져오는 함수.

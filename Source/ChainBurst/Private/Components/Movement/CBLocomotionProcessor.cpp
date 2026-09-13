@@ -1,6 +1,7 @@
 // project
 #include "Components/Movement/CBLocomotionProcessor.h"
 #include "Characters/CBBaseCharacter.h"
+#include "DataAssets/Movement/CBCharacterMovementData.h"
 #include "CBGameplayTags.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 
@@ -24,8 +25,12 @@ void UCBLocomotionProcessor::TickComponent(float DeltaTime, enum ELevelTick Tick
 	// 매 Tick 마다 CMC 의 가속과 감속을 계산하여 적용.
 	if (GetCachedCMC(CachedCMC))
 	{
-		CachedCMC.Get()->MaxAcceleration = CalculateMaxAcceleration();
-		CachedCMC.Get()->BrakingDecelerationWalking = CalculateBrakingDeceleration();
+		// 개이트 데이터는 틱당 한 번만 조회
+		const FCBGaitMovementData* GaitData = ResolveCurrentGaitData();
+
+		// 가속과 감속 계산 후 CMC에 적용 (개이트 데이터가 없으면 폴백 값 사용)
+		CachedCMC.Get()->MaxAcceleration = CalculateMaxAcceleration(GaitData);
+		CachedCMC.Get()->BrakingDecelerationWalking = CalculateBrakingDeceleration(GaitData);
 	}
 
 	// Idle 상태 업데이트 (InAir/Run은 이벤트 기반이라 틱 불필요)
@@ -55,38 +60,33 @@ void UCBLocomotionProcessor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-float UCBLocomotionProcessor::CalculateMaxAcceleration()
+// 현재 개이트 태그에 해당하는 이동 데이터 조회 (없으면 nullptr — 호출부에서 폴백 처리)
+const FCBGaitMovementData* UCBLocomotionProcessor::ResolveCurrentGaitData()
 {
-	// ASC 유효하지 않다면 기본 속도 (Run) 반환
-	if (!GetASC())
-	{
-		return RunMaxAcceleration;
-	}
-	
-	if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Gait_Sprint))
-	{
-		return SprintMaxAcceleration;
-	}
-	else if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Gait_Walk))
-	{
-		return WalkMaxAcceleration;
-	}
-	else
-	{
-		return RunMaxAcceleration;
-	}
+	// 이동 데이터는 로드아웃이 캐릭터에 주입 (미주입이면 폴백 경로) — 런타임 불변이라 캐시 재사용
+	UCBCharacterMovementData* MovementData = GetCachedMovementData();
+	if (!MovementData) return nullptr;
+
+	// 개이트 판별은 공용 헬퍼 사용 (Sprint > Walk > 기본 Run — 중복 구현 금지)
+	return MovementData->FindGaitData(UCBAbilitySystemLibrary::GetCurrentGaitTag(GetASC()));
 }
 
-float UCBLocomotionProcessor::CalculateBrakingDeceleration()
+float UCBLocomotionProcessor::CalculateMaxAcceleration(const FCBGaitMovementData* InGaitData) const
 {
-	// ASC 유효하지 않다면 기본 속도 (Run) 반환
-	if (!GetASC())
+	// 개이트 데이터에 유효한 값이 있으면 사용
+	if (InGaitData && InGaitData->MaxAcceleration > 0.0f)
 	{
-		return RunBrakingDeceleration;
+		return InGaitData->MaxAcceleration;
 	}
 
+	// 데이터가 없거나 값이 유효하지 않으면 폴백
+	return DefaultMaxAcceleration;
+}
+
+float UCBLocomotionProcessor::CalculateBrakingDeceleration(const FCBGaitMovementData* InGaitData)
+{
 	// 대시 중이면 개이트와 무관하게 대시 전용 감속 (루트모션 잔여 속도가 개이트 최대 속도보다 훨씬 높아 별도 튜닝 필요)
-	if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Dashing))
+	if (GetASC() && CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Dashing))
 	{
 		// 태그 감지 시각 기록 (linger 판정 기준)
 		LastDashTagSeenTime = GetWorld()->GetTimeSeconds();
@@ -99,24 +99,23 @@ float UCBLocomotionProcessor::CalculateBrakingDeceleration()
 		return DashBrakingDeceleration;
 	}
 
-	if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Gait_Sprint))
+	// 개이트 데이터에 유효한 값이 있으면 사용
+	if (InGaitData && InGaitData->BrakingDeceleration > 0.0f)
 	{
-		return SprintBrakingDeceleration;
+		return InGaitData->BrakingDeceleration;
 	}
-	else if (CachedASC.Get()->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Gait_Walk))
-	{
-		return WalkBrakingDeceleration;
-	}
-	else
-	{
-		return RunBrakingDeceleration;
-	}
+
+	// 데이터가 없거나 값이 유효하지 않으면 폴백
+	return DefaultBrakingDeceleration;
 }
 
 void UCBLocomotionProcessor::OnCharacterSystemReady()
 {
 	// CachedCMC 초기화
 	GetCachedCMC(CachedCMC);
+
+	// 이동 데이터 캐시 초기화 (로드아웃 주입이 끝난 시점이라 여기서 채워둔다 — 첫 Tick에 조회가 몰리지 않게)
+	GetCachedMovementData();
 
 	// 파생 이동 태그 미러링 초기화 (ASC 준비 완료 이후여야 하므로 여기서)
 	InitializeDerivedMovementTags();
@@ -264,13 +263,32 @@ bool UCBLocomotionProcessor::GetCachedCMC(TWeakObjectPtr<UCharacterMovementCompo
 		// 초기 값 설정
 		if (OutCMC.IsValid())
 		{
+			// 첫 Tick 전까지 쓰일 초기값 — 폴백 값으로 맞춤 (이후 매 Tick 개이트 데이터로 덮어씀)
 			OutCMC.Get()->bUseSeparateBrakingFriction = true;
-			OutCMC.Get()->MaxAcceleration = 1000.0f;
-			OutCMC.Get()->BrakingDecelerationWalking = 1000.0f;
+			OutCMC.Get()->MaxAcceleration = DefaultMaxAcceleration;
+			OutCMC.Get()->BrakingDecelerationWalking = DefaultBrakingDeceleration;
 		}
 	}
 	
 	return OutCMC.IsValid();
+}
+
+// 이동 데이터 에셋 지연 캐싱 (로드아웃이 주입한 뒤 교체되지 않으므로 1회 조회 후 재사용)
+UCBCharacterMovementData* UCBLocomotionProcessor::GetCachedMovementData()
+{
+	// 캐싱된 이동 데이터가 이미 존재하면 그대로 반환
+	if (CachedMovementData.IsValid())
+	{
+		return CachedMovementData.Get();
+	}
+
+	// 유효하지 않다면 캐싱 시도
+	if (ACBBaseCharacter* OwnerCharacter = GetOwningPawn<ACBBaseCharacter>())
+	{
+		CachedMovementData = OwnerCharacter->GetMovementDataAsset();
+	}
+
+	return CachedMovementData.Get();
 }
 
 

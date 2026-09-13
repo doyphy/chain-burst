@@ -5,7 +5,7 @@
 #include "GameplayTagContainer.h"
 #include "CBCharacterMovementData.generated.h"
 
-/** 개이트(Walk/Run/Sprint) 하나에 대한 이동 데이터 — 최대 속도와 회전 보간 속도를 함께 묶는다. */
+/** 개이트(Walk/Run/Sprint) 하나에 대한 이동 데이터 — 속도·가속·감속·회전 보간 속도·피벗 파라미터를 함께 묶는다. */
 USTRUCT(BlueprintType)
 struct FCBGaitMovementData
 {
@@ -14,6 +14,14 @@ struct FCBGaitMovementData
 	/** 최대 이동 속도 (cm/s). CMC MaxWalkSpeed로 반영된다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
 	float MaxSpeed = 0.0f;
+
+	/** 최대 가속도 (cm/s^2). CMC MaxAcceleration으로 반영된다. 값이 클수록 목표 속도까지 빨리 붙는다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	float MaxAcceleration = 1000.0f;
+
+	/** 제동 감속도 (cm/s^2). CMC BrakingDecelerationWalking으로 반영된다. 값이 작을수록 오래 미끄러진다 — 질주 시 낮게 준다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	float BrakingDeceleration = 1000.0f;
 
 	/** 회전 보간 속도 (RInterpTo 속도). 값이 작을수록 회전이 느리다 — 질주 시 낮게 준다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
@@ -35,9 +43,9 @@ class CHAINBURST_API UCBCharacterMovementData : public UDataAsset
 
 protected:
 	/**
-	 * GameplayTag(개이트)에 따른 이동 데이터 매핑 (속도 + 회전 보간 속도)
-	 * Key: Status.Movement.Gait.Run    -> { MaxSpeed: 550, RotationInterpSpeed: 5 }
-	 * Key: Status.Movement.Gait.Sprint -> { MaxSpeed: 700, RotationInterpSpeed: 2 }
+	 * GameplayTag(개이트)에 따른 이동 데이터 매핑 (속도 + 가속/감속 + 회전 보간 속도 + 피벗)
+	 * Key: Status.Movement.Gait.Run    -> { MaxSpeed: 550, MaxAcceleration: 1000, BrakingDeceleration: 1000, RotationInterpSpeed: 5 }
+	 * Key: Status.Movement.Gait.Sprint -> { MaxSpeed: 700, MaxAcceleration: 1500, BrakingDeceleration:  800, RotationInterpSpeed: 2 }
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement|Gaits", meta = (Categories = "Status.Movement.Gait"))
 	TMap<FGameplayTag, FCBGaitMovementData> MovementDataMap;

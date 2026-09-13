@@ -40,7 +40,9 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCharacterMovementComponent> CachedMovementComp;
 
-	UFUNCTION(Server, Reliable)
+	// Unreliable 로 서버에 목표 회전을 전송. 서버는 이를 받아 TargetRotation을 갱신하고, 리플리케이션으로 다른 클라이언트에 전파.
+	// 회전은 최신 값만 맞으면 되는 연속 상태이므로 Unreliable로 충분하며, Reliable은 불필요한 대역폭을 초래할 수 있음.
+	UFUNCTION(Server, Unreliable)
 	void Server_SetTargetRotation(FRotator NewTargetRotation);
 
 	void UpdateSmoothedTargetRotation(float DeltaTime);

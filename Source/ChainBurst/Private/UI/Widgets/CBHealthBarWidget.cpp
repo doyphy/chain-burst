@@ -46,7 +46,13 @@ void UCBHealthBarWidget::BindToASC()
 		.AddUObject(this, &UCBHealthBarWidget::HandleHealthAttributeChanged);
 	MaxHealthChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(UCBAttributeSet::GetMaxHealthAttribute())
 		.AddUObject(this, &UCBHealthBarWidget::HandleHealthAttributeChanged);
-
+	
+	// 슬레이트가 아직 없으면 초기값 반영을 미룸.
+	// 이 시점에 값을 보내면 서드파티 프로그레스 바가 머티리얼 없이 값만 삼키고,
+	// NativeConstruct 의 재반영은 '같은 값'이라 무시돼 바가 기본값(꽉 참)으로 굳는 현상.
+	// 화면에 붙을 때 NativeConstruct 가 이 함수를 다시 부르므로 반영은 그때 한 번만 일어남.
+	if (!GetCachedWidget().IsValid()) return;
+	
 	// 구독 전에 이미 확정된 값 반영
 	BroadcastHealthChanged();
 }

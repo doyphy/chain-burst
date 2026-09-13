@@ -33,8 +33,9 @@
 - **비복제 API만 사용** — 복제 API(`TagAndCountToAll`)와 섞으면 서버 복제분과 로컬 부여분이 겹쳐 카운트가 꼬인다.
 - `EndPlay`에서 태그·구독 정리 — 플레이어 ASC는 PlayerState 소유라 캐릭터보다 오래 살아 태그가 잔류할 수 있다.
 - 이 컴포넌트는 파생 상태 태그만 **쓰고**, 의도 태그(Walk/Sprint)·Dashing은 **읽기만** 한다 (읽기/쓰기 태그 분리 — 피드백 루프 차단).
-- 개이트별 파라미터는 **`UCBCharacterMovementData`의 `FCBGaitMovementData`** (태그 → {`MaxSpeed`, `RotationInterpSpeed`, `PivotAngleThreshold`, `PivotInputLockDuration`}) — 로드아웃에서 캐릭터에 주입.
-- 가속·감속은 `UCBLocomotionProcessor`가 매 Tick 태그 판별로 CMC에 적용. **대시 중(`Status.Movement.Dashing`)은 개이트보다 우선**해 `DashBrakingDeceleration` 적용하고, 태그 소멸 후에도 `DashBrakingLingerTime`(기본 1초) 동안 유지(linger — 루트모션 잔여 고속 구간 처리, GE·복제 개입 없는 컴포넌트 로컬 방식).
+- 개이트별 파라미터는 **`UCBCharacterMovementData`의 `FCBGaitMovementData`** (태그 → {`MaxSpeed`, `MaxAcceleration`, `BrakingDeceleration`, `RotationInterpSpeed`, `PivotAngleThreshold`, `PivotInputLockDuration`}) — 로드아웃에서 캐릭터에 주입. 개이트별 튜닝 값은 **전부 이 에셋 한 곳**에 모으고, 소비하는 컴포넌트는 폴백만 갖는다.
+- 가속·감속은 `UCBLocomotionProcessor`가 매 Tick CMC(`MaxAcceleration`/`BrakingDecelerationWalking`)에 적용한다. 값은 **이동 데이터 에셋에서 개이트 태그로 조회**(`ResolveCurrentGaitData()` — 틱당 1회 조회해 가속·감속이 같은 구조체를 공유. 데이터 에셋 자체는 로드아웃 주입 후 런타임에 바뀌지 않으므로 `GetCachedMovementData()`로 1회만 캐싱해 재사용한다)하고, 데이터가 없으면 컴포넌트의 `DefaultMaxAcceleration`/`DefaultBrakingDeceleration` 폴백을 쓴다. 회전 보간 속도를 `UCBCharacterRotationComponent`가 조회하는 방식과 동일한 구조.
+- **대시 중(`Status.Movement.Dashing`)은 개이트보다 우선**해 `DashBrakingDeceleration` 적용하고, 태그 소멸 후에도 `DashBrakingLingerTime`(기본 1초) 동안 유지(linger — 루트모션 잔여 고속 구간 처리, GE·복제 개입 없는 컴포넌트 로컬 방식). 대시 값은 개이트 개념이 아니라 컴포넌트가 그대로 보유한다.
 
 ## 출발/정지 판정 — 비예측, 속도 비율 기준
 
@@ -112,6 +113,22 @@
 - **종속 체인**: ① `GA_Sprint`는 `ActivationRequiredTags = Status.Movement.Dashing`으로 대시 없인 활성화 불가 (대시 쿨다운이면 Sprint도 발동 불가) ② 대시 성공 시 `UCBGADash`가 `TryActivateAbilitiesByTag(Ability.Movement.Sprint)`로 Sprint를 직접 활성화(부여 순서 무관) ③ Sprint는 릴리즈 또는 **가속 소실 자동 종료**(`bEndWhenNoAcceleration`, 유예 0.2초 — 정지·피벗 잠금 포함)로 해제.
 - 대시 쿨다운은 GAS 표준(`CooldownGameplayEffectClass`), 활성 중 `Status.Movement.Dashing` 부여(ActivationOwnedTags) — 대시 감속·점프 차단·Sprint 활성화 조건에 사용. 상세: [Abilities.md](Abilities.md)
 - 대시 종료 후 상태 머신 인계는 Idle 고속 출구(`Idle → Move`)가 담당 (위 지상 표).
+
+## 회전 동기화 — 목표 회전만 복제한다
+
+`UCBCharacterRotationComponent`는 회전 **결과**가 아니라 **목표(`TargetRotation`)** 만 네트워크에 태우고, 실제 회전은 각 머신이 자기 프레임에서 보간한다.
+
+| 단계 | 머신 | 하는 일 |
+|---|---|---|
+| ① 목표 계산 | 로컬 컨트롤 폰 | 개이트로 타겟 선택 — Sprint는 `CachedMoveInputDir`(InputManager가 매 이동 입력마다 갱신), Walk/Run은 `GetControlRotation().Yaw` |
+| ② 전송 | 로컬 → 서버 | 이전 값과 0.1도 넘게 다를 때만 `Server_SetTargetRotation` (**`Server, Unreliable`**) |
+| ③ 복제 | 서버 → 다른 클라 | `TargetRotation`은 `DOREPLIFETIME_CONDITION(..., COND_SkipOwner)` — 오너는 이미 알고 있으므로 제외 |
+| ④ 적용 | 모든 머신 | `OnRep_TargetRotation`이 `SmoothedTargetRotation`을 갱신하고, 매 틱 `RInterpTo(개이트별 보간 속도)`로 `SetActorRotation` |
+
+- **`Unreliable`인 이유**: 회전은 매 틱 갱신되는 **연속 상태**라 최신 값만 맞으면 되고, 놓친 값은 다음 갱신이 덮는다. Reliable로 보내면 매 틱 순서·재전송 보장 비용만 늘어난다. (이산 이벤트 — 어빌리티 활성화·이벤트 RPC 등 — 은 반대로 Reliable이어야 한다, [Multiplayer.md](Multiplayer.md))
+- **결과가 아니라 목표를 보내는 이유**: 보간을 각 머신이 자기 프레임률로 수행하므로 지연·프레임률이 달라도 같은 값으로 수렴하고, 전송량도 목표 갱신 시에만 발생한다.
+- 보간 속도는 개이트 태그로 `FCBGaitMovementData`에서 조회하고, 데이터가 없으면 컴포넌트의 `RotationInterpSpeed` 폴백을 쓴다 (`UCBLocomotionProcessor`가 가속·감속을 조회하는 구조와 동일).
+- 루트모션 재생 중에는 ①~④ 전체를 스킵한다 (아래 절) — 목표 전송도 함께 멈춘다.
 
 ## 루트모션 재생 중 회전 잠금
 

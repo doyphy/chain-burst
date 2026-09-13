@@ -66,9 +66,9 @@ Source/ChainBurst/
 | 문서 | 내용 |
 |---|---|
 | [1. 캐릭터 아키텍처](Docs/SubReadme/01-character-architecture.md) | 캐릭터 계층 구조와 로드아웃 |
-| [2. 어빌리티 아키텍처](Docs/SubReadme/02-ability-architecture.md) | 어빌리티 계층 구조 |
-| [3. 액션 시스템](Docs/SubReadme/03-action-system.md) | 액션 시스템과 액션 어빌리티 동기화 |
-| [4. 이동/로코모션 시스템](Docs/SubReadme/04-locomotion-system.md) | 이동/로코모션 동작 구조와 애님BP |
+| [2. 어빌리티 아키텍처](Docs/SubReadme/02-ability-architecture.md) | 어빌리티 계층 구조와 종류별 실행 흐름 |
+| [3. 액션 시스템](Docs/SubReadme/03-action-system.md) | 몽타주 재생·정지 경로와 액션 어빌리티 동기화 |
+| [4. 이동/로코모션 시스템](Docs/SubReadme/04-locomotion-system.md) | 개이트 태그·회전·피벗 처리와 애님BP |
 | [5. 입력 시스템](Docs/SubReadme/05-input-system.md) | 입력 시스템 구조와 역할 분리 |
 | [6. 전투 시스템](Docs/SubReadme/06-combat-system.md) | 무기 클래스 및 생성과 등록, 트레이스 처리 |
 | [7. 멀티플레이 구조](Docs/SubReadme/07-multiplayer-architecture.md) | 리슨 서버 설계 및 세션 시스템 |

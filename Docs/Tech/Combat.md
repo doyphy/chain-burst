@@ -23,10 +23,14 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
   - 트레이스는 애님노티파이 `CBANS_WeaponTraceWindow`가 구간을 제어
   - **무기별 root/tip을 순회 트레이스**(쌍수는 양손 블레이드 모두). `AlreadyHitActors`는 무기 간 **공유**하여 한 스윙에 같은 대상이 두 블레이드로 이중 히트되는 것을 방지
   - 히트 배칭(0.1초 간격)으로 중복 히트 방지
+  - **종료 시 마지막 구간을 한 번 더 트레이스한다** (`StopWeaponTrace()`가 `TickWeaponTrace()`를 한 번 호출). 트레이스는 프레임 단위 샘플링이라 **마지막 Tick ~ `NotifyEnd` 사이의 휘두름이 통째로 빠지고**, 재생 속도(공격 속도 GE)가 빠를수록 누락되는 호가 커진다
+    - `bIsTracing` 가드를 두는 이유: `EndAbility`의 안전장치 호출 등으로 이미 종료된 뒤 다시 불리면, stale한 `PrevRootLocs`/`PrevTipLocs`로 엉뚱한 구간을 중복 트레이스한다
   - **진영 필터**: 트레이스에 걸린 액터는 적대(`Hostile`)일 때만 배칭 목록에 담긴다(`IsHostileTarget()`). 아군·중립은 히트에서 제외 → 서버 RPC도 나가지 않는다
     - `AlreadyHitActors`에는 **적대 여부와 무관하게** 기록한다. 같은 대상을 트레이스 등분마다 다시 판정하지 않기 위함
 - 히트 검증: 로컬에서 감지 → `Server_NotifyAttackHit()` RPC → 서버에서 **진영 → 거리** 순으로 재검증. 쌍수는 무기 중 **가장 먼 tip 거리**를 허용 거리 기준으로 사용 (`HitValidationTolerance`)
-  - **클라 필터만으로는 부족하다.** 트레이스는 로컬(`IsLocallyControlled`)에서 돌고 결과만 RPC로 올라오므로, 조작된 클라가 아군 타겟을 실어 보낼 수 있다. 서버가 같은 기준으로 한 번 더 판정한다
+  - **왜 서버가 직접 훑지 않는가(= 왜 로컬 감지인가).** 몽타주 재생 위치는 머신마다 미세하게 어긋난다. 서버가 직접 트레이스하면 **레이턴시만큼 늦은 자세로 판정**해, 때린 쪽 화면에서 분명히 맞은 스윙이 빗나간다. 그래서 보이는 화면(`IsLocallyControlled`, AI는 서버가 곧 로컬)에서 판정하고 서버는 결과만 다시 잰다
+  - **클라 필터만으로는 부족하다.** 트레이스는 로컬에서 돌고 결과만 RPC로 올라오므로, 조작된 클라가 아군 타겟을 실어 보낼 수 있다. 서버가 같은 기준으로 한 번 더 판정한다
+  - **클라가 보내는 것은 "누구를 맞췄는가"뿐이다.** 데미지 값·계수는 전부 서버가 스펙을 만들어 적용하므로 RPC 페이로드를 조작해도 피해량은 바뀌지 않는다
 - **진영 판정 기준은 한 곳**: `FGenericTeamId::GetAttitude(공격자, 대상) == Hostile`. `ACBAIController::IsValidTarget()`·퍼셉션 소속 필터와 같은 전역 attitude solver를 탄다 → [Teams.md](Teams.md)
   - ⚠️ **중립은 때릴 수 없다.** solver는 한쪽이라도 Neutral이면 Neutral을 반환한다. `ACBBaseCharacter`의 팀 기본값이 Neutral이므로, **팀 지정이 빠진 캐릭터는 조용히 무적이 된다**
   - ⚠️ **`IGenericTeamAgentInterface`를 구현하지 않은 액터도 걸러진다**(엔진 구현상 Neutral). 지금은 트레이스 채널이 `Pawn`이라 무해하지만, 파괴 가능한 오브젝트를 무기로 때리려면 그때 별도 경로가 필요하다

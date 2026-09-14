@@ -177,13 +177,69 @@ UCBGameInstance::OnStart()
 제공자마다 주소를 얻는 방법이 다르다 — Null은 `FSessionLAN::OwnerInternetAddr`, EOS는 `EOSGS_HOST_ADDRESS_ATTRIBUTE_KEY` 속성이다. **그 차이를 코드에 들이지 않으려고 호스트가 직접 자기 주소를 세션 속성(`CB_HostAddress`)에 실어 보낸다.**
 
 ```
-호스트: ISocketSubsystem::GetLocalHostAddr()  → CustomSettings["CB_HostAddress"]
-참가 : GetSessionByName → CustomSettings["CB_HostAddress"] → Local_JoinServerByAddress()
+호스트(LAN): ISocketSubsystem::GetLocalHostAddr()      → CustomSettings["CB_HostAddress"]
+호스트(EOS): UCBAuthSubsystem::GetLocalEOSAddress()    → CustomSettings["CB_HostAddress"]
+참가       : GetSessionByName → CustomSettings["CB_HostAddress"] → Local_JoinServerByAddress()
 ```
 
-**조회 코드가 제공자와 무관해진다.** EOS를 붙일 때 호스트가 넣는 값만 EOS 주소로 바뀌고 참가 측은 그대로다. (EOS는 P2P 라우팅을 위해 자기 키에도 같은 값을 넣어줘야 하는데, 그건 EOS 도입 시 추가한다)
+**조회 코드가 제공자와 무관해진다.** 호스트가 넣는 값만 갈리고 참가 측은 그대로다 — 주소 형식이 곧 전송 방식을 정하므로(아래 "P2P") 참가 측은 무엇이 실려 있든 그대로 travel 하면 된다.
 
 > 포트는 싣지 않는다. 참가 측이 기본 포트로 접속한다 — 호스트가 기본 포트를 쓰지 않게 되면 여기에 포트를 함께 실어야 한다.
+
+#### P2P — 리슨 서버는 그대로, 전송만 EOS로 바꾼다
+
+**리슨 서버(토폴로지)와 P2P(전송)는 다른 축이다.** 서버 권위·복제 코드는 한 줄도 바뀌지 않고, 패킷이 오가는 경로만 갈린다. 직접 IP로는 호스트가 NAT 뒤에 있으면 외부에서 붙을 수 없고, 포트포워딩을 일반 플레이어에게 요구할 수 없다 — 그게 P2P를 쓰는 이유다.
+
+```ini
+[/Script/Engine.Engine]
+!NetDriverDefinitions=ClearArray
++NetDriverDefinitions=(DefName="GameNetDriver",DriverClassName="/Script/SocketSubsystemEOS.NetDriverEOS",DriverClassNameFallback="/Script/OnlineSubsystemUtils.IpNetDriver")
++NetDriverDefinitions=(DefName="BeaconNetDriver",...)   ; ClearArray 로 날아가므로 함께 복원
++NetDriverDefinitions=(DefName="DemoNetDriver",...)
+
+[/Script/SocketSubsystemEOS.NetDriverEOS]
+NetConnectionClassName="/Script/SocketSubsystemEOS.NetConnectionEOS"
+```
+
+- **클래스 경로 주의.** 인터넷 자료 대부분이 쓰는 `/Script/OnlineSubsystemEOS.NetDriverEOS`는 옛 경로다. 클래스가 `SocketSubsystemEOS`로 옮겨졌고 `BaseEngine.ini`의 `ClassRedirects`가 옛 경로를 넘겨준다. OSSv2에서는 `OnlineSubsystemEOS`를 켜지도 않으므로 새 경로로 적는다
+- **섹션은 `[/Script/Engine.Engine]`이다.** `[/Script/Engine.GameEngine]`이 아니다 — 엔진 기본값이 `Engine` 쪽에 있고, 에디터 엔진에도 적용돼야 PIE에서 검증할 수 있다
+- **`bIsUsingP2PSockets`는 5.6에서 폐기됐다.** 튜토리얼이 넣으라고 해도 넣지 않는다
+
+##### 하나의 빌드로 LAN과 EOS를 모두 태운다
+
+`UNetDriverEOS`는 `UIpNetDriver`를 상속하고, 다음 조건이면 스스로 기존 IP 경로로 넘어간다(passthrough).
+
+| 쪽 | passthrough 조건 |
+|---|---|
+| 리슨 서버 | URL에 `bIsLanMatch` 또는 `bUseIPSockets`가 있을 때 |
+| 클라이언트 | 접속 주소가 `EOS:`로 시작하지 않을 때 |
+
+클라이언트는 주소만 보고 알아서 갈리지만, **리슨 서버는 URL 옵션이 없으면 EOS 모드로 들어가 로그인된 P2P 주소를 요구한다.** 그래서 LAN 경로에서는 `Local_HostLobby()`가 `listen?bIsLanMatch`를 붙인다 — 이걸 빼면 LAN에서 방 만들기 자체가 실패한다.
+
+##### 주소에 대괄호가 필수다
+
+EOS 주소는 `[EOS:<ProductUserId>]` 형식이며 **대괄호가 없으면 동작하지 않는다.**
+
+`FURL` 파서(`URL.cpp`)가 콜론을 보고 `EOS`를 **프로토콜로 잘라내기** 때문이다 — ProductUserId는 점이 없는 순수 16진수라 프로토콜 판정 조건이 전부 성립한다. 그러면 `ConnectURL.Host`가 비어 `NetDriverEOS::InitConnect`의 `Host.StartsWith("EOS")` 검사에 걸리지 않고 **조용히 passthrough로 빠진다.**
+
+대괄호를 씌우면 FURL이 IPv6 리터럴로 인식해 프로토콜 파싱을 건너뛰고, 괄호만 벗겨 `Host = "EOS:<PUID>"`를 정확히 만든다. 엔진 자신의 OSSv1 경로(`FOnlineSessionEOS::GetConnectStringFromSessionInfo`)도 같은 형식을 쓴다.
+
+ProductUserId 문자열은 `UE::Online::ToString(FAccountId)`로 얻는다 — `CoreOnline`에 있어 **EOS 모듈에 의존하지 않는다.** 형식 지식은 `UCBAuthSubsystem::GetLocalEOSAddress()` 한 곳에 둔다.
+
+##### 검증 로그
+
+| 로그 | 의미 |
+|---|---|
+| `LogEOSP2P: A new connection request listener has been bound. SocketId=[GameNetDriver]` | 리슨 서버가 EOS 모드로 진입 |
+| `LogNet: NetConnectionEOS_N` | `NetConnectionClassName` 적용됨 (`IpConnection`이면 미적용) |
+| `LogEOSP2P: Connection established. NetworkType=[EOS_NCT_DirectConnection]` | P2P 소켓 연결 |
+| `LogNet: IpNetDriver listening on port 7777` | **나오면 안 됨** — EOS 모드가 아니라는 뜻 |
+
+##### 한 PC에서는 접속까지 검증할 수 없다
+
+**Device ID는 기기당 하나라 같은 PC의 두 인스턴스는 같은 ProductUserId를 받는다.** P2P는 PUID가 곧 주소이므로 자기 자신에게 접속하는 꼴이 되고, EOS P2P 소켓은 맺어지지만 언리얼 핸드셰이크(Challenge 교환)가 진행되지 않는다. 세션 생성·검색·참가와 NetDriver 진입까지는 확인할 수 있고, **실제 접속 검증은 PC 2대가 필요하다.**
+
+반복 테스트 중 참가가 `EOS_Sessions_SessionAlreadyExists`로 막히는 것도 같은 원인이다(이전 실행의 멤버십이 백엔드에 남음). 에디터를 재시작하면 풀린다.
 
 #### 세션 속성 목록
 

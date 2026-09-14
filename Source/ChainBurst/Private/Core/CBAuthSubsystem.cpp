@@ -60,6 +60,21 @@ IOnlineServicesPtr UCBAuthSubsystem::ResolveServices() const
 	return GetServices(EOnlineServices::Default, ResolveInstanceName());
 }
 
+// [로컬] EOS P2P 주소 조회
+FString UCBAuthSubsystem::GetLocalEOSAddress() const
+{
+	// 로그인해야 ProductUserId 가 생김. 그 전에는 광고할 주소가 없음
+	if (!CachedAccountId.IsValid()) return FString();
+
+	// 계정 ID 를 문자열로 바꾸면 EOSGS 레지스트리가 ProductUserId 를 그대로 돌려줌.
+	// 이 경로는 CoreOnline 에 있어 EOS 모듈에 의존하지 않음
+	const FString ProductUserId = ToString(CachedAccountId);
+	if (ProductUserId.IsEmpty()) return FString();
+
+	// 대괄호가 핵심. 없으면 FURL 이 "EOS" 를 프로토콜로 잘라내 주소가 통째로 사라짐
+	return FString::Printf(TEXT("[%s%s%s]"), TEXT("EOS"), TEXT(":"), *ProductUserId);
+}
+
 // [로컬] 로그인 시작, 게임 시작 시 게임 인스턴스에서 호출됨.
 void UCBAuthSubsystem::RequestLogin()
 {

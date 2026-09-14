@@ -60,6 +60,16 @@ public:
 	FORCEINLINE UE::Online::FAccountId GetLocalAccountId() const { return CachedAccountId; }
 
 	/**
+	 * [로컬] 이 클라이언트에 붙을 수 있는 P2P 주소를 반환함. 로그인 전이면 빈 문자열.
+	 *
+	 * 형식은 "[EOS:<ProductUserId>]" 이며 **대괄호가 필수**임 —
+	 * FURL 파서가 콜론을 보고 "EOS" 를 프로토콜로 잘라내 주소가 통째로 사라지는데,
+	 * 대괄호가 있으면 IPv6 리터럴로 인식해 그 파싱을 건너뛰고 괄호만 벗겨 줌.
+	 * (엔진의 OSSv1 경로 FOnlineSessionEOS 도 같은 형식을 씀)
+	 */
+	FString GetLocalEOSAddress() const;
+
+	/**
 	 * [로컬] 이 게임 인스턴스의 온라인 서비스를 반환함. 없으면 nullptr.
 	 *
 	 * 인스턴스 식별 규칙을 이 함수 하나에 모음 — 서비스는 (인스턴스 이름 × 설정 이름) 조합마다

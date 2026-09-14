@@ -119,9 +119,24 @@ FAccountId UCBSessionSubsystem::Local_ResolveLocalAccountId() const
 	return AuthSubsystem->GetLocalAccountId();
 }
 
-// [로컬][호스트] 자기 PC의 IP를 문자열로 만들어 반환함 (호스트가 세션에 실어 참가자에게 알려주는 용도)
+// [로컬][호스트] 참가자가 붙을 주소를 만들어 반환함 (호스트가 세션에 실어 참가자에게 알려주는 용도)
 FString UCBSessionSubsystem::Local_ResolveHostAddress() const
 {
+	// EOS 는 IP 가 아니라 P2P 주소로 붙음. 형식 지식은 로그인 서브시스템이 가짐
+	if (!bUseLANSessions)
+	{
+		const UGameInstance* OwningGameInstance = GetGameInstance();
+		const UCBAuthSubsystem* AuthSubsystem = OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBAuthSubsystem>() : nullptr;
+
+		const FString EOSAddress = AuthSubsystem ? AuthSubsystem->GetLocalEOSAddress() : FString();
+		if (EOSAddress.IsEmpty())
+		{
+			UE_LOG(LogTemp, Error, TEXT("[Session] EOS 주소를 얻지 못함. 로그인 상태를 확인할 것"));
+		}
+
+		return EOSAddress;
+	}
+
 	// 플랫폼의 소켓 서브시스템 가져오기
 	ISocketSubsystem* SocketSubsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
 	if (!SocketSubsystem) return FString();
@@ -618,6 +633,13 @@ bool UCBSessionSubsystem::Local_HostLobby(TSoftObjectPtr<UWorld> InLobbyLevel, i
 
 	// listen: 리슨 서버로 염. 빠지면 조용히 단독 실행이 됨
 	FString Options = TEXT("listen");
+
+	// bIsLanMatch: NetDriverEOS 가 이 옵션을 보면 기존 IpNetDriver 로 넘김(passthrough).
+	// 넣지 않으면 EOS 모드로 들어가 로그인된 P2P 주소를 요구하므로, LAN 경로에서는 반드시 붙여야 함
+	if (bUseLANSessions)
+	{
+		Options += TEXT("?bIsLanMatch");
+	}
 
 	// MaxPlayers: 레벨과 함께 스폰되는 AGameSession 이 InitOptions 에서 읽어 정원 판정에 씀.
 	// 세션 광고의 인원과 같은 값에서 나와야 표시와 실제 정원이 어긋나지 않음. 0 이면 엔진 기본값을 그대로 둠

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Delegates/DelegateCombinations.h"
 #include "GameplayTagContainer.h"
+#include "Types/CBEnumTypes.h"
 #include "CBDelegates.generated.h" // BP에도 사용할거라 Include
 
 /**
@@ -57,3 +58,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnLocalPlayerStateSet);
 /** 접속한 플레이어 목록이 바뀌었음. (받는 쪽이 PlayerArray 를 다시 읽음) */
 UDELEGATE()
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnPlayerListChanged);
+
+/** [로컬] 온라인 로그인 상태가 바뀌었음. (새 상태 / 실패 사유 — 실패가 아니면 비어 있음) */
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCBOnLoginStateChanged, ECBLoginState, NewState, const FText&, FailureReason);

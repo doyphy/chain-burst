@@ -96,3 +96,23 @@ FORCEINLINE ECBTeam GenericIdToCBTeam(const FGenericTeamId& InTeamId)
 	default:									return ECBTeam::Neutral;
 	}
 }
+
+/**
+ * 온라인 로그인 진행 상태
+ * 세션 작업이 가능한지를 가르는 값. UI 가 버튼 활성화·스피너 표시를 결정하는 데 씀.
+ */
+UENUM(BlueprintType)
+enum class ECBLoginState : uint8
+{
+	// 아직 시도하지 않음
+	NotLoggedIn		UMETA(DisplayName = "Not Logged In"),
+
+	// 진행 중 (세션 작업 불가)
+	LoggingIn		UMETA(DisplayName = "Logging In"),
+
+	// 완료 (세션 작업 가능)
+	LoggedIn		UMETA(DisplayName = "Logged In"),
+
+	// 실패 (사유는 방송에 실려 옴)
+	Failed			UMETA(DisplayName = "Failed")
+};

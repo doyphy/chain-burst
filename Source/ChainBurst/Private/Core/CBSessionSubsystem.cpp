@@ -1,16 +1,15 @@
 // project
 #include "Core/CBSessionSubsystem.h"
+#include "Core/CBAuthSubsystem.h"
 
 // engine
 #include "Engine/Engine.h"
-#include "Engine/LocalPlayer.h"
 #include "Engine/NetDriver.h"
 #include "Engine/PendingNetGame.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameMapsSettings.h"
 #include "Kismet/GameplayStatics.h"
-#include "Online/Auth.h"
 #include "Online/OnlineAsyncOpHandle.h"
 #include "Online/OnlineServices.h"
 #include "Online/Sessions.h"
@@ -79,15 +78,12 @@ void UCBSessionSubsystem::Deinitialize()
 // [로컬] 세션 인터페이스 조회
 ISessionsPtr UCBSessionSubsystem::Local_ResolveSessionsInterface() const
 {
+	// 로그인 서브시스템 가져오기.
 	const UGameInstance* OwningGameInstance = GetGameInstance();
-	if (!OwningGameInstance) return nullptr;
+	const UCBAuthSubsystem* AuthSubsystem = OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBAuthSubsystem>() : nullptr;
 
-	// PIE로 테스트 시 한 프로세스에 게임 인스턴스가 여럿이라, 월드 컨텍스트 이름으로 서비스 인스턴스를 구분해야 함.
-	const FWorldContext* WorldContext = OwningGameInstance->GetWorldContext();
-	const FName InstanceName = WorldContext ? WorldContext->ContextHandle : NAME_None;
-
-	// 해당 게임 인스턴스의 온라인 서비스 가져오기. 제공자(Null/EOS)는 ini 의 [OnlineServices] DefaultServices 가 정함
-	const IOnlineServicesPtr Services = GetServices(EOnlineServices::Default, InstanceName);
+	// 온라인 서비스 조회. 없으면 세션 작업을 할 수 없음
+	const IOnlineServicesPtr Services = AuthSubsystem ? AuthSubsystem->ResolveServices() : nullptr;
 	if (!Services)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[Session] 온라인 서비스를 찾을 수 없음. [OnlineServices] DefaultServices 설정과 플러그인 활성화를 확인할 것"));
@@ -101,36 +97,23 @@ ISessionsPtr UCBSessionSubsystem::Local_ResolveSessionsInterface() const
 // [로컬] 로컬 플레이어의 계정 ID 조회
 FAccountId UCBSessionSubsystem::Local_ResolveLocalAccountId() const
 {
+	// 로그인 서브시스템 가져오기.
 	const UGameInstance* OwningGameInstance = GetGameInstance();
-	if (!OwningGameInstance) return FAccountId();
-
-	const FWorldContext* WorldContext = OwningGameInstance->GetWorldContext();
-	const FName InstanceName = WorldContext ? WorldContext->ContextHandle : NAME_None;
-
-	// 온라인 서비스 가져오기
-	const IOnlineServicesPtr Services = GetServices(EOnlineServices::Default, InstanceName);
-	if (!Services) return FAccountId();
-
-	// 온라인 서비스의 인증 인터페이스 가져오기
-	const IAuthPtr Auth = Services->GetAuthInterface();
-	if (!Auth) return FAccountId();
-
-	// 첫 번째 로컬 플레이어 기준. 분할 화면은 아직 고려하지 않음
-	const ULocalPlayer* LocalPlayer = OwningGameInstance->GetFirstGamePlayer();
-	if (!LocalPlayer) return FAccountId();
-
-	// 로컬 플레이어의 플랫폼 계정 ID 조회. Null 제공자는 로그인 없이 바로 얻어짐. EOS 는 로그인 후에야 유효해짐
-	const TOnlineResult<FAuthGetLocalOnlineUserByPlatformUserId> Result =
-		Auth->GetLocalOnlineUserByPlatformUserId({ LocalPlayer->GetPlatformUserId() });
-
-	if (!Result.IsOk())
+	const UCBAuthSubsystem* AuthSubsystem = OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBAuthSubsystem>() : nullptr;
+	if (!AuthSubsystem)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Session] 로컬 계정을 얻지 못함: %s"), *Result.GetErrorValue().GetLogString());
+		UE_LOG(LogTemp, Warning, TEXT("[Session] 로그인 서브시스템을 찾을 수 없음"));
 		return FAccountId();
 	}
 
-	// 로컬 계정 ID 반환
-	return Result.GetOkValue().AccountInfo->AccountId;
+	// 아직 로그인 전이면 무효한 ID 가 돌아옴. 호출부가 실패로 처리함
+	if (!AuthSubsystem->IsLoggedIn())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Session] 아직 로그인되지 않아 계정을 얻지 못함 (상태 %d)"), static_cast<int32>(AuthSubsystem->GetLoginState()));
+	}
+
+	// 로그인한 계정 ID 반환. 미로그인이면 무효한 ID 를 돌려줌
+	return AuthSubsystem->GetLocalAccountId();
 }
 
 // [로컬][호스트] 자기 PC의 IP를 문자열로 만들어 반환함 (호스트가 세션에 실어 참가자에게 알려주는 용도)

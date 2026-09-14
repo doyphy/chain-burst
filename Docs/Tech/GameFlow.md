@@ -114,6 +114,9 @@ PlayerStateClass      = ACBPlayerState::StaticClass();
 **세션은 "붙을 주소를 알아내는 일"만 한다.** 실제 접속은 위 두 함수(`Local_HostLobby` / `Local_JoinServerByAddress`)로 그대로 수렴한다.
 
 ```
+[게임 시작] UCBGameInstance::OnStart() → UCBAuthSubsystem::RequestLogin()
+          └ 로그인 성공 → 계정 ID 확보 (아래 "로그인")
+
 [호스트] Local_CreateAndHostSession(로비 레벨, 방 이름, 최대 인원)
           └ CreateSession 성공 → Local_HostLobby(로비 레벨)
 
@@ -129,14 +132,45 @@ PlayerStateClass      = ACBPlayerState::StaticClass();
 
 ```ini
 [OnlineServices]
-DefaultServices=Null          ; 나중에 EOS 도입 시 Epic
+DefaultServices=Epic          ; Null = LAN 비콘, Epic = EOS
+bUseBuildIdOverride=True      ; 세션 버킷을 가르는 빌드 식별자
+BuildIdOverride=1
 
 [/Script/ChainBurst.CBSessionSubsystem]
-bUseLANSessions=True          ; EOS 로 바꾸면 반드시 False
+bUseLANSessions=False         ; Null 로 되돌리면 반드시 True 로 함께 바꿀 것
+
+[EOSSDK]
+DefaultPlatformConfigName=ChainBurst   ; 자격증명 섹션 이름 (값은 Config/Windows/WindowsEngine.ini, 저장소 제외)
 ```
 
 - **`bUseLANSessions`를 코드에 박지 않는다.** Null은 LAN 비콘으로만 검색되고 EOS는 아니다. 박아두면 제공자를 바꿔도 **에러 없이 LAN만 검색된다.** 그래서 두 설정을 ini에서 나란히 두었다 — 하나만 바꾸는 사고를 막기 위해서다
+- **`DefaultServices`와 `bUseLANSessions`는 한 쌍이다.** `Local_CreateAndHostSession`이 맨 먼저 부르는 `Local_ResetOnlineServices()`가 `bUseLANSessions`에만 걸려 있고 하는 일이 `DestroyService()`다. Epic + LAN=True 조합이면 **EOS 서비스를 쓰기 직전에 스스로 파괴한다**
+- **플랫폼 설정 이름은 `DefaultPlatformConfigName`이다.** OSSv1의 `DefaultArtifactName`은 `OnlineSubsystemEOS`만 읽으므로 OSSv2에서는 아무 효과가 없다. 못 찾았을 때의 실패 메시지가 `Verbose`라 **기본 로그 레벨에서는 보이지도 않는다**
+- **`BuildIdOverride`를 지정하지 않으면 세션이 서로 보이지 않을 수 있다.** `SessionsEOSGS::CreateSession`은 버킷 커스텀 세팅이 없으면 BuildId를 버킷 ID로 쓰는데, 기본값(`GetNetworkCompatibleChangelist()`)은 에디터와 패키징 빌드에서 달라진다. 네트워크 호환성이 깨지는 변경을 하면 숫자를 올린다
 - **v1(`OnlineSubsystem`)이 아니라 v2를 쓴 이유**: EOS의 Device ID 익명 로그인이 v2에만 있고(v1 `ToEOS_ELoginCredentialType`에 항목 자체가 없다), v2를 골라도 `OnlineServicesOSSAdapter`로 Steam이 열려 있다. v2 EOS의 세션 구현도 생성·검색·참가·나가기에 빈 구현이 없음을 확인했다(미구현은 presence 2개뿐)
+
+#### 로그인 — 세션보다 먼저, 그리고 세션은 그걸 모른다
+
+EOS는 **로그인해서 계정 ID를 얻어야** 세션을 만들 수 있다. Null 제공자는 계정을 자동으로 만들어 줘서 이 단계가 사실상 없었지만, EOS는 명시적으로 거쳐야 한다. 그 차이를 세션 코드에 들이지 않으려고 **`UCBAuthSubsystem`** 을 따로 뒀다.
+
+```
+UCBGameInstance::OnStart()
+ └ UCBAuthSubsystem::RequestLogin()
+     ├ ResolveServices()          ← 먼저! 온라인 서비스가 EOS 플랫폼을 만들게 한다
+     ├ Local_CreateDeviceId()     ← EOS SDK 직접 호출
+     │    └ Success 또는 DuplicateNotAllowed → 둘 다 정상
+     └ Local_LoginWithDeviceId()  ← IAuth::Login (ExternalAuth / DeviceIdAccessToken)
+          └ 계정 ID 보관 → OnLoginStateChanged 방송
+```
+
+- **`UCBSessionSubsystem`은 제공자를 모른다.** 계정 ID는 `GetLocalAccountId()`로, 서비스는 `ResolveServices()`로 받아 쓸 뿐이다. **프로젝트에서 EOS 전용 코드는 `CBAuthSubsystem.cpp` 하나뿐이다**
+- **왜 `OnStart()`인가.** 로그인에 `PlatformUserId`가 필요하고 그건 로컬 플레이어에게서 나온다. 서브시스템 `Initialize()`는 `SetupInitialLocalPlayer()`보다 일러서 로컬 플레이어가 아직 없다. `OnStart()`는 두 경로(일반 실행·PIE) 모두에서 로컬 플레이어가 보장되는 가장 이른 지점이다. **단 PIE에서는 월드·게임모드가 아직 준비 전이므로 그쪽에 의존하는 코드를 여기 두면 안 된다**
+- **`ResolveServices()`를 Device ID 생성보다 먼저 부르는 이유.** SDK 매니저는 `(설정 이름 × 인스턴스 이름)` 조합으로 플랫폼 핸들을 캐시한다. 온라인 서비스가 먼저 플랫폼을 만들게 해야 같은 핸들을 얻는다. 순서가 뒤집히면 **플랫폼이 둘 생겨서 "로그인은 됐는데 세션이 계정을 못 찾는"** 상태가 된다
+- **Device ID 생성만 EOS SDK 직접 호출이다.** `EOS_Connect_CreateDeviceId`를 감싸는 OSSv2 경로가 없다(엔진 전체 검색 0건). 로그인 자체는 `IAuth::Login`으로 한다
+- **SDK 콜백에 `this`를 그대로 넘기지 않는다.** EOS 콜백은 `void*` 하나만 나르므로, 콜백 전에 서브시스템이 사라지면(PIE 정지) 댕글링이 된다. 약참조를 힙에 담아 넘기고 콜백이 회수한다
+- **Device ID는 기기당 하나다.** 한 PC에서 클라이언트를 여럿 띄우면 같은 계정으로 로그인될 수 있다
+
+> 데브 포털 참고: 세션 기능은 포털에서 **"매치메이킹"** 이라고 부른다. 클라이언트 정책의 **"Connect"** 토글은 로그인이 아니라 *다른 유저의 계정 매핑 조회*(둘 다 신뢰할 수 있는 서버 전용)라 **꺼져 있어도 Device ID 로그인은 된다**. 리슨 서버 + P2P 구조에는 사전 정의 정책 `Peer2Peer`가 맞는다.
 
 #### 호스트 주소는 우리가 정한 속성 하나로 주고받는다
 

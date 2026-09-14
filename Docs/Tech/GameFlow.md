@@ -114,7 +114,7 @@ PlayerStateClass      = ACBPlayerState::StaticClass();
 **세션은 "붙을 주소를 알아내는 일"만 한다.** 실제 접속은 위 두 함수(`Local_HostLobby` / `Local_JoinServerByAddress`)로 그대로 수렴한다.
 
 ```
-[게임 시작] UCBGameInstance::OnStart() → UCBAuthSubsystem::RequestLogin()
+[메인 메뉴] LAN/EOS 버튼 → UCBAuthSubsystem::RequestLogin(모드)
           └ 로그인 성공 → 계정 ID 확보 (아래 "로그인")
 
 [호스트] Local_CreateAndHostSession(로비 레벨, 방 이름, 최대 인원)
@@ -126,45 +126,62 @@ PlayerStateClass      = ACBPlayerState::StaticClass();
           └ JoinSession 성공 → 세션 속성에서 호스트 주소 → Local_JoinServerByAddress(주소)
 ```
 
-#### 제공자는 설정이 정하고, 코드는 모른다
+#### 제공자는 런타임에 고른다 — 설정이 아니라 버튼이다
 
-**OnlineServices(v2) API로 작성한다.** 실제 제공자는 `Config/DefaultEngine.ini` 한 곳에서 정한다.
+**OnlineServices(v2) API로 작성한다.** 실제 제공자는 **메인 메뉴에서 플레이어가 고른다.**
+
+`GetServices()`는 제공자를 매개변수로 받고, 구체적인 값을 넘기면 ini를 보지 않는다(`OnlineServicesRegistry.cpp`의 `ResolveServiceName`은 `Default`·`Platform`만 해석한다). 인스턴스는 제공자별로 따로 캐시되므로 Null과 Epic이 동시에 존재해도 서로 간섭하지 않는다.
+
+```
+ECBOnlineMode::LAN → EOnlineServices::Null     (LAN 비콘)
+ECBOnlineMode::EOS → EOnlineServices::Epic     (EOS)
+```
+
+- **LAN 여부를 따로 설정하지 않는다.** `UCBSessionSubsystem::Local_IsLANMode()`가 `UCBAuthSubsystem::IsLANMode()`에서 파생되므로, **제공자와 LAN 플래그가 어긋날 수 없다.** 예전에는 ini 두 곳을 짝 맞춰야 했고 하나만 바꾸면 조용히 깨졌다 — `Local_ResetOnlineServices()`가 LAN 조건에서 `DestroyService()`를 부르는 탓에 "Epic + LAN=True" 조합은 EOS 서비스를 쓰기 직전에 스스로 파괴했다
+- **`DestroyService`·`IsLoaded`에 `EOnlineServices::Default`를 넘기지 않는다.** 런타임 선택과 ini 값이 다를 수 있어, 쓰지도 않는 제공자를 파괴하게 된다
+- **개발 중에는 LAN이 필수다.** Device ID는 기기당 하나라 한 PC의 2인 PIE가 EOS로는 불가능하다(같은 ProductUserId → 자기 자신에게 접속). LAN 모드는 계정이 필요 없어 그대로 된다
+
+남은 ini 설정은 EOS 쪽뿐이다.
 
 ```ini
 [OnlineServices]
-DefaultServices=Epic          ; Null = LAN 비콘, Epic = EOS
+DefaultServices=Epic          ; 코드가 제공자를 직접 넘기므로 세션 경로엔 쓰이지 않음(엔진 기본값용)
 bUseBuildIdOverride=True      ; 세션 버킷을 가르는 빌드 식별자
 BuildIdOverride=1
-
-[/Script/ChainBurst.CBSessionSubsystem]
-bUseLANSessions=False         ; Null 로 되돌리면 반드시 True 로 함께 바꿀 것
 
 [EOSSDK]
 DefaultPlatformConfigName=ChainBurst   ; 자격증명 섹션 이름 (값은 Config/Windows/WindowsEngine.ini, 저장소 제외)
 ```
 
-- **`bUseLANSessions`를 코드에 박지 않는다.** Null은 LAN 비콘으로만 검색되고 EOS는 아니다. 박아두면 제공자를 바꿔도 **에러 없이 LAN만 검색된다.** 그래서 두 설정을 ini에서 나란히 두었다 — 하나만 바꾸는 사고를 막기 위해서다
-- **`DefaultServices`와 `bUseLANSessions`는 한 쌍이다.** `Local_CreateAndHostSession`이 맨 먼저 부르는 `Local_ResetOnlineServices()`가 `bUseLANSessions`에만 걸려 있고 하는 일이 `DestroyService()`다. Epic + LAN=True 조합이면 **EOS 서비스를 쓰기 직전에 스스로 파괴한다**
 - **플랫폼 설정 이름은 `DefaultPlatformConfigName`이다.** OSSv1의 `DefaultArtifactName`은 `OnlineSubsystemEOS`만 읽으므로 OSSv2에서는 아무 효과가 없다. 못 찾았을 때의 실패 메시지가 `Verbose`라 **기본 로그 레벨에서는 보이지도 않는다**
 - **`BuildIdOverride`를 지정하지 않으면 세션이 서로 보이지 않을 수 있다.** `SessionsEOSGS::CreateSession`은 버킷 커스텀 세팅이 없으면 BuildId를 버킷 ID로 쓰는데, 기본값(`GetNetworkCompatibleChangelist()`)은 에디터와 패키징 빌드에서 달라진다. 네트워크 호환성이 깨지는 변경을 하면 숫자를 올린다
 - **v1(`OnlineSubsystem`)이 아니라 v2를 쓴 이유**: EOS의 Device ID 익명 로그인이 v2에만 있고(v1 `ToEOS_ELoginCredentialType`에 항목 자체가 없다), v2를 골라도 `OnlineServicesOSSAdapter`로 Steam이 열려 있다. v2 EOS의 세션 구현도 생성·검색·참가·나가기에 빈 구현이 없음을 확인했다(미구현은 presence 2개뿐)
 
 #### 로그인 — 세션보다 먼저, 그리고 세션은 그걸 모른다
 
-EOS는 **로그인해서 계정 ID를 얻어야** 세션을 만들 수 있다. Null 제공자는 계정을 자동으로 만들어 줘서 이 단계가 사실상 없었지만, EOS는 명시적으로 거쳐야 한다. 그 차이를 세션 코드에 들이지 않으려고 **`UCBAuthSubsystem`** 을 따로 뒀다.
+EOS는 **로그인해서 계정 ID를 얻어야** 세션을 만들 수 있다. Null은 로그인 개념이 아예 없다. 그 차이를 세션 코드에 들이지 않으려고 **`UCBAuthSubsystem`** 을 따로 뒀다.
 
 ```
-UCBGameInstance::OnStart()
- └ UCBAuthSubsystem::RequestLogin()
-     ├ ResolveServices()          ← 먼저! 온라인 서비스가 EOS 플랫폼을 만들게 한다
-     ├ Local_CreateDeviceId()     ← EOS SDK 직접 호출
-     │    └ Success 또는 DuplicateNotAllowed → 둘 다 정상
-     └ Local_LoginWithDeviceId()  ← IAuth::Login (ExternalAuth / DeviceIdAccessToken)
+[메인 메뉴 버튼] RequestLogin(모드)
+ ├ 진행 중이면 무시 / 같은 모드로 로그인돼 있으면 무시
+ ├ 모드가 바뀌었으면 Local_ResetLogin() 으로 비우고 새로
+ │
+ ├ LAN → Local_AdoptLocalAccount()
+ │        └ GetLocalOnlineUserByPlatformUserId 로 자동 등록된 계정 조회
+ │
+ └ EOS → ResolveServices()          ← 먼저! 온라인 서비스가 EOS 플랫폼을 만들게 한다
+         Local_CreateDeviceId()     ← EOS SDK 직접 호출
+          └ Success 또는 DuplicateNotAllowed → 둘 다 정상
+         Local_LoginWithDeviceId()  ← IAuth::Login (ExternalAuth / DeviceIdAccessToken)
           └ 계정 ID 보관 → OnLoginStateChanged 방송
 ```
 
+- **Null 에서는 `Login()` 을 부르면 안 된다.** `FAuthNull` 에 구현이 없어 베이스의 `NotImplemented` 로 실패한다(`AuthCommon.cpp`). 대신 플랫폼 유저가 생길 때 계정이 자동 등록되므로 레지스트리에서 꺼내 쓴다
+- **모드는 메인 메뉴에서 언제든 바꿀 수 있다.** 메뉴로 돌아오는 경로(`Local_LeaveToMainMenu`)가 이미 세션을 정리하므로, 전환 시점에는 정리할 세션이 없다
+- **로그인 진행 중에는 모드 전환 요청을 무시한다.** EOS 로그인은 SDK 콜백이 비동기로 오는데, 그 사이에 상태를 갈아엎으면 뒤늦게 도착한 콜백이 새 상태를 덮어쓴다. UI 는 `OnLoginStateChanged` 로 버튼을 잠그면 된다
+
 - **`UCBSessionSubsystem`은 제공자를 모른다.** 계정 ID는 `GetLocalAccountId()`로, 서비스는 `ResolveServices()`로 받아 쓸 뿐이다. **프로젝트에서 EOS 전용 코드는 `CBAuthSubsystem.cpp` 하나뿐이다**
-- **왜 `OnStart()`인가.** 로그인에 `PlatformUserId`가 필요하고 그건 로컬 플레이어에게서 나온다. 서브시스템 `Initialize()`는 `SetupInitialLocalPlayer()`보다 일러서 로컬 플레이어가 아직 없다. `OnStart()`는 두 경로(일반 실행·PIE) 모두에서 로컬 플레이어가 보장되는 가장 이른 지점이다. **단 PIE에서는 월드·게임모드가 아직 준비 전이므로 그쪽에 의존하는 코드를 여기 두면 안 된다**
+- **서브시스템 `Initialize()` 에서 로그인하면 안 된다.** 로그인에 `PlatformUserId` 가 필요하고 그건 로컬 플레이어에게서 나오는데, `Initialize()` 는 `SetupInitialLocalPlayer()` 보다 이르다. 메인 메뉴 위젯이 호출하는 지금 구조에서는 이미 로컬 플레이어가 있으므로 문제가 없다
 - **`ResolveServices()`를 Device ID 생성보다 먼저 부르는 이유.** SDK 매니저는 `(설정 이름 × 인스턴스 이름)` 조합으로 플랫폼 핸들을 캐시한다. 온라인 서비스가 먼저 플랫폼을 만들게 해야 같은 핸들을 얻는다. 순서가 뒤집히면 **플랫폼이 둘 생겨서 "로그인은 됐는데 세션이 계정을 못 찾는"** 상태가 된다
 - **Device ID 생성만 EOS SDK 직접 호출이다.** `EOS_Connect_CreateDeviceId`를 감싸는 OSSv2 경로가 없다(엔진 전체 검색 0건). 로그인 자체는 `IAuth::Login`으로 한다
 - **SDK 콜백에 `this`를 그대로 넘기지 않는다.** EOS 콜백은 `void*` 하나만 나르므로, 콜백 전에 서브시스템이 사라지면(PIE 정지) 댕글링이 된다. 약참조를 힙에 담아 넘기고 콜백이 회수한다
@@ -273,7 +290,7 @@ LogOnlineServices: Warning: EOS_SessionSearch_Find failed with result [EOS_Inval
 값은 `ChainBurst_<BuildId>`다. `[OnlineServices] BuildIdOverride`가 그 숫자를 정하므로, 네트워크 호환성이 깨지는 변경 후 숫자를 올리면 이전 빌드의 방과 자동으로 갈라진다.
 
 - **키 이름은 엔진 상수 `EOSGS_BUCKET_ID_ATTRIBUTE_KEY`(`SessionsEOSGSTypes.h:20`)와 문자열이 같아야 한다.** 그 헤더를 include 하면 세션 서브시스템이 EOS를 알게 되므로(제공자 독립 원칙 위반) 문자열만 맞춰 두었다 — 엔진이 값을 바꾸면 드리프트하므로 주석에 출처를 남겨 둔다
-- **생성과 검색 모두 `bUseLANSessions == false`일 때만 적용한다.** LAN은 비콘으로 찾으므로 버킷이 필요 없고, 검증된 경로를 건드리지 않기 위해서다
+- **생성과 검색 모두 EOS 모드일 때만 적용한다.** LAN은 비콘으로 찾으므로 버킷이 필요 없고, 검증된 경로를 건드리지 않기 위해서다
 
 #### 현재 인원도 우리가 실어 보내야 한다 — 엔진 값은 못 쓴다
 
@@ -524,7 +541,7 @@ Null 제공자(LAN 비콘)의 검색 동작 두 가지는 **버그가 아니라 
 
 **대응**: `Local_CreateAndHostSession()` 맨 앞에서 `Local_ResetOnlineServices()`가 `UE::Online::DestroyService()`로 이 게임 인스턴스의 서비스를 파괴한다. 다음 조회가 빈 캐시로 새로 만들므로, **비콘이 켜지는 시점의 캐시에는 방금 만든 방 하나만 남는다.** 프로세스를 갓 재시작한 것과 같은 상태다.
 
-- **`bUseLANSessions` 일 때만 한다.** 조건을 제공자 이름에 걸지 않는 이유는 `FSessionsEOSGS` 가 `FSessionsLAN` 을 상속해 **EOS 라도 LAN 세션이면 같은 비콘 경로를 타기** 때문이다(`SessionsEOSGS.cpp` 의 `CreateSessionImpl`·`FindSessionsImpl` 이 LAN 구현으로 위임한다). 정상 EOS 경로에서는 광고 주체가 백엔드라 ①이 남아도 무해하다 — 그래서 EOS 로 옮기면 이 코드는 자동으로 죽는다
+- **LAN 모드일 때만 한다.** 그 조건이 곧 제공자가 Null 이라는 뜻이다. 예전에는 별도 플래그였고, 조건을 제공자 이름에 걸지 않은 이유는 `FSessionsEOSGS` 가 `FSessionsLAN` 을 상속해 **EOS 라도 LAN 세션이면 같은 비콘 경로를 타기** 때문이다(`SessionsEOSGS.cpp` 의 `CreateSessionImpl`·`FindSessionsImpl` 이 LAN 구현으로 위임한다). 정상 EOS 경로에서는 광고 주체가 백엔드라 ①이 남아도 무해하다 — 그래서 EOS 로 옮기면 이 코드는 자동으로 죽는다
 - **나가기 경로에는 넣지 않는다.** 비동기 `LeaveSession` 이 떠 있는 직후라 EOS 에서는 실제 백엔드 호출이 날아간다. 유령을 뿌리는 건 호스팅하는 쪽뿐이므로 "방 열기 직전" 한 곳이면 충분하다
 - **세션 인터페이스·계정 ID 조회보다 반드시 먼저 부른다.** `ISessionsPtr` 을 들고 있는 채로 파괴하면 엔진이 참조 경고를 찍고, 미리 얻어둔 값은 죽은 인스턴스의 것이 된다
 - 파괴와 함께 이전 검색 결과의 세션 ID 가 무효가 되므로 `FoundSessions`·`FoundSessionIds` 도 함께 비운다
@@ -1169,7 +1186,7 @@ AI(Rogue/Outlaw)는 이 경로를 타지 않는다. 기존대로 `DespawnDelay` 
 
 **미구현**
 - **무기(캐릭터) 변경 UI 배선** — C++ 창구는 완료(위 "무기 변경 = 캐릭터 변경"). 남은 것: `UCBCharacterCatalog` 데이터 에셋 작성, 무기별 캐릭터 BP·로드아웃, `GI_EasyMainGameInstance`에 카탈로그 지정, 로비 위젯의 버튼 목록 + `Server_RequestCharacterSelection` 호출 + `OnCharacterSelectionChanged` 구독
-- **EOS 제공자 전환** — 플러그인 활성화 + 자격증명 + Device ID 로그인 + `DefaultServices=Epic` / `bUseLANSessions=False`. 세션 호출 코드는 그대로. 추가로 `NetDriverEOS` 설정(P2P)과 호스트 주소를 EOS 키에도 넣는 작업이 붙는다
+- **EOS 제공자 전환** — 플러그인 활성화 + 자격증명 + Device ID 로그인 + `NetDriverEOS`(P2P) + 호스트 주소를 EOS 주소로. 제공자는 메인 메뉴에서 런타임에 고르고, 세션 호출 코드는 그대로다
 - 세션 목록 UI (`WBP_CB_SessionList`, `Menu` 레이어) + 메인 메뉴에 방 만들기/찾기 버튼 — C++ 창구는 완료
 - 접속 실패 사유를 모달로 표시 — C++은 완료, **위젯 배선만 남음**. 참가 실패는 `OnConnectionFailed` 구독, 접속 후 끊김은 `Local_ConsumePendingFailureReason()` — 두 경로 다 물릴 것 (위 "엔진의 자동 복귀")
 - 로비 위젯 배선 (`WBP_CB_Lobby_Footer`) — 준비/시작 위젯 스위처, `OnReadyStateChanged` 구독, 두 RPC 호출

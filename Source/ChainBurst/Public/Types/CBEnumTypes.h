@@ -99,7 +99,7 @@ FORCEINLINE ECBTeam GenericIdToCBTeam(const FGenericTeamId& InTeamId)
 
 /**
  * 온라인 로그인 진행 상태
- * 세션 작업이 가능한지를 가르는 값. UI 가 버튼 활성화·스피너 표시를 결정하는 데 씀.
+ * 세션 작업이 가능한지를 가르는 값. (UI 에서 활용)
  */
 UENUM(BlueprintType)
 enum class ECBLoginState : uint8
@@ -115,4 +115,18 @@ enum class ECBLoginState : uint8
 
 	// 실패 (사유는 방송에 실려 옴)
 	Failed			UMETA(DisplayName = "Failed")
+};
+
+/**
+ * 온라인 제공자 선택
+ * 메인 메뉴에서 고르며, 로그인 방식과 세션 검색 방식을 함께 결정함.
+ */
+UENUM(BlueprintType)
+enum class ECBOnlineMode : uint8
+{
+	// LAN 비콘 기반. 계정·자격증명이 필요 없음. 같은 네트워크에 붙은 클라이언트끼리만 검색·접속 가능
+	LAN		UMETA(DisplayName = "LAN"),
+
+	// EOS. Device ID 익명 로그인 후 P2P 로 붙음. 인터넷 너머로 접속 가능
+	EOS		UMETA(DisplayName = "EOS")
 };

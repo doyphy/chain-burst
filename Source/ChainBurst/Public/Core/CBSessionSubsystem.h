@@ -34,7 +34,7 @@ namespace UE::Online
  *
  * 맵을 넘어 살아남아야 접속 실패 신호를 받을 수 있으므로 게임 인스턴스 서브시스템으로 둠.
  */
-UCLASS(Config = Engine)
+UCLASS()
 class CHAINBURST_API UCBSessionSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
@@ -121,6 +121,12 @@ private:
 	 */
 	UE::Online::FAccountId Local_ResolveLocalAccountId() const;
 
+	/**
+	 * [로컬] 세션을 LAN 비콘으로 다룰지. 로그인 서브시스템의 선택 모드에서 파생됨.
+	 * 생성·검색·호스트 주소·리슨 URL 옵션이 전부 이 값으로 갈림.
+	 */
+	bool Local_IsLANMode() const;
+
 	/** [로컬] 이 PC 가 리슨 서버로서 광고할 주소를 반환함. (제공자 무관하게 세션 속성으로 실어 보냄) */
 	FString Local_ResolveHostAddress() const;
 
@@ -166,13 +172,6 @@ private:
 	 * 검색으로 발견한 세션 캐시를 정리하기 위함. 정리안하면 LAN환경에서 세션을 광고할 때 세션 캐시까지 같이 광고함.
 	 */
 	void Local_ResetOnlineServices();
-
-	/**
-	 * 세션이 LAN 전용인지.
-	 * Null 제공자는 LAN 비콘으로만 검색되므로 true 여야 하고, EOS 는 false 여야 함.
-	 */
-	UPROPERTY(Config)
-	bool bUseLANSessions = true;
 
 	/** 로컬 세션 이름. 생성·참가·나가기에서 같은 이름을 씀 (한 번에 하나만 유지). */
 	static const FName SessionName;

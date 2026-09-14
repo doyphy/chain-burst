@@ -1,7 +1,6 @@
 // project
 #include "Core/CBGameInstance.h"
 #include "Core/CBOnlineSession.h"
-#include "Core/CBAuthSubsystem.h"
 #include "Types/CBEnumTypes.h"
 
 // engine
@@ -41,20 +40,6 @@ void UCBGameInstance::Shutdown()
 	FGenericTeamId::ResetAttitudeSolver();
 
 	Super::Shutdown();
-}
-
-// 게임 인스턴스 시작
-void UCBGameInstance::OnStart()
-{
-	Super::OnStart();
-	
-	// 로그인 요청 시 어느 로컬 유저에 계정을 붙일지 결정해야 함.
-	// Params.PlatformUserId = LocalPlayer->GetPlatformUserId();
-	// 로컬 플레이어가 보장되는 OnStart() 함수에서 로그인 요청.
-	if (UCBAuthSubsystem* AuthSubsystem = GetSubsystem<UCBAuthSubsystem>())
-	{
-		AuthSubsystem->RequestLogin();
-	}
 }
 
 // UCBGameInstance 에서 사용할 온라인 세션 클래스 지정

@@ -78,6 +78,16 @@ void UCBSessionSubsystem::Deinitialize()
 
 #pragma region Session
 
+// [로컬] LAN 모드 여부 조회
+bool UCBSessionSubsystem::Local_IsLANMode() const
+{
+	// 로그인 전이면 LAN 으로 간주해 외부 서비스를 건드리지 않음
+	const UGameInstance* OwningGameInstance = GetGameInstance();
+	const UCBAuthSubsystem* AuthSubsystem = OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBAuthSubsystem>() : nullptr;
+
+	return AuthSubsystem ? AuthSubsystem->IsLANMode() : true;
+}
+
 // [로컬] 세션 인터페이스 조회
 ISessionsPtr UCBSessionSubsystem::Local_ResolveSessionsInterface() const
 {
@@ -122,18 +132,20 @@ FAccountId UCBSessionSubsystem::Local_ResolveLocalAccountId() const
 // [로컬][호스트] 참가자가 붙을 주소를 만들어 반환함 (호스트가 세션에 실어 참가자에게 알려주는 용도)
 FString UCBSessionSubsystem::Local_ResolveHostAddress() const
 {
-	// EOS 는 IP 가 아니라 P2P 주소로 붙음. 형식 지식은 로그인 서브시스템이 가짐
-	if (!bUseLANSessions)
+	// EOS 는 IP 가 아니라 P2P 주소로 붙음.
+	if (!Local_IsLANMode())
 	{
 		const UGameInstance* OwningGameInstance = GetGameInstance();
 		const UCBAuthSubsystem* AuthSubsystem = OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBAuthSubsystem>() : nullptr;
 
+		// EOS 주소를 로그인 서브시스템에 물어봄. 로그인 전이면 빈 문자열이 돌아옴
 		const FString EOSAddress = AuthSubsystem ? AuthSubsystem->GetLocalEOSAddress() : FString();
 		if (EOSAddress.IsEmpty())
 		{
 			UE_LOG(LogTemp, Error, TEXT("[Session] EOS 주소를 얻지 못함. 로그인 상태를 확인할 것"));
 		}
 
+		// EOS 주소 반환.
 		return EOSAddress;
 	}
 
@@ -141,8 +153,9 @@ FString UCBSessionSubsystem::Local_ResolveHostAddress() const
 	ISocketSubsystem* SocketSubsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
 	if (!SocketSubsystem) return FString();
 	
-	// 라우팅 조회로 주소를 확정하지 못해 아래 주소가 어댑터 목록의 첫 값(추정)으로 대체됐는지 여부.
-	// true 면 신뢰도가 낮지만, 지금은 노출용 주소 하나만 필요해 참고하지 않음
+	// 커맨드라인 -multihome 으로 바인딩 주소를 지정했는지 여부(지정 안 했으면 true).
+	// true 면 아래 주소가 어댑터 목록의 첫 값이라, NIC 가 여럿인 PC(VPN·VM·WSL 등)에서는
+	// 실제 쓰는 회선이 아닐 수 있음. 지금은 노출용 주소 하나만 필요해 참고하지 않음
 	bool bCanBindAll = false;
 	
 	// 이 PC 로컬 주소 가져오기.
@@ -166,7 +179,7 @@ void UCBSessionSubsystem::Local_ResetOnlineServices()
 {
 	// 서비스를 파괴하면 로그인까지 날아가므로 LAN 일 때만 수행함.
 	// 세션 캐시 검색 문제는 LAN 에서만 발생
-	if (!bUseLANSessions) return;
+	if (!Local_IsLANMode()) return;
 
 	// 세션에 들어가 있으면 건드리지 않음. 진행 중인 세션 작업이 통째로 사라짐
 	if (bHasActiveSession) return;
@@ -178,13 +191,17 @@ void UCBSessionSubsystem::Local_ResetOnlineServices()
 	const FWorldContext* WorldContext = OwningGameInstance->GetWorldContext();
 	const FName InstanceName = WorldContext ? WorldContext->ContextHandle : NAME_None;
 
+	// 파괴 대상은 현재 쓰는 제공자여야 함. Default 로 두면 ini 가 가리키는 엉뚱한 제공자를 지울 수 있음.
+	// 이 함수는 LAN 일 때만 오므로 Null 이 대상임
+	const EOnlineServices Provider = EOnlineServices::Null;
+
 	// 만들어진 적이 없으면 파괴할 것도 없음
-	if (!IsLoaded(EOnlineServices::Default, InstanceName)) return;
+	if (!IsLoaded(Provider, InstanceName)) return;
 
 	UE_LOG(LogTemp, Log, TEXT("[Session] 온라인 서비스를 재생성해 세션 캐시를 비움 (LAN 유령 세션 방지)"));
 
 	// 서비스 파괴만 함. 다음 GetServices() 가 빈 캐시로 새로 만듦
-	DestroyService(EOnlineServices::Default, InstanceName);
+	DestroyService(Provider, InstanceName);
 
 	// 파괴와 함께 이전 검색 결과의 세션 ID 가 무효가 되므로 표시 목록도 비움
 	FoundSessions.Reset();
@@ -224,7 +241,7 @@ bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLo
 	Params.SessionSettings.SchemaName = SessionSchemaName;
 	Params.LocalAccountId = LocalAccountId;
 	Params.SessionName = SessionName;
-	Params.bIsLANSession = bUseLANSessions;
+	Params.bIsLANSession = Local_IsLANMode();
 	Params.SessionSettings.NumMaxConnections = PendingMaxPlayers;
 	Params.SessionSettings.JoinPolicy = ESessionJoinPolicy::Public;
 
@@ -232,8 +249,7 @@ bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLo
 	// [EOS 전용] 버킷을 실어 보냄. 이 값이 EOS 버킷이 되는 동시에 검색 가능한 어트리뷰트로도 써져,
 	// 검색 측이 같은 키로 필터를 걸 수 있음. 넣지 않으면 엔진이 BuildId 로 버킷을 채우지만
 	// 그건 어트리뷰트로 써지지 않아 검색이 매칭할 방법이 없음.
-	// LAN 은 비콘으로 찾으므로 필요 없고, 검증된 경로를 건드리지 않기 위해 제외함
-	if (!bUseLANSessions)
+	if (!Local_IsLANMode())
 	{
 		Params.SessionSettings.CustomSettings.Emplace(
 			BucketIdSettingKey,
@@ -260,7 +276,7 @@ bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLo
 		CurrentPlayersSettingKey,
 		FCustomSessionSetting{ FSchemaVariant(static_cast<int64>(1)), ESchemaAttributeVisibility::Public });
 
-	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 생성 요청: %s (LAN=%d, 최대 %d명)"), *DisplayName, bUseLANSessions ? 1 : 0, Params.SessionSettings.NumMaxConnections);
+	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 생성 요청: %s (LAN=%d, 최대 %d명)"), *DisplayName, Local_IsLANMode() ? 1 : 0, Params.SessionSettings.NumMaxConnections);
 
 	// 세션 생성 요청. 완료 콜백에서 로비를 엶
 	Sessions->CreateSession(MoveTemp(Params))
@@ -360,17 +376,17 @@ bool UCBSessionSubsystem::Local_FindSessions(int32 InMaxResults /* = 20 */)
 	FFindSessions::Params Params;
 	Params.LocalAccountId = LocalAccountId;
 	Params.MaxResults = static_cast<uint32>(FMath::Max(1, InMaxResults));
-	Params.bFindLANSessions = bUseLANSessions;
+	Params.bFindLANSessions = Local_IsLANMode();
 
 	// [EOS 전용] 버킷 필터. 생성 측과 같은 값이어야 서로를 찾음.
 	// EOS 는 조건이 하나도 없는 검색을 invalid_params 로 거부하므로 이 필터가 필수임
-	if (!bUseLANSessions)
+	if (!Local_IsLANMode())
 	{
 		Params.Filters.Emplace(FFindSessionsSearchFilter{
 			BucketIdSettingKey, ESchemaAttributeComparisonOp::Equals, FSchemaVariant(Local_ResolveBucketId()) });
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 검색 요청 (LAN=%d, 버킷=%s)"), bUseLANSessions ? 1 : 0, *Local_ResolveBucketId());
+	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 검색 요청 (LAN=%d, 버킷=%s)"), Local_IsLANMode() ? 1 : 0, *Local_ResolveBucketId());
 
 	// 검색 요청. 완료 콜백에서 결과를 표시용 목록으로 옮기고 방송함
 	Sessions->FindSessions(MoveTemp(Params))
@@ -636,7 +652,7 @@ bool UCBSessionSubsystem::Local_HostLobby(TSoftObjectPtr<UWorld> InLobbyLevel, i
 
 	// bIsLanMatch: NetDriverEOS 가 이 옵션을 보면 기존 IpNetDriver 로 넘김(passthrough).
 	// 넣지 않으면 EOS 모드로 들어가 로그인된 P2P 주소를 요구하므로, LAN 경로에서는 반드시 붙여야 함
-	if (bUseLANSessions)
+	if (Local_IsLANMode())
 	{
 		Options += TEXT("?bIsLanMatch");
 	}

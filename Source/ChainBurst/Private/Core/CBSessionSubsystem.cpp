@@ -29,6 +29,9 @@ namespace
 const FName UCBSessionSubsystem::SessionName = TEXT("ChainBurstSession");
 const FName UCBSessionSubsystem::SessionSchemaName = TEXT("ChainBurstSessionSchema");
 
+// EOS 가 버킷으로 인식하는 키. 엔진 상수 EOSGS_BUCKET_ID_ATTRIBUTE_KEY(SessionsEOSGSTypes.h:20) 와 문자열이 같아야 함
+const FName UCBSessionSubsystem::BucketIdSettingKey = TEXT("EOSGS_BUCKET_ID_ATTRIBUTE_KEY");
+
 // 호스트 주소·방 이름을 실어 보내는 세션 속성 키.
 // 서비스 제공자마다 주소를 만드는 방식이 달라, 키 하나로 통일해 조회 코드를 하나로 유지함
 // LAN : 192.168.x.x, EOS : [EOS:0002aeeb5b2d...]
@@ -135,6 +138,14 @@ FString UCBSessionSubsystem::Local_ResolveHostAddress() const
 	return LocalAddr->ToString(false);
 }
 
+// [로컬] 세션 버킷 ID 조회
+FString UCBSessionSubsystem::Local_ResolveBucketId() const
+{
+	// 빌드 식별자를 섞음. ini 의 [OnlineServices] BuildIdOverride 가 이 값을 정하므로,
+	// 네트워크 호환성이 깨지는 변경을 하고 그 숫자를 올리면 이전 빌드의 방과 자동으로 갈라짐
+	return FString::Printf(TEXT("ChainBurst_%d"), GetBuildUniqueId());
+}
+
 // [로컬][LAN전용] 온라인 서비스 인스턴스를 새로 만들어 세션 캐시를 비움
 void UCBSessionSubsystem::Local_ResetOnlineServices()
 {
@@ -202,6 +213,17 @@ bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLo
 	Params.SessionSettings.NumMaxConnections = PendingMaxPlayers;
 	Params.SessionSettings.JoinPolicy = ESessionJoinPolicy::Public;
 
+
+	// [EOS 전용] 버킷을 실어 보냄. 이 값이 EOS 버킷이 되는 동시에 검색 가능한 어트리뷰트로도 써져,
+	// 검색 측이 같은 키로 필터를 걸 수 있음. 넣지 않으면 엔진이 BuildId 로 버킷을 채우지만
+	// 그건 어트리뷰트로 써지지 않아 검색이 매칭할 방법이 없음.
+	// LAN 은 비콘으로 찾으므로 필요 없고, 검증된 경로를 건드리지 않기 위해 제외함
+	if (!bUseLANSessions)
+	{
+		Params.SessionSettings.CustomSettings.Emplace(
+			BucketIdSettingKey,
+			FCustomSessionSetting{ FSchemaVariant(Local_ResolveBucketId()), ESchemaAttributeVisibility::Public });
+	}
 
 	// 호스트 주소를 세션에 실어 보냄. 참가 측은 이 값을 그대로 접속 주소로 씀
 	Params.SessionSettings.CustomSettings.Emplace(
@@ -325,7 +347,15 @@ bool UCBSessionSubsystem::Local_FindSessions(int32 InMaxResults /* = 20 */)
 	Params.MaxResults = static_cast<uint32>(FMath::Max(1, InMaxResults));
 	Params.bFindLANSessions = bUseLANSessions;
 
-	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 검색 요청 (LAN=%d)"), bUseLANSessions ? 1 : 0);
+	// [EOS 전용] 버킷 필터. 생성 측과 같은 값이어야 서로를 찾음.
+	// EOS 는 조건이 하나도 없는 검색을 invalid_params 로 거부하므로 이 필터가 필수임
+	if (!bUseLANSessions)
+	{
+		Params.Filters.Emplace(FFindSessionsSearchFilter{
+			BucketIdSettingKey, ESchemaAttributeComparisonOp::Equals, FSchemaVariant(Local_ResolveBucketId()) });
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 검색 요청 (LAN=%d, 버킷=%s)"), bUseLANSessions ? 1 : 0, *Local_ResolveBucketId());
 
 	// 검색 요청. 완료 콜백에서 결과를 표시용 목록으로 옮기고 방송함
 	Sessions->FindSessions(MoveTemp(Params))

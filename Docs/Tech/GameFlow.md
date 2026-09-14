@@ -191,9 +191,33 @@ UCBGameInstance::OnStart()
 
 | 키 | 타입 | 쓰임 | 갱신 시점 |
 |---|---|---|---|
+| `EOSGS_BUCKET_ID_ATTRIBUTE_KEY` | String | EOS 버킷 + 검색 필터 (EOS 전용, 아래) | 생성 시 1회 |
 | `CB_HostAddress` | String | 참가 측 접속 주소 | 생성 시 1회 |
 | `CB_DisplayName` | String | 목록에 보일 방 이름 | 생성 시 1회 |
 | `CB_CurrentPlayers` | Int64 | 목록에 보일 현재 인원 | 로비 인원 변화마다 (아래) |
+
+#### EOS 검색에는 버킷 필터가 필수다 — 없으면 조건이 비어 거부당한다
+
+**`EOS_SessionSearch_Find`는 조건이 하나도 없는 검색을 `EOS_InvalidParameters`로 거부한다.** `MaxResults`만 넣은 검색은 EOS 입장에서 빈 쿼리다.
+
+```
+LogEOSSDK: Error: LogEOSSessions: Search query is empty, search invalid.
+LogOnlineServices: Warning: EOS_SessionSearch_Find failed with result [EOS_InvalidParameters]
+```
+
+`SessionsEOSGS::WriteSessionSearchHandle`가 검색에 쓰는 것은 `Filters` / `SessionId` / `TargetUser` 셋뿐이고, **버킷을 자동으로 채워주지 않는다.**
+
+**생성 쪽만 자동 처리가 있다는 게 함정이다.** `CreateSession`은 버킷 커스텀 세팅이 없으면 `GetBuildUniqueId()`를 버킷으로 쓴다 — 그래서 **방 만들기는 되고 검색만 실패한다.** 게다가 그 자동 버킷은 `CustomSettings`에 없으므로 **검색 가능한 어트리뷰트로 써지지도 않아**, 자동 버킷에 의존하면 매칭할 방법 자체가 없다.
+
+그래서 **버킷을 명시적으로 넣는다.** 커스텀 세팅에 넣으면 두 가지가 동시에 일어난다:
+
+- `CreateSessionModificationOptions.BucketId`가 된다 (EOS 서버 측 파티션)
+- `WriteCreateSessionModificationHandle`의 루프가 모든 `CustomSettings`를 `AddAttribute`로 쓰므로 **검색 가능한 어트리뷰트도 된다**
+
+값은 `ChainBurst_<BuildId>`다. `[OnlineServices] BuildIdOverride`가 그 숫자를 정하므로, 네트워크 호환성이 깨지는 변경 후 숫자를 올리면 이전 빌드의 방과 자동으로 갈라진다.
+
+- **키 이름은 엔진 상수 `EOSGS_BUCKET_ID_ATTRIBUTE_KEY`(`SessionsEOSGSTypes.h:20`)와 문자열이 같아야 한다.** 그 헤더를 include 하면 세션 서브시스템이 EOS를 알게 되므로(제공자 독립 원칙 위반) 문자열만 맞춰 두었다 — 엔진이 값을 바꾸면 드리프트하므로 주석에 출처를 남겨 둔다
+- **생성과 검색 모두 `bUseLANSessions == false`일 때만 적용한다.** LAN은 비콘으로 찾으므로 버킷이 필요 없고, 검증된 경로를 건드리지 않기 위해서다
 
 #### 현재 인원도 우리가 실어 보내야 한다 — 엔진 값은 못 쓴다
 

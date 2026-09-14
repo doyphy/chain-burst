@@ -124,6 +124,12 @@ private:
 	/** [로컬] 이 PC 가 리슨 서버로서 광고할 주소를 반환함. (제공자 무관하게 세션 속성으로 실어 보냄) */
 	FString Local_ResolveHostAddress() const;
 
+	/**
+	 * [로컬] 세션을 담을 버킷 ID 를 반환함. 생성과 검색이 같은 값을 써야 서로를 찾음.
+	 * 빌드 식별자를 섞어, 네트워크 호환성이 다른 빌드끼리는 방이 보이지 않게 함.
+	 */
+	FString Local_ResolveBucketId() const;
+
 	/** [로컬] 세션 생성 완료 콜백. 성공하면 로비를 엶. */
 	void Local_HandleCreateSessionComplete(const UE::Online::TOnlineResult<UE::Online::FCreateSession>& InResult);
 
@@ -173,6 +179,14 @@ private:
 
 	/** 세션 스키마 이름. CreateSession 은 이 값이 비어 있으면(NAME_None) invalid_params 로 거부한다. */
 	static const FName SessionSchemaName;
+
+	/**
+	 * 세션 버킷을 실어 보내는 속성 키. EOS 는 이 키를 보고 버킷을 가르고, 같은 값이 검색 가능한
+	 * 어트리뷰트로도 써져 검색 필터가 매칭할 수 있음. **버킷을 넣지 않으면 검색 조건이 비어 EOS 가 거부함.**
+	 * 값은 엔진 상수 EOSGS_BUCKET_ID_ATTRIBUTE_KEY(SessionsEOSGSTypes.h) 와 같아야 하지만,
+	 * 그 헤더를 포함하면 이 클래스가 EOS 를 알게 되므로 문자열만 맞춰 둠. (LAN 경로에서는 쓰지 않음)
+	 */
+	static const FName BucketIdSettingKey;
 
 	/** 호스트 주소를 실어 보내는 세션 속성 키. 제공자와 무관하게 이 키 하나로 주고받음. */
 	static const FName HostAddressSettingKey;

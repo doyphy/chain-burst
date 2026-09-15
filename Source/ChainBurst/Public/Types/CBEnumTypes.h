@@ -96,3 +96,37 @@ FORCEINLINE ECBTeam GenericIdToCBTeam(const FGenericTeamId& InTeamId)
 	default:									return ECBTeam::Neutral;
 	}
 }
+
+/**
+ * 온라인 로그인 진행 상태
+ * 세션 작업이 가능한지를 가르는 값. (UI 에서 활용)
+ */
+UENUM(BlueprintType)
+enum class ECBLoginState : uint8
+{
+	// 아직 시도하지 않음
+	NotLoggedIn		UMETA(DisplayName = "Not Logged In"),
+
+	// 진행 중 (세션 작업 불가)
+	LoggingIn		UMETA(DisplayName = "Logging In"),
+
+	// 완료 (세션 작업 가능)
+	LoggedIn		UMETA(DisplayName = "Logged In"),
+
+	// 실패 (사유는 방송에 실려 옴)
+	Failed			UMETA(DisplayName = "Failed")
+};
+
+/**
+ * 온라인 제공자 선택
+ * 메인 메뉴에서 고르며, 로그인 방식과 세션 검색 방식을 함께 결정함.
+ */
+UENUM(BlueprintType)
+enum class ECBOnlineMode : uint8
+{
+	// LAN 비콘 기반. 계정·자격증명이 필요 없음. 같은 네트워크에 붙은 클라이언트끼리만 검색·접속 가능
+	LAN		UMETA(DisplayName = "LAN"),
+
+	// EOS. Device ID 익명 로그인 후 P2P 로 붙음. 인터넷 너머로 접속 가능
+	EOS		UMETA(DisplayName = "EOS")
+};

@@ -114,6 +114,9 @@ PlayerStateClass      = ACBPlayerState::StaticClass();
 **세션은 "붙을 주소를 알아내는 일"만 한다.** 실제 접속은 위 두 함수(`Local_HostLobby` / `Local_JoinServerByAddress`)로 그대로 수렴한다.
 
 ```
+[메인 메뉴] LAN/EOS 버튼 → UCBAuthSubsystem::RequestLogin(모드)
+          └ 로그인 성공 → 계정 ID 확보 (아래 "로그인")
+
 [호스트] Local_CreateAndHostSession(로비 레벨, 방 이름, 최대 인원)
           └ CreateSession 성공 → Local_HostLobby(로비 레벨)
 
@@ -123,33 +126,137 @@ PlayerStateClass      = ACBPlayerState::StaticClass();
           └ JoinSession 성공 → 세션 속성에서 호스트 주소 → Local_JoinServerByAddress(주소)
 ```
 
-#### 제공자는 설정이 정하고, 코드는 모른다
+#### 제공자는 런타임에 고른다 — 설정이 아니라 버튼이다
 
-**OnlineServices(v2) API로 작성한다.** 실제 제공자는 `Config/DefaultEngine.ini` 한 곳에서 정한다.
+**OnlineServices(v2) API로 작성한다.** 실제 제공자는 **메인 메뉴에서 플레이어가 고른다.**
+
+`GetServices()`는 제공자를 매개변수로 받고, 구체적인 값을 넘기면 ini를 보지 않는다(`OnlineServicesRegistry.cpp`의 `ResolveServiceName`은 `Default`·`Platform`만 해석한다). 인스턴스는 제공자별로 따로 캐시되므로 Null과 Epic이 동시에 존재해도 서로 간섭하지 않는다.
+
+```
+ECBOnlineMode::LAN → EOnlineServices::Null     (LAN 비콘)
+ECBOnlineMode::EOS → EOnlineServices::Epic     (EOS)
+```
+
+- **LAN 여부를 따로 설정하지 않는다.** `UCBSessionSubsystem::Local_IsLANMode()`가 `UCBAuthSubsystem::IsLANMode()`에서 파생되므로, **제공자와 LAN 플래그가 어긋날 수 없다.** 예전에는 ini 두 곳을 짝 맞춰야 했고 하나만 바꾸면 조용히 깨졌다 — `Local_ResetOnlineServices()`가 LAN 조건에서 `DestroyService()`를 부르는 탓에 "Epic + LAN=True" 조합은 EOS 서비스를 쓰기 직전에 스스로 파괴했다
+- **`DestroyService`·`IsLoaded`에 `EOnlineServices::Default`를 넘기지 않는다.** 런타임 선택과 ini 값이 다를 수 있어, 쓰지도 않는 제공자를 파괴하게 된다
+- **개발 중에는 LAN이 필수다.** Device ID는 기기당 하나라 한 PC의 2인 PIE가 EOS로는 불가능하다(같은 ProductUserId → 자기 자신에게 접속). LAN 모드는 계정이 필요 없어 그대로 된다
+
+남은 ini 설정은 EOS 쪽뿐이다.
 
 ```ini
 [OnlineServices]
-DefaultServices=Null          ; 나중에 EOS 도입 시 Epic
+DefaultServices=Epic          ; 코드가 제공자를 직접 넘기므로 세션 경로엔 쓰이지 않음(엔진 기본값용)
+bUseBuildIdOverride=True      ; 세션 버킷을 가르는 빌드 식별자
+BuildIdOverride=1
 
-[/Script/ChainBurst.CBSessionSubsystem]
-bUseLANSessions=True          ; EOS 로 바꾸면 반드시 False
+[EOSSDK]
+DefaultPlatformConfigName=ChainBurst   ; 자격증명 섹션 이름 (값은 Config/Windows/WindowsEngine.ini, 저장소 제외)
 ```
 
-- **`bUseLANSessions`를 코드에 박지 않는다.** Null은 LAN 비콘으로만 검색되고 EOS는 아니다. 박아두면 제공자를 바꿔도 **에러 없이 LAN만 검색된다.** 그래서 두 설정을 ini에서 나란히 두었다 — 하나만 바꾸는 사고를 막기 위해서다
+- **플랫폼 설정 이름은 `DefaultPlatformConfigName`이다.** OSSv1의 `DefaultArtifactName`은 `OnlineSubsystemEOS`만 읽으므로 OSSv2에서는 아무 효과가 없다. 못 찾았을 때의 실패 메시지가 `Verbose`라 **기본 로그 레벨에서는 보이지도 않는다**
+- **`BuildIdOverride`를 지정하지 않으면 세션이 서로 보이지 않을 수 있다.** `SessionsEOSGS::CreateSession`은 버킷 커스텀 세팅이 없으면 BuildId를 버킷 ID로 쓰는데, 기본값(`GetNetworkCompatibleChangelist()`)은 에디터와 패키징 빌드에서 달라진다. 네트워크 호환성이 깨지는 변경을 하면 숫자를 올린다
 - **v1(`OnlineSubsystem`)이 아니라 v2를 쓴 이유**: EOS의 Device ID 익명 로그인이 v2에만 있고(v1 `ToEOS_ELoginCredentialType`에 항목 자체가 없다), v2를 골라도 `OnlineServicesOSSAdapter`로 Steam이 열려 있다. v2 EOS의 세션 구현도 생성·검색·참가·나가기에 빈 구현이 없음을 확인했다(미구현은 presence 2개뿐)
+
+#### 로그인 — 세션보다 먼저, 그리고 세션은 그걸 모른다
+
+EOS는 **로그인해서 계정 ID를 얻어야** 세션을 만들 수 있다. Null은 로그인 개념이 아예 없다. 그 차이를 세션 코드에 들이지 않으려고 **`UCBAuthSubsystem`** 을 따로 뒀다.
+
+```
+[메인 메뉴 버튼] RequestLogin(모드)
+ ├ 진행 중이면 무시 / 같은 모드로 로그인돼 있으면 무시
+ ├ 모드가 바뀌었으면 Local_ResetLogin() 으로 비우고 새로
+ │
+ ├ LAN → Local_AdoptLocalAccount()
+ │        └ GetLocalOnlineUserByPlatformUserId 로 자동 등록된 계정 조회
+ │
+ └ EOS → ResolveServices()          ← 먼저! 온라인 서비스가 EOS 플랫폼을 만들게 한다
+         Local_CreateDeviceId()     ← EOS SDK 직접 호출
+          └ Success 또는 DuplicateNotAllowed → 둘 다 정상
+         Local_LoginWithDeviceId()  ← IAuth::Login (ExternalAuth / DeviceIdAccessToken)
+          └ 계정 ID 보관 → OnLoginStateChanged 방송
+```
+
+- **Null 에서는 `Login()` 을 부르면 안 된다.** `FAuthNull` 에 구현이 없어 베이스의 `NotImplemented` 로 실패한다(`AuthCommon.cpp`). 대신 플랫폼 유저가 생길 때 계정이 자동 등록되므로 레지스트리에서 꺼내 쓴다
+- **모드는 메인 메뉴에서 언제든 바꿀 수 있다.** 메뉴로 돌아오는 경로(`Local_LeaveToMainMenu`)가 이미 세션을 정리하므로, 전환 시점에는 정리할 세션이 없다
+- **로그인 진행 중에는 모드 전환 요청을 무시한다.** EOS 로그인은 SDK 콜백이 비동기로 오는데, 그 사이에 상태를 갈아엎으면 뒤늦게 도착한 콜백이 새 상태를 덮어쓴다. UI 는 `OnLoginStateChanged` 로 버튼을 잠그면 된다
+
+- **`UCBSessionSubsystem`은 제공자를 모른다.** 계정 ID는 `GetLocalAccountId()`로, 서비스는 `ResolveServices()`로 받아 쓸 뿐이다. **프로젝트에서 EOS 전용 코드는 `CBAuthSubsystem.cpp` 하나뿐이다**
+- **서브시스템 `Initialize()` 에서 로그인하면 안 된다.** 로그인에 `PlatformUserId` 가 필요하고 그건 로컬 플레이어에게서 나오는데, `Initialize()` 는 `SetupInitialLocalPlayer()` 보다 이르다. 메인 메뉴 위젯이 호출하는 지금 구조에서는 이미 로컬 플레이어가 있으므로 문제가 없다
+- **`ResolveServices()`를 Device ID 생성보다 먼저 부르는 이유.** SDK 매니저는 `(설정 이름 × 인스턴스 이름)` 조합으로 플랫폼 핸들을 캐시한다. 온라인 서비스가 먼저 플랫폼을 만들게 해야 같은 핸들을 얻는다. 순서가 뒤집히면 **플랫폼이 둘 생겨서 "로그인은 됐는데 세션이 계정을 못 찾는"** 상태가 된다
+- **Device ID 생성만 EOS SDK 직접 호출이다.** `EOS_Connect_CreateDeviceId`를 감싸는 OSSv2 경로가 없다(엔진 전체 검색 0건). 로그인 자체는 `IAuth::Login`으로 한다
+- **SDK 콜백에 `this`를 그대로 넘기지 않는다.** EOS 콜백은 `void*` 하나만 나르므로, 콜백 전에 서브시스템이 사라지면(PIE 정지) 댕글링이 된다. 약참조를 힙에 담아 넘기고 콜백이 회수한다
+- **Device ID는 기기당 하나다.** 한 PC에서 클라이언트를 여럿 띄우면 같은 계정으로 로그인될 수 있다
+
+> 데브 포털 참고: 세션 기능은 포털에서 **"매치메이킹"** 이라고 부른다. 클라이언트 정책의 **"Connect"** 토글은 로그인이 아니라 *다른 유저의 계정 매핑 조회*(둘 다 신뢰할 수 있는 서버 전용)라 **꺼져 있어도 Device ID 로그인은 된다**. 리슨 서버 + P2P 구조에는 사전 정의 정책 `Peer2Peer`가 맞는다.
 
 #### 호스트 주소는 우리가 정한 속성 하나로 주고받는다
 
 제공자마다 주소를 얻는 방법이 다르다 — Null은 `FSessionLAN::OwnerInternetAddr`, EOS는 `EOSGS_HOST_ADDRESS_ATTRIBUTE_KEY` 속성이다. **그 차이를 코드에 들이지 않으려고 호스트가 직접 자기 주소를 세션 속성(`CB_HostAddress`)에 실어 보낸다.**
 
 ```
-호스트: ISocketSubsystem::GetLocalHostAddr()  → CustomSettings["CB_HostAddress"]
-참가 : GetSessionByName → CustomSettings["CB_HostAddress"] → Local_JoinServerByAddress()
+호스트(LAN): ISocketSubsystem::GetLocalHostAddr()      → CustomSettings["CB_HostAddress"]
+호스트(EOS): UCBAuthSubsystem::GetLocalEOSAddress()    → CustomSettings["CB_HostAddress"]
+참가       : GetSessionByName → CustomSettings["CB_HostAddress"] → Local_JoinServerByAddress()
 ```
 
-**조회 코드가 제공자와 무관해진다.** EOS를 붙일 때 호스트가 넣는 값만 EOS 주소로 바뀌고 참가 측은 그대로다. (EOS는 P2P 라우팅을 위해 자기 키에도 같은 값을 넣어줘야 하는데, 그건 EOS 도입 시 추가한다)
+**조회 코드가 제공자와 무관해진다.** 호스트가 넣는 값만 갈리고 참가 측은 그대로다 — 주소 형식이 곧 전송 방식을 정하므로(아래 "P2P") 참가 측은 무엇이 실려 있든 그대로 travel 하면 된다.
 
 > 포트는 싣지 않는다. 참가 측이 기본 포트로 접속한다 — 호스트가 기본 포트를 쓰지 않게 되면 여기에 포트를 함께 실어야 한다.
+
+#### P2P — 리슨 서버는 그대로, 전송만 EOS로 바꾼다
+
+**리슨 서버(토폴로지)와 P2P(전송)는 다른 축이다.** 서버 권위·복제 코드는 한 줄도 바뀌지 않고, 패킷이 오가는 경로만 갈린다. 직접 IP로는 호스트가 NAT 뒤에 있으면 외부에서 붙을 수 없고, 포트포워딩을 일반 플레이어에게 요구할 수 없다 — 그게 P2P를 쓰는 이유다.
+
+```ini
+[/Script/Engine.Engine]
+!NetDriverDefinitions=ClearArray
++NetDriverDefinitions=(DefName="GameNetDriver",DriverClassName="/Script/SocketSubsystemEOS.NetDriverEOS",DriverClassNameFallback="/Script/OnlineSubsystemUtils.IpNetDriver")
++NetDriverDefinitions=(DefName="BeaconNetDriver",...)   ; ClearArray 로 날아가므로 함께 복원
++NetDriverDefinitions=(DefName="DemoNetDriver",...)
+
+[/Script/SocketSubsystemEOS.NetDriverEOS]
+NetConnectionClassName="/Script/SocketSubsystemEOS.NetConnectionEOS"
+```
+
+- **클래스 경로 주의.** 인터넷 자료 대부분이 쓰는 `/Script/OnlineSubsystemEOS.NetDriverEOS`는 옛 경로다. 클래스가 `SocketSubsystemEOS`로 옮겨졌고 `BaseEngine.ini`의 `ClassRedirects`가 옛 경로를 넘겨준다. OSSv2에서는 `OnlineSubsystemEOS`를 켜지도 않으므로 새 경로로 적는다
+- **섹션은 `[/Script/Engine.Engine]`이다.** `[/Script/Engine.GameEngine]`이 아니다 — 엔진 기본값이 `Engine` 쪽에 있고, 에디터 엔진에도 적용돼야 PIE에서 검증할 수 있다
+- **`bIsUsingP2PSockets`는 5.6에서 폐기됐다.** 튜토리얼이 넣으라고 해도 넣지 않는다
+
+##### 하나의 빌드로 LAN과 EOS를 모두 태운다
+
+`UNetDriverEOS`는 `UIpNetDriver`를 상속하고, 다음 조건이면 스스로 기존 IP 경로로 넘어간다(passthrough).
+
+| 쪽 | passthrough 조건 |
+|---|---|
+| 리슨 서버 | URL에 `bIsLanMatch` 또는 `bUseIPSockets`가 있을 때 |
+| 클라이언트 | 접속 주소가 `EOS:`로 시작하지 않을 때 |
+
+클라이언트는 주소만 보고 알아서 갈리지만, **리슨 서버는 URL 옵션이 없으면 EOS 모드로 들어가 로그인된 P2P 주소를 요구한다.** 그래서 LAN 경로에서는 `Local_HostLobby()`가 `listen?bIsLanMatch`를 붙인다 — 이걸 빼면 LAN에서 방 만들기 자체가 실패한다.
+
+##### 주소에 대괄호가 필수다
+
+EOS 주소는 `[EOS:<ProductUserId>]` 형식이며 **대괄호가 없으면 동작하지 않는다.**
+
+`FURL` 파서(`URL.cpp`)가 콜론을 보고 `EOS`를 **프로토콜로 잘라내기** 때문이다 — ProductUserId는 점이 없는 순수 16진수라 프로토콜 판정 조건이 전부 성립한다. 그러면 `ConnectURL.Host`가 비어 `NetDriverEOS::InitConnect`의 `Host.StartsWith("EOS")` 검사에 걸리지 않고 **조용히 passthrough로 빠진다.**
+
+대괄호를 씌우면 FURL이 IPv6 리터럴로 인식해 프로토콜 파싱을 건너뛰고, 괄호만 벗겨 `Host = "EOS:<PUID>"`를 정확히 만든다. 엔진 자신의 OSSv1 경로(`FOnlineSessionEOS::GetConnectStringFromSessionInfo`)도 같은 형식을 쓴다.
+
+ProductUserId 문자열은 `UE::Online::ToString(FAccountId)`로 얻는다 — `CoreOnline`에 있어 **EOS 모듈에 의존하지 않는다.** 형식 지식은 `UCBAuthSubsystem::GetLocalEOSAddress()` 한 곳에 둔다.
+
+##### 검증 로그
+
+| 로그 | 의미 |
+|---|---|
+| `LogEOSP2P: A new connection request listener has been bound. SocketId=[GameNetDriver]` | 리슨 서버가 EOS 모드로 진입 |
+| `LogNet: NetConnectionEOS_N` | `NetConnectionClassName` 적용됨 (`IpConnection`이면 미적용) |
+| `LogEOSP2P: Connection established. NetworkType=[EOS_NCT_DirectConnection]` | P2P 소켓 연결 |
+| `LogNet: IpNetDriver listening on port 7777` | **나오면 안 됨** — EOS 모드가 아니라는 뜻 |
+
+##### 한 PC에서는 접속까지 검증할 수 없다
+
+**Device ID는 기기당 하나라 같은 PC의 두 인스턴스는 같은 ProductUserId를 받는다.** P2P는 PUID가 곧 주소이므로 자기 자신에게 접속하는 꼴이 되고, EOS P2P 소켓은 맺어지지만 언리얼 핸드셰이크(Challenge 교환)가 진행되지 않는다. 세션 생성·검색·참가와 NetDriver 진입까지는 확인할 수 있고, **실제 접속 검증은 PC 2대가 필요하다.**
+
+반복 테스트 중 참가가 `EOS_Sessions_SessionAlreadyExists`로 막히는 것도 같은 원인이다(이전 실행의 멤버십이 백엔드에 남음). 에디터를 재시작하면 풀린다.
 
 #### 세션 속성 목록
 
@@ -157,9 +264,33 @@ bUseLANSessions=True          ; EOS 로 바꾸면 반드시 False
 
 | 키 | 타입 | 쓰임 | 갱신 시점 |
 |---|---|---|---|
+| `EOSGS_BUCKET_ID_ATTRIBUTE_KEY` | String | EOS 버킷 + 검색 필터 (EOS 전용, 아래) | 생성 시 1회 |
 | `CB_HostAddress` | String | 참가 측 접속 주소 | 생성 시 1회 |
 | `CB_DisplayName` | String | 목록에 보일 방 이름 | 생성 시 1회 |
 | `CB_CurrentPlayers` | Int64 | 목록에 보일 현재 인원 | 로비 인원 변화마다 (아래) |
+
+#### EOS 검색에는 버킷 필터가 필수다 — 없으면 조건이 비어 거부당한다
+
+**`EOS_SessionSearch_Find`는 조건이 하나도 없는 검색을 `EOS_InvalidParameters`로 거부한다.** `MaxResults`만 넣은 검색은 EOS 입장에서 빈 쿼리다.
+
+```
+LogEOSSDK: Error: LogEOSSessions: Search query is empty, search invalid.
+LogOnlineServices: Warning: EOS_SessionSearch_Find failed with result [EOS_InvalidParameters]
+```
+
+`SessionsEOSGS::WriteSessionSearchHandle`가 검색에 쓰는 것은 `Filters` / `SessionId` / `TargetUser` 셋뿐이고, **버킷을 자동으로 채워주지 않는다.**
+
+**생성 쪽만 자동 처리가 있다는 게 함정이다.** `CreateSession`은 버킷 커스텀 세팅이 없으면 `GetBuildUniqueId()`를 버킷으로 쓴다 — 그래서 **방 만들기는 되고 검색만 실패한다.** 게다가 그 자동 버킷은 `CustomSettings`에 없으므로 **검색 가능한 어트리뷰트로 써지지도 않아**, 자동 버킷에 의존하면 매칭할 방법 자체가 없다.
+
+그래서 **버킷을 명시적으로 넣는다.** 커스텀 세팅에 넣으면 두 가지가 동시에 일어난다:
+
+- `CreateSessionModificationOptions.BucketId`가 된다 (EOS 서버 측 파티션)
+- `WriteCreateSessionModificationHandle`의 루프가 모든 `CustomSettings`를 `AddAttribute`로 쓰므로 **검색 가능한 어트리뷰트도 된다**
+
+값은 `ChainBurst_<BuildId>`다. `[OnlineServices] BuildIdOverride`가 그 숫자를 정하므로, 네트워크 호환성이 깨지는 변경 후 숫자를 올리면 이전 빌드의 방과 자동으로 갈라진다.
+
+- **키 이름은 엔진 상수 `EOSGS_BUCKET_ID_ATTRIBUTE_KEY`(`SessionsEOSGSTypes.h:20`)와 문자열이 같아야 한다.** 그 헤더를 include 하면 세션 서브시스템이 EOS를 알게 되므로(제공자 독립 원칙 위반) 문자열만 맞춰 두었다 — 엔진이 값을 바꾸면 드리프트하므로 주석에 출처를 남겨 둔다
+- **생성과 검색 모두 EOS 모드일 때만 적용한다.** LAN은 비콘으로 찾으므로 버킷이 필요 없고, 검증된 경로를 건드리지 않기 위해서다
 
 #### 현재 인원도 우리가 실어 보내야 한다 — 엔진 값은 못 쓴다
 
@@ -410,7 +541,7 @@ Null 제공자(LAN 비콘)의 검색 동작 두 가지는 **버그가 아니라 
 
 **대응**: `Local_CreateAndHostSession()` 맨 앞에서 `Local_ResetOnlineServices()`가 `UE::Online::DestroyService()`로 이 게임 인스턴스의 서비스를 파괴한다. 다음 조회가 빈 캐시로 새로 만들므로, **비콘이 켜지는 시점의 캐시에는 방금 만든 방 하나만 남는다.** 프로세스를 갓 재시작한 것과 같은 상태다.
 
-- **`bUseLANSessions` 일 때만 한다.** 조건을 제공자 이름에 걸지 않는 이유는 `FSessionsEOSGS` 가 `FSessionsLAN` 을 상속해 **EOS 라도 LAN 세션이면 같은 비콘 경로를 타기** 때문이다(`SessionsEOSGS.cpp` 의 `CreateSessionImpl`·`FindSessionsImpl` 이 LAN 구현으로 위임한다). 정상 EOS 경로에서는 광고 주체가 백엔드라 ①이 남아도 무해하다 — 그래서 EOS 로 옮기면 이 코드는 자동으로 죽는다
+- **LAN 모드일 때만 한다.** 그 조건이 곧 제공자가 Null 이라는 뜻이다. 예전에는 별도 플래그였고, 조건을 제공자 이름에 걸지 않은 이유는 `FSessionsEOSGS` 가 `FSessionsLAN` 을 상속해 **EOS 라도 LAN 세션이면 같은 비콘 경로를 타기** 때문이다(`SessionsEOSGS.cpp` 의 `CreateSessionImpl`·`FindSessionsImpl` 이 LAN 구현으로 위임한다). 정상 EOS 경로에서는 광고 주체가 백엔드라 ①이 남아도 무해하다 — 그래서 EOS 로 옮기면 이 코드는 자동으로 죽는다
 - **나가기 경로에는 넣지 않는다.** 비동기 `LeaveSession` 이 떠 있는 직후라 EOS 에서는 실제 백엔드 호출이 날아간다. 유령을 뿌리는 건 호스팅하는 쪽뿐이므로 "방 열기 직전" 한 곳이면 충분하다
 - **세션 인터페이스·계정 ID 조회보다 반드시 먼저 부른다.** `ISessionsPtr` 을 들고 있는 채로 파괴하면 엔진이 참조 경고를 찍고, 미리 얻어둔 값은 죽은 인스턴스의 것이 된다
 - 파괴와 함께 이전 검색 결과의 세션 ID 가 무효가 되므로 `FoundSessions`·`FoundSessionIds` 도 함께 비운다
@@ -1055,7 +1186,7 @@ AI(Rogue/Outlaw)는 이 경로를 타지 않는다. 기존대로 `DespawnDelay` 
 
 **미구현**
 - **무기(캐릭터) 변경 UI 배선** — C++ 창구는 완료(위 "무기 변경 = 캐릭터 변경"). 남은 것: `UCBCharacterCatalog` 데이터 에셋 작성, 무기별 캐릭터 BP·로드아웃, `GI_EasyMainGameInstance`에 카탈로그 지정, 로비 위젯의 버튼 목록 + `Server_RequestCharacterSelection` 호출 + `OnCharacterSelectionChanged` 구독
-- **EOS 제공자 전환** — 플러그인 활성화 + 자격증명 + Device ID 로그인 + `DefaultServices=Epic` / `bUseLANSessions=False`. 세션 호출 코드는 그대로. 추가로 `NetDriverEOS` 설정(P2P)과 호스트 주소를 EOS 키에도 넣는 작업이 붙는다
+- **EOS 제공자 전환** — 플러그인 활성화 + 자격증명 + Device ID 로그인 + `NetDriverEOS`(P2P) + 호스트 주소를 EOS 주소로. 제공자는 메인 메뉴에서 런타임에 고르고, 세션 호출 코드는 그대로다
 - 세션 목록 UI (`WBP_CB_SessionList`, `Menu` 레이어) + 메인 메뉴에 방 만들기/찾기 버튼 — C++ 창구는 완료
 - 접속 실패 사유를 모달로 표시 — C++은 완료, **위젯 배선만 남음**. 참가 실패는 `OnConnectionFailed` 구독, 접속 후 끊김은 `Local_ConsumePendingFailureReason()` — 두 경로 다 물릴 것 (위 "엔진의 자동 복귀")
 - 로비 위젯 배선 (`WBP_CB_Lobby_Footer`) — 준비/시작 위젯 스위처, `OnReadyStateChanged` 구독, 두 RPC 호출

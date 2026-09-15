@@ -1,16 +1,15 @@
 // project
 #include "Core/CBSessionSubsystem.h"
+#include "Core/CBAuthSubsystem.h"
 
 // engine
 #include "Engine/Engine.h"
-#include "Engine/LocalPlayer.h"
 #include "Engine/NetDriver.h"
 #include "Engine/PendingNetGame.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameMapsSettings.h"
 #include "Kismet/GameplayStatics.h"
-#include "Online/Auth.h"
 #include "Online/OnlineAsyncOpHandle.h"
 #include "Online/OnlineServices.h"
 #include "Online/Sessions.h"
@@ -29,6 +28,9 @@ namespace
 // 로컬 세션 이름. 한 번에 하나만 유지하므로 상수 하나로 충분함
 const FName UCBSessionSubsystem::SessionName = TEXT("ChainBurstSession");
 const FName UCBSessionSubsystem::SessionSchemaName = TEXT("ChainBurstSessionSchema");
+
+// EOS 가 버킷으로 인식하는 키. 엔진 상수 EOSGS_BUCKET_ID_ATTRIBUTE_KEY(SessionsEOSGSTypes.h:20) 와 문자열이 같아야 함
+const FName UCBSessionSubsystem::BucketIdSettingKey = TEXT("EOSGS_BUCKET_ID_ATTRIBUTE_KEY");
 
 // 호스트 주소·방 이름을 실어 보내는 세션 속성 키.
 // 서비스 제공자마다 주소를 만드는 방식이 달라, 키 하나로 통일해 조회 코드를 하나로 유지함
@@ -76,18 +78,25 @@ void UCBSessionSubsystem::Deinitialize()
 
 #pragma region Session
 
+// [로컬] LAN 모드 여부 조회
+bool UCBSessionSubsystem::Local_IsLANMode() const
+{
+	// 로그인 전이면 LAN 으로 간주해 외부 서비스를 건드리지 않음
+	const UGameInstance* OwningGameInstance = GetGameInstance();
+	const UCBAuthSubsystem* AuthSubsystem = OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBAuthSubsystem>() : nullptr;
+
+	return AuthSubsystem ? AuthSubsystem->IsLANMode() : true;
+}
+
 // [로컬] 세션 인터페이스 조회
 ISessionsPtr UCBSessionSubsystem::Local_ResolveSessionsInterface() const
 {
+	// 로그인 서브시스템 가져오기.
 	const UGameInstance* OwningGameInstance = GetGameInstance();
-	if (!OwningGameInstance) return nullptr;
+	const UCBAuthSubsystem* AuthSubsystem = OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBAuthSubsystem>() : nullptr;
 
-	// PIE로 테스트 시 한 프로세스에 게임 인스턴스가 여럿이라, 월드 컨텍스트 이름으로 서비스 인스턴스를 구분해야 함.
-	const FWorldContext* WorldContext = OwningGameInstance->GetWorldContext();
-	const FName InstanceName = WorldContext ? WorldContext->ContextHandle : NAME_None;
-
-	// 해당 게임 인스턴스의 온라인 서비스 가져오기. 제공자(Null/EOS)는 ini 의 [OnlineServices] DefaultServices 가 정함
-	const IOnlineServicesPtr Services = GetServices(EOnlineServices::Default, InstanceName);
+	// 온라인 서비스 조회. 없으면 세션 작업을 할 수 없음
+	const IOnlineServicesPtr Services = AuthSubsystem ? AuthSubsystem->ResolveServices() : nullptr;
 	if (!Services)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[Session] 온라인 서비스를 찾을 수 없음. [OnlineServices] DefaultServices 설정과 플러그인 활성화를 확인할 것"));
@@ -101,47 +110,52 @@ ISessionsPtr UCBSessionSubsystem::Local_ResolveSessionsInterface() const
 // [로컬] 로컬 플레이어의 계정 ID 조회
 FAccountId UCBSessionSubsystem::Local_ResolveLocalAccountId() const
 {
+	// 로그인 서브시스템 가져오기.
 	const UGameInstance* OwningGameInstance = GetGameInstance();
-	if (!OwningGameInstance) return FAccountId();
-
-	const FWorldContext* WorldContext = OwningGameInstance->GetWorldContext();
-	const FName InstanceName = WorldContext ? WorldContext->ContextHandle : NAME_None;
-
-	// 온라인 서비스 가져오기
-	const IOnlineServicesPtr Services = GetServices(EOnlineServices::Default, InstanceName);
-	if (!Services) return FAccountId();
-
-	// 온라인 서비스의 인증 인터페이스 가져오기
-	const IAuthPtr Auth = Services->GetAuthInterface();
-	if (!Auth) return FAccountId();
-
-	// 첫 번째 로컬 플레이어 기준. 분할 화면은 아직 고려하지 않음
-	const ULocalPlayer* LocalPlayer = OwningGameInstance->GetFirstGamePlayer();
-	if (!LocalPlayer) return FAccountId();
-
-	// 로컬 플레이어의 플랫폼 계정 ID 조회. Null 제공자는 로그인 없이 바로 얻어짐. EOS 는 로그인 후에야 유효해짐
-	const TOnlineResult<FAuthGetLocalOnlineUserByPlatformUserId> Result =
-		Auth->GetLocalOnlineUserByPlatformUserId({ LocalPlayer->GetPlatformUserId() });
-
-	if (!Result.IsOk())
+	const UCBAuthSubsystem* AuthSubsystem = OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBAuthSubsystem>() : nullptr;
+	if (!AuthSubsystem)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Session] 로컬 계정을 얻지 못함: %s"), *Result.GetErrorValue().GetLogString());
+		UE_LOG(LogTemp, Warning, TEXT("[Session] 로그인 서브시스템을 찾을 수 없음"));
 		return FAccountId();
 	}
 
-	// 로컬 계정 ID 반환
-	return Result.GetOkValue().AccountInfo->AccountId;
+	// 아직 로그인 전이면 무효한 ID 가 돌아옴. 호출부가 실패로 처리함
+	if (!AuthSubsystem->IsLoggedIn())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Session] 아직 로그인되지 않아 계정을 얻지 못함 (상태 %d)"), static_cast<int32>(AuthSubsystem->GetLoginState()));
+	}
+
+	// 로그인한 계정 ID 반환. 미로그인이면 무효한 ID 를 돌려줌
+	return AuthSubsystem->GetLocalAccountId();
 }
 
-// [로컬][호스트] 자기 PC의 IP를 문자열로 만들어 반환함 (호스트가 세션에 실어 참가자에게 알려주는 용도)
+// [로컬][호스트] 참가자가 붙을 주소를 만들어 반환함 (호스트가 세션에 실어 참가자에게 알려주는 용도)
 FString UCBSessionSubsystem::Local_ResolveHostAddress() const
 {
+	// EOS 는 IP 가 아니라 P2P 주소로 붙음.
+	if (!Local_IsLANMode())
+	{
+		const UGameInstance* OwningGameInstance = GetGameInstance();
+		const UCBAuthSubsystem* AuthSubsystem = OwningGameInstance ? OwningGameInstance->GetSubsystem<UCBAuthSubsystem>() : nullptr;
+
+		// EOS 주소를 로그인 서브시스템에 물어봄. 로그인 전이면 빈 문자열이 돌아옴
+		const FString EOSAddress = AuthSubsystem ? AuthSubsystem->GetLocalEOSAddress() : FString();
+		if (EOSAddress.IsEmpty())
+		{
+			UE_LOG(LogTemp, Error, TEXT("[Session] EOS 주소를 얻지 못함. 로그인 상태를 확인할 것"));
+		}
+
+		// EOS 주소 반환.
+		return EOSAddress;
+	}
+
 	// 플랫폼의 소켓 서브시스템 가져오기
 	ISocketSubsystem* SocketSubsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
 	if (!SocketSubsystem) return FString();
 	
-	// 라우팅 조회로 주소를 확정하지 못해 아래 주소가 어댑터 목록의 첫 값(추정)으로 대체됐는지 여부.
-	// true 면 신뢰도가 낮지만, 지금은 노출용 주소 하나만 필요해 참고하지 않음
+	// 커맨드라인 -multihome 으로 바인딩 주소를 지정했는지 여부(지정 안 했으면 true).
+	// true 면 아래 주소가 어댑터 목록의 첫 값이라, NIC 가 여럿인 PC(VPN·VM·WSL 등)에서는
+	// 실제 쓰는 회선이 아닐 수 있음. 지금은 노출용 주소 하나만 필요해 참고하지 않음
 	bool bCanBindAll = false;
 	
 	// 이 PC 로컬 주소 가져오기.
@@ -152,12 +166,20 @@ FString UCBSessionSubsystem::Local_ResolveHostAddress() const
 	return LocalAddr->ToString(false);
 }
 
+// [로컬] 세션 버킷 ID 조회
+FString UCBSessionSubsystem::Local_ResolveBucketId() const
+{
+	// 빌드 식별자를 섞음. ini 의 [OnlineServices] BuildIdOverride 가 이 값을 정하므로,
+	// 네트워크 호환성이 깨지는 변경을 하고 그 숫자를 올리면 이전 빌드의 방과 자동으로 갈라짐
+	return FString::Printf(TEXT("ChainBurst_%d"), GetBuildUniqueId());
+}
+
 // [로컬][LAN전용] 온라인 서비스 인스턴스를 새로 만들어 세션 캐시를 비움
 void UCBSessionSubsystem::Local_ResetOnlineServices()
 {
 	// 서비스를 파괴하면 로그인까지 날아가므로 LAN 일 때만 수행함.
 	// 세션 캐시 검색 문제는 LAN 에서만 발생
-	if (!bUseLANSessions) return;
+	if (!Local_IsLANMode()) return;
 
 	// 세션에 들어가 있으면 건드리지 않음. 진행 중인 세션 작업이 통째로 사라짐
 	if (bHasActiveSession) return;
@@ -169,13 +191,17 @@ void UCBSessionSubsystem::Local_ResetOnlineServices()
 	const FWorldContext* WorldContext = OwningGameInstance->GetWorldContext();
 	const FName InstanceName = WorldContext ? WorldContext->ContextHandle : NAME_None;
 
+	// 파괴 대상은 현재 쓰는 제공자여야 함. Default 로 두면 ini 가 가리키는 엉뚱한 제공자를 지울 수 있음.
+	// 이 함수는 LAN 일 때만 오므로 Null 이 대상임
+	const EOnlineServices Provider = EOnlineServices::Null;
+
 	// 만들어진 적이 없으면 파괴할 것도 없음
-	if (!IsLoaded(EOnlineServices::Default, InstanceName)) return;
+	if (!IsLoaded(Provider, InstanceName)) return;
 
 	UE_LOG(LogTemp, Log, TEXT("[Session] 온라인 서비스를 재생성해 세션 캐시를 비움 (LAN 유령 세션 방지)"));
 
 	// 서비스 파괴만 함. 다음 GetServices() 가 빈 캐시로 새로 만듦
-	DestroyService(EOnlineServices::Default, InstanceName);
+	DestroyService(Provider, InstanceName);
 
 	// 파괴와 함께 이전 검색 결과의 세션 ID 가 무효가 되므로 표시 목록도 비움
 	FoundSessions.Reset();
@@ -215,10 +241,20 @@ bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLo
 	Params.SessionSettings.SchemaName = SessionSchemaName;
 	Params.LocalAccountId = LocalAccountId;
 	Params.SessionName = SessionName;
-	Params.bIsLANSession = bUseLANSessions;
+	Params.bIsLANSession = Local_IsLANMode();
 	Params.SessionSettings.NumMaxConnections = PendingMaxPlayers;
 	Params.SessionSettings.JoinPolicy = ESessionJoinPolicy::Public;
 
+
+	// [EOS 전용] 버킷을 실어 보냄. 이 값이 EOS 버킷이 되는 동시에 검색 가능한 어트리뷰트로도 써져,
+	// 검색 측이 같은 키로 필터를 걸 수 있음. 넣지 않으면 엔진이 BuildId 로 버킷을 채우지만
+	// 그건 어트리뷰트로 써지지 않아 검색이 매칭할 방법이 없음.
+	if (!Local_IsLANMode())
+	{
+		Params.SessionSettings.CustomSettings.Emplace(
+			BucketIdSettingKey,
+			FCustomSessionSetting{ FSchemaVariant(Local_ResolveBucketId()), ESchemaAttributeVisibility::Public });
+	}
 
 	// 호스트 주소를 세션에 실어 보냄. 참가 측은 이 값을 그대로 접속 주소로 씀
 	Params.SessionSettings.CustomSettings.Emplace(
@@ -240,7 +276,7 @@ bool UCBSessionSubsystem::Local_CreateAndHostSession(TSoftObjectPtr<UWorld> InLo
 		CurrentPlayersSettingKey,
 		FCustomSessionSetting{ FSchemaVariant(static_cast<int64>(1)), ESchemaAttributeVisibility::Public });
 
-	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 생성 요청: %s (LAN=%d, 최대 %d명)"), *DisplayName, bUseLANSessions ? 1 : 0, Params.SessionSettings.NumMaxConnections);
+	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 생성 요청: %s (LAN=%d, 최대 %d명)"), *DisplayName, Local_IsLANMode() ? 1 : 0, Params.SessionSettings.NumMaxConnections);
 
 	// 세션 생성 요청. 완료 콜백에서 로비를 엶
 	Sessions->CreateSession(MoveTemp(Params))
@@ -340,9 +376,17 @@ bool UCBSessionSubsystem::Local_FindSessions(int32 InMaxResults /* = 20 */)
 	FFindSessions::Params Params;
 	Params.LocalAccountId = LocalAccountId;
 	Params.MaxResults = static_cast<uint32>(FMath::Max(1, InMaxResults));
-	Params.bFindLANSessions = bUseLANSessions;
+	Params.bFindLANSessions = Local_IsLANMode();
 
-	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 검색 요청 (LAN=%d)"), bUseLANSessions ? 1 : 0);
+	// [EOS 전용] 버킷 필터. 생성 측과 같은 값이어야 서로를 찾음.
+	// EOS 는 조건이 하나도 없는 검색을 invalid_params 로 거부하므로 이 필터가 필수임
+	if (!Local_IsLANMode())
+	{
+		Params.Filters.Emplace(FFindSessionsSearchFilter{
+			BucketIdSettingKey, ESchemaAttributeComparisonOp::Equals, FSchemaVariant(Local_ResolveBucketId()) });
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Session] 세션 검색 요청 (LAN=%d, 버킷=%s)"), Local_IsLANMode() ? 1 : 0, *Local_ResolveBucketId());
 
 	// 검색 요청. 완료 콜백에서 결과를 표시용 목록으로 옮기고 방송함
 	Sessions->FindSessions(MoveTemp(Params))
@@ -605,6 +649,13 @@ bool UCBSessionSubsystem::Local_HostLobby(TSoftObjectPtr<UWorld> InLobbyLevel, i
 
 	// listen: 리슨 서버로 염. 빠지면 조용히 단독 실행이 됨
 	FString Options = TEXT("listen");
+
+	// bIsLanMatch: NetDriverEOS 가 이 옵션을 보면 기존 IpNetDriver 로 넘김(passthrough).
+	// 넣지 않으면 EOS 모드로 들어가 로그인된 P2P 주소를 요구하므로, LAN 경로에서는 반드시 붙여야 함
+	if (Local_IsLANMode())
+	{
+		Options += TEXT("?bIsLanMatch");
+	}
 
 	// MaxPlayers: 레벨과 함께 스폰되는 AGameSession 이 InitOptions 에서 읽어 정원 판정에 씀.
 	// 세션 광고의 인원과 같은 값에서 나와야 표시와 실제 정원이 어긋나지 않음. 0 이면 엔진 기본값을 그대로 둠

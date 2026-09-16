@@ -36,7 +36,7 @@ class CHAINBURST_API UCBAuthSubsystem : public UGameInstanceSubsystem
 	GENERATED_BODY()
 
 #pragma region Login
-	/** 로그인 요청·상태 조회. 실제 시작은 UCBGameInstance::OnStart 가 호출함. */
+	/** 로그인 요청·상태 조회. 실제 시작은 메뉴 위젯의 LAN/EOS 버튼이 호출함. */
 public:
 	/**
 	 * [로컬] 고른 모드로 로그인을 시작함. LAN/EOS 버튼이 호출함.

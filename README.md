@@ -71,7 +71,7 @@ Source/ChainBurst/
 | [4. 이동/로코모션 시스템](Docs/SubReadme/04-locomotion-system.md) | 개이트 태그·회전·피벗 처리와 애님BP |
 | [5. 입력 시스템](Docs/SubReadme/05-input-system.md) | 입력 시스템 구조와 역할 분리 |
 | [6. 전투 시스템](Docs/SubReadme/06-combat-system.md) | 무기·본체 무기 구조, 등록과 수명, 트레이스 스윕과 히트 검증 |
-| [7. 멀티플레이 구조](Docs/SubReadme/07-multiplayer-architecture.md) | 리슨 서버 설계 및 세션 시스템 |
+| [7. 멀티플레이 구조](Docs/SubReadme/07-multiplayer-architecture.md) | 로그인·세션 생성·검색·참가 흐름과 접속 실패 처리 |
 | [8. AI 전투](Docs/SubReadme/08-AI-combat.md) | AI BT 배선과 타겟팅 계산 |
 | [9. 의상 시스템](Docs/SubReadme/09-cosmetic-system.md) | 의상 구조와 교체 및 복제 |
 

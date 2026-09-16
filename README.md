@@ -74,6 +74,7 @@ Source/ChainBurst/
 | [7. 멀티플레이 구조](Docs/SubReadme/07-multiplayer-architecture.md) | 로그인·세션 생성·검색·참가 흐름과 접속 실패 처리 |
 | [8. AI 전투](Docs/SubReadme/08-AI-combat.md) | AI BT 배선과 타겟팅 계산 |
 | [9. 의상 시스템](Docs/SubReadme/09-cosmetic-system.md) | 의상 구조와 교체 및 복제 |
+| [10. 로비 구조](Docs/SubReadme/10-lobby-system.md) | 로비의 요청·검증·상태 분리, 닉네임·캐릭터 변경·준비와 게임 시작 |
 
 ---
 

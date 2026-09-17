@@ -133,14 +133,8 @@ void UCBCombatComponent::TickComponent(float DeltaTime, enum ELevelTick TickType
 	{
 		TickWeaponTrace();
 
-		// 히트 배칭 타이머 업데이트
-		HitBatchAccumulator += DeltaTime;
-
-		// 일정 시간마다 배칭된 히트 처리 (기본 값 : 0.1초)
-		if (HitBatchAccumulator >= HitBatchInterval)
-		{
-			FlushPendingHits();
-		}
+		// 히트 배칭 윈도우 진행 (첫 타는 즉시)
+		UpdateHitBatch(DeltaTime);
 	}
 }
 
@@ -241,6 +235,11 @@ void UCBCombatComponent::StartWeaponTrace()
 	// 새로운 트레이스 시작. 기존 충돌 기록 초기화
 	AlreadyHitActors.Empty();
 
+	// 배칭 윈도우가 닫힌 상태에서 시작. (첫 타는 지연 없이 바로 히트 처리)
+	PendingHits.Reset();
+	bHitBatchWindowOpen = false;
+	HitBatchAccumulator = 0.0f;
+
 	if (!HasValidWeapon())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[%s] 에는 트레이스할 무기가 유효하지 않음."), *GetOwner()->GetName());
@@ -319,8 +318,8 @@ void UCBCombatComponent::TickWeaponTrace()
 			// 트레이스 결과 배열 초기화
 			HitResults.Reset();
 
-			// 구형 트레이스 발사
-			bool bHit = UKismetSystemLibrary::SphereTraceMulti(
+			// 구형 트레이스 발사. (오버랩 결과는 HitResults 에 그대로 담김)
+			UKismetSystemLibrary::SphereTraceMulti(
 				this,
 				PrevPoint,			// 시작 위치
 				CurrPoint,			// 끝 위치
@@ -336,25 +335,22 @@ void UCBCombatComponent::TickWeaponTrace()
 				2.0f				// 디버그 선 유지 시간
 			);
 
-			// 타격 성공 시
-			if (bHit)
+			// 타격 처리 (오버랩·블로킹 구분 없이 걸린 것 전부 검사)
+			for (const FHitResult& Hit : HitResults)
 			{
-				for (const FHitResult& Hit : HitResults)
+				AActor* HitActor = Hit.GetActor();
+
+				// 충돌한 액터가 유효하고, 충돌한 기록이 없다면 처리
+				if (HitActor && !AlreadyHitActors.Contains(HitActor))
 				{
-					AActor* HitActor = Hit.GetActor();
+					// 진영 판정 결과와 무관하게 기록해, 같은 대상을 서브디비전마다 다시 검사하지 않게 함
+					AlreadyHitActors.Add(HitActor);
 
-					// 충돌한 액터가 유효하고, 충돌한 기록이 없다면 처리
-					if (HitActor && !AlreadyHitActors.Contains(HitActor))
+					// 적대 진영만 배칭 목록에 추가 (아군·중립·팀 없는 액터는 여기서 걸러짐)
+					// 배칭 목록에 담아두고 일정 간격 마다 한 번에 처리함. (RPC 최적화)
+					if (IsHostileTarget(HitActor))
 					{
-						// 진영 판정 결과와 무관하게 기록해, 같은 대상을 서브디비전마다 다시 검사하지 않게 함
-						AlreadyHitActors.Add(HitActor);
-
-						// 적대 진영만 배칭 목록에 추가 (아군·중립·팀 없는 액터는 여기서 걸러짐)
-						// 배칭 목록에 담아두고 일정 간격 마다 한 번에 처리함.
-						if (IsHostileTarget(HitActor))
-						{
-							PendingHits.Add(Hit);
-						}
+						PendingHits.Add(Hit);
 					}
 				}
 			}
@@ -688,6 +684,37 @@ void UCBCombatComponent::Server_NotifyAttackHit_Implementation(const FGameplayAb
 	ASC->HandleGameplayEvent(CBGameplayTags::Event_Combat_Attack_Hit, &EventData);
 }
 
+// 트레이스 중 매 틱 호출. 윈도우가 닫혀 있으면 첫 히트를 지연 없이 처리하고, 열려 있으면 간격마다 처리.
+void UCBCombatComponent::UpdateHitBatch(float DeltaTime)
+{
+	// 윈도우가 닫혀 있음 (대기할 필요가 없는 경우)
+	// 스윙 첫 타가 여기로 나가므로 배칭 때문에 타격감이 늦어지지 않음.
+	if (!bHitBatchWindowOpen)
+	{
+		// 누적된 히트 목록 처리
+		FlushPendingHits();
+		return;
+	}
+
+	// 윈도우가 열려 있는 동안만 배칭 간격 검사.
+	HitBatchAccumulator += DeltaTime;
+	if (HitBatchAccumulator < HitBatchInterval) return;
+
+	// 누적된 히트가 남아있으면
+	if (!PendingHits.IsEmpty())
+	{
+		// 누적된 히트 목록 처리
+		FlushPendingHits();
+	}
+	// 누적된 히트가 없으면 (공격이 다 끝났으면)
+	else
+	{
+		bHitBatchWindowOpen = false; // 다음 첫 타는 지연 없이 바로 처리
+		HitBatchAccumulator = 0.0f;
+	}
+}
+
+// 누적된 히트 목록 처리
 void UCBCombatComponent::FlushPendingHits()
 {
 	// 배칭된 히트가 없으면 처리하지 않음
@@ -705,6 +732,9 @@ void UCBCombatComponent::FlushPendingHits()
 
 	// 배칭 목록 초기화
 	PendingHits.Reset();
+
+	// 다음 배칭 윈도우 시작. (첫 타 이후 공격에는 간격마다 처리)
+	bHitBatchWindowOpen = true;
 	HitBatchAccumulator = 0.0f;
 }
 

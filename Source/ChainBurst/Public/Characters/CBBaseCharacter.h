@@ -207,7 +207,7 @@ protected:
 	/**
 	 * 사망 라이프사이클. (Status.Dead 태그가 진입점)
 	 * 태그는 전 클라이언트에 복제되므로 서버·오너·시뮬 프록시가 같은 콜백에서 각자 자기 몫만 수행:
-	 * 서버는 권위 정리(이동·충돌·두뇌 정지·디스폰), 전 인스턴스는 표현 정리(머리 위 바 숨김 등).
+	 * 서버는 권위 정리(이동 정지·두뇌 정지·디스폰), 전 인스턴스는 로컬 정리(충돌 해제·머리 위 바 숨김 등).
 	 */
 public:
 	/** 사망 상태가 되었을 때 방송 (표현 정리용). 전 인스턴스에서 처리 */
@@ -225,7 +225,7 @@ protected:
 	virtual void Landed(const FHitResult& Hit) override;
 	//~ End ACharacter Interface.
 
-	/** [서버] 사망 시 권위 정리 (이동 정지·충돌 해제·자식 훅·디스폰 예약) */
+	/** [서버] 사망 시 권위 정리 (이동 정지·자식 훅·디스폰 예약) */
 	virtual void Auth_HandleDeath();
 
 	/** [서버] 이동을 완전히 정지 (사망 확정 시점 또는 공중 사망 후 착지 시점) */
@@ -237,8 +237,8 @@ protected:
 	/** [서버] 디스폰 타이머 만료 시 액터를 파괴 */
 	virtual void Auth_Despawn();
 
-	/** 사망 로컬 정리 (전 인스턴스 각자 실행. 기본 구현은 델리게이트 방송) */
-	virtual void Local_ApplyDeathVisuals();
+	/** 사망 로컬 정리 (전 인스턴스 각자 실행. 기본 구현은 ECC_Pawn 충돌 해제 + 델리게이트 방송) */
+	virtual void Local_HandleDeath();
 
 	/** 사망 후 액터를 파괴하기까지의 지연(초). 0 이하면 자동 파괴하지 않음 (리스폰이 있는 플레이어 등) */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Death")

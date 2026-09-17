@@ -6,6 +6,7 @@
 #include "DataAssets/Weapon/CBWeaponData.h"
 #include "ActiveGameplayEffectHandle.h"
 #include "Abilities/GameplayAbilityTargetTypes.h"
+#include "Types/CBCollisionChannels.h"
 #include "CBCombatComponent.generated.h"
 
 class ACBBaseWeapon;
@@ -205,8 +206,14 @@ protected:
 	/** 트레이스 충돌 결과를 처리하는 함수 */
 	void ProcessHit(const FGameplayAbilityTargetDataHandle& TargetDataHandle);
 
-	/** 누적된 히트를 한 번에 처리하는 함수 */
+	/** 누적된 히트를 한 번에 처리하는 함수. 처리 후 다음 배칭 윈도우를 연다. */
 	void FlushPendingHits();
+
+	/**
+	 * 히트 배칭 윈도우를 진행시키는 함수 (트레이스 중 매 틱 호출).
+	 * 윈도우가 닫혀 있으면 첫 히트를 지연 없이 처리하고, 열려 있으면 간격마다 처리.
+	 */
+	void UpdateHitBatch(float DeltaTime);
 
 	/**
 	 * 타격 대상으로 유효한 진영인지 판정 (적대만 true)
@@ -219,9 +226,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Trace")
 	float TraceRadius = 20.0f;
 
-	/** 트레이스 채널 */
+	/** 트레이스 채널. */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Trace")
-	TEnumAsByte<ETraceTypeQuery> WeaponTraceChannel = UEngineTypes::ConvertToTraceType(ECC_Pawn);
+	TEnumAsByte<ETraceTypeQuery> WeaponTraceChannel = UEngineTypes::ConvertToTraceType(CBCollisionChannels::Weapon);
 
 	/** 트레이스 디버그 표시 여부 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Trace")
@@ -239,10 +246,21 @@ private:
 	/** 배칭 대기 중인 히트 목록 */
 	TArray<FHitResult> PendingHits;
 
-	/** 히트 배칭 타이머 누적값 */
+	/** 히트 배칭 타이머 누적값 (배칭 창이 열려 있을 때만 증가) */
 	float HitBatchAccumulator = 0.0f;
 
-	/** 히트 배칭 간격 (초) */
+	/**
+	 * 배칭 윈도우가 열려 있는지 여부.
+	 * 닫힘 = 다음 히트를 지연 없이 처리 / 열림 = 간격마다 처리.
+	 * 공격 첫 타는 항상 닫힌 상태에서 시작하므로 즉시 처리.
+	 */
+	bool bHitBatchWindowOpen = false;
+
+	/**
+	 * 히트 배칭 간격 (초). 이 창 안에서 서로 다른 프레임에 걸린 대상들이 RPC 하나로 묶인다.
+	 * 첫 타는 윈도우 밖이라 지연되지 않고, 묶이는 건 뒤따라 걸린 대상들뿐임.
+	 * 경쟁(PvP) 규칙으로 간다면 0 으로 둘 것 (공정하게 지연없이 처리해야하는 경우)
+	 */
 	static constexpr float HitBatchInterval = 0.1f;
 
 	/** 서버 히트 검증 허용 거리 보정값 (레이턴시 보상) */

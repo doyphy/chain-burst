@@ -7,6 +7,7 @@
 #include "Components/Perception/CBNoiseEmitterComponent.h"
 #include "AbilitySystem/CBAttributeSet.h"
 #include "CBGameplayTags.h"
+#include "Types/CBCollisionChannels.h"
 
 // engine
 #include "AbilitySystemBlueprintLibrary.h"
@@ -47,6 +48,19 @@ ACBBaseCharacter::ACBBaseCharacter()
 	// 캡슐이 겹쳤을 때 프레임당 밀려나는 최대 거리 (엔진 기본 100cm).
 	// 루트모션으로 계속 밀고 들어오면 매 프레임 이만큼 텔레포트되므로, 기본값이면 튕겨나가는 것처럼 보임.
 	GetCharacterMovement()->MaxDepenetrationWithPawn = 20.f;
+#pragma endregion
+
+#pragma region 무기 히트 판정 채널
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		// 캡슐은 이동만 담당. (빗나간 공격이 캡슐 반지름 때문에 맞는 일이 없음.)
+		Capsule->SetCollisionResponseToChannel(CBCollisionChannels::Weapon, ECR_Ignore);
+	}
+
+	// 캐릭터 메시의 채널 반응을 Block 이 아니라 Overlap 으로 설정.
+	// (트레이스가 첫 대상에서 끊기지 않아야 일직선의 여러 적을 관통해서 벨 수 있음)
+	// (Weapon 채널 기본 반응이 Block 이라 벽·지형은 여전히 트레이스를 끊음)
+	GetMesh()->SetCollisionResponseToChannel(CBCollisionChannels::Weapon, ECR_Overlap);
 #pragma endregion
 
 	CBLocomotionProcessor = CreateDefaultSubobject<UCBLocomotionProcessor>(TEXT("CBLocomotionProcessor"));
@@ -214,10 +228,10 @@ void ACBBaseCharacter::OnDeadTagChanged(const FGameplayTag /*CallbackTag*/, int3
 	}
 
 	// 로컬 정리 (서버·오너·시뮬 프록시 각자 수행)
-	Local_ApplyDeathVisuals();
+	Local_HandleDeath();
 }
 
-// [서버] 사망 시 권위 정리.
+// [서버] 사망 시 권위 정리. (충돌 해제는 복제되지 않으므로 Local_HandleDeath 담당)
 void ACBBaseCharacter::Auth_HandleDeath()
 {
 	// 이동 정지.
@@ -235,16 +249,6 @@ void ACBBaseCharacter::Auth_HandleDeath()
 			// 착지 상태라면 즉시 이동 정지
 			Auth_StopMovementForDeath();
 		}
-	}
-
-	// 시체를 통과할 수 있게 하고, 무기 트레이스(ECC_Pawn 채널)에도 더 이상 걸리지 않게 함
-	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
-	{
-		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-	}
-	if (USkeletalMeshComponent* MeshComp = GetMesh())
-	{
-		MeshComp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	}
 
 	// 자식 확장 훅 (AI = 두뇌 정지 등)
@@ -286,9 +290,22 @@ void ACBBaseCharacter::Auth_Despawn()
 	Destroy();
 }
 
-// 사망 로컬 정리. 구독 중인 컴포넌트에 알림 (머리 위 체력바 숨김 등).
-void ACBBaseCharacter::Local_ApplyDeathVisuals()
+// 사망 로컬 정리.
+void ACBBaseCharacter::Local_HandleDeath()
 {
+	// 시체를 통과할 수 있게 함 (이동 차단 해제)
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	}
+
+	// 시체를 히트 판정에서 제외. 판정은 메시가 맡으므로 여기서 끔.
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		MeshComp->SetCollisionResponseToChannel(CBCollisionChannels::Weapon, ECR_Ignore);
+	}
+
+	// 구독 중인 컴포넌트에 알림 (머리 위 체력바 숨김 등)
 	OnCharacterDiedDelegate.Broadcast();
 }
 

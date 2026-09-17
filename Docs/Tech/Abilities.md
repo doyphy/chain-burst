@@ -87,7 +87,8 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 
 - 어빌리티는 `ServerInitiated`라 **시뮬레이티드 프록시에서 실행되지 않는다.** 다른 플레이어 화면의 시체 연출·UI 정리는 명시 호출로 도달할 수 없고, 복제되는 신호(태그)여야만 한다.
 - 진입점이 태그 하나면 **어빌리티를 거치지 않는 죽음**(낙사, 즉사 GE, 디버프, 치트)이 나중에 생겨도 정리 코드를 다시 짜지 않는다.
-- 캐릭터 쪽 구현은 `ACBBaseCharacter`의 `#pragma region Death`다. 준비 완료 시점에 `Status.Dead`를 구독하고(`BindDeathStateEvent`), 콜백에서 `HasAuthority()`면 `Auth_HandleDeath()`(이동 정지·`ECC_Pawn` 충돌 해제·자식 훅·디스폰 예약), 전 인스턴스는 `Local_ApplyDeathVisuals()`(`OnCharacterDiedDelegate` 방송)를 수행한다. 자식 훅 `Auth_OnDeath()`는 `ACBAICharacter`가 오버라이드해 BT를 정지시킨다 — **이동은 GAS 밖(BT/CMC)이라 사망 차단 게이트에 걸리지 않으므로 별도 정지가 필요하다.**
+- 캐릭터 쪽 구현은 `ACBBaseCharacter`의 `#pragma region Death`다. 준비 완료 시점에 `Status.Dead`를 구독하고(`BindDeathStateEvent`), 콜백에서 `HasAuthority()`면 `Auth_HandleDeath()`(이동 정지·자식 훅·디스폰 예약), 전 인스턴스는 `Local_HandleDeath()`(캡슐 `ECC_Pawn`=이동 차단 해제, 메시 `Weapon`=히트 판정 제외, `OnCharacterDiedDelegate` 방송)를 수행한다. 자식 훅 `Auth_OnDeath()`는 `ACBAICharacter`가 오버라이드해 BT를 정지시킨다 — **이동은 GAS 밖(BT/CMC)이라 사망 차단 게이트에 걸리지 않으므로 별도 정지가 필요하다.**
+- **충돌 해제가 서버 몫이 아닌 이유**: 충돌 응답은 복제되지 않는다(`UPrimitiveComponent::BodyInstance`, `AActor::bActorEnableCollision` 모두 비복제 프로퍼티). 서버에서만 껐다면 클라의 시체는 계속 살아있는 것처럼 굴어 **이동 예측이 서버와 어긋나 보정으로 덜컥이고**, 공격자 머신에서 도는 무기 트레이스(→ [Combat.md](Combat.md))에도 계속 걸린다. 그래서 태그 복제로 전 인스턴스가 각자 끈다. 이동 차단과 히트 판정을 **따로 끄는 것**이 채널 분리의 목적이기도 하다.
 - 구독은 과거 변화를 소급 발화하지 않으므로, `BindDeathStateEvent()`가 구독 직후 현재 태그 카운트를 1회 반영한다. 이게 없으면 **이미 죽은 캐릭터에 뒤늦게 관련성을 얻은 클라이언트가 시체를 멀쩡한 상태로 본다.**
 
 **공중에서 죽으면 이동 정지를 착지까지 미룬다.** `DisableMovement()`는 `MOVE_None` 으로 바꾸므로 중력이 적용되지 않는다 — 사망 시점에 바로 부르면 **시체가 공중에 뜬 채 사망 몽타주만 재생된다.**

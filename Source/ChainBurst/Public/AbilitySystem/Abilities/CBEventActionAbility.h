@@ -8,11 +8,11 @@
  * 게임플레이 이벤트로 트리거되는 액션(몽타주) 어빌리티 베이스
  * - 입력이 아닌 GameplayEvent(예: 피격, 사망)로 자동 발동
  * - 이벤트는 서버에서 발행되므로 기본 NetExecutionPolicy = ServerInitiated
- * - 발동 시 지정한 액션(CancelActionTag)을 캔슬하고 몽타주 재생
+ * - 발동 시 지정한 어빌리티(CancelAbilityTag)를 캔슬하고 몽타주 재생
  * - 플레이어 / AI 구분 없이 공용으로 사용
  *
  * 자식은 생성자에서 RegisterEventTrigger()로 발동 이벤트 태그를 등록하고,
- * BoundActionTag(재생할 몽타주)와 CancelActionTag(캔슬 대상)를 설정한다.
+ * BoundActionTag(재생할 몽타주)와 CancelAbilityTag(캔슬 대상)를 설정한다.
  */
 UCLASS(Abstract)
 class CHAINBURST_API UCBEventActionAbility : public UCBActionAbility
@@ -34,7 +34,7 @@ protected:
 	 */
 	void RegisterEventTrigger(const FGameplayTag& InEventTag);
 
-	/** 발동 시 캔슬할 액션 태그 (예: Action.Combat). 비어있으면 캔슬하지 않음 */
-	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst", meta = (Categories = "Action"))
-	FGameplayTag CancelActionTag;
+	/** 발동 시 캔슬할 어빌리티 태그 (예: Ability.Combat.Attack). 비어있으면 캔슬하지 않음. */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst", meta = (Categories = "Ability"))
+	FGameplayTag CancelAbilityTag;
 };

@@ -73,6 +73,29 @@ void UCBCharacterRotationComponent::TickComponent(float DeltaTime, enum ELevelTi
 	CachedCharacter->SetActorRotation(NewRotation);
 }
 
+void UCBCharacterRotationComponent::AlignFacingToControlRotation()
+{
+	if (!GetCachedCharacter(CachedCharacter)) return;
+
+	// 컨트롤러가 없는 인스턴스(시뮬레이티드 프록시)는 복제로 처리.
+	if (!CachedCharacter->GetController()) return;
+
+	// 조준 방향 = 컨트롤 회전의 Yaw
+	const FRotator AimRotation(0.0f, CachedCharacter->GetControlRotation().Yaw, 0.0f);
+
+	// 세 값을 한꺼번에 맞춤 (보간을 거치지 않는 즉시 스냅)
+	TargetRotation = AimRotation;
+	SmoothedTargetRotation = AimRotation;
+	CachedCharacter->SetActorRotation(AimRotation);
+
+	// 소유 클라이언트는 최신 값을 서버로 한 번 더 밀어 서버 계산과의 오차를 줄임.
+	// 다른 클라이언트 전파는 서버가 쓴 TargetRotation 의 복제가 담당.
+	if (CachedCharacter->IsLocallyControlled() && !CachedCharacter->HasAuthority())
+	{
+		Server_SetTargetRotation(AimRotation);
+	}
+}
+
 FGameplayTag UCBCharacterRotationComponent::GetCurrentGaitTag() const
 {
 	// 기본 개이트
@@ -132,6 +155,13 @@ void UCBCharacterRotationComponent::OnRep_TargetRotation()
 	// SmoothedTargetRotation의 목표를 갱신
 	// Tick에서 RInterpTo로 자연스럽게 따라감
 	SmoothedTargetRotation = TargetRotation;
+
+	// 루트모션 재생 중에는 Tick 이 회전 갱신을 통째로 건너뛰므로(궤적 보존) 여기서 즉시 반영.
+	// 조준 정렬처럼 몽타주 시작과 같은 타이밍에 도착하는 값이 누락되는 것을 막기 위함.
+	if (CachedCharacter && CachedCharacter->IsPlayingRootMotion())
+	{
+		CachedCharacter->SetActorRotation(TargetRotation);
+	}
 }
 
 void UCBCharacterRotationComponent::OnCharacterSystemReady()

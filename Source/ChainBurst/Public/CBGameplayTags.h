@@ -30,6 +30,7 @@ namespace  CBGameplayTags
 	/** Status Tags. (캐릭터 상태 — 소유자·복제 규칙은 Docs/Tech/GameplayTags.md 참고) */
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Combat_InCombat)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Combat_SuperArmor)
+	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Combat_Staggered)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Movement_Overridden)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Movement_Dashing)
 	CHAINBURST_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Movement_Idle)

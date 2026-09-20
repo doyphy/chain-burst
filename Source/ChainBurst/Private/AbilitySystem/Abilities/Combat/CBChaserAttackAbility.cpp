@@ -4,6 +4,8 @@
 #include "Components/Combat/CBCombatComponent.h"
 #include "Components/Animation/CBActionComponent.h"
 #include "CBAbilitySystemLibrary.h"
+#include "Characters/CBChaserCharacter.h"
+#include "Components/Movement/CBCharacterRotationComponent.h"
 
 // engine
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
@@ -57,6 +59,19 @@ void UCBChaserAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Ha
 	{
 		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 		return;
+	}
+
+	// 조준 방향으로 즉시 정렬
+	// 쿨다운 이후 - 몽타주 재생 사이에 호출해야 함. (쿨다운 중에 활성화하면 회전하지 않게)
+	if (bAlignToAimOnActivate)
+	{
+		if (const ACBChaserCharacter* Chaser = Cast<ACBChaserCharacter>(GetAvatarActorFromActorInfo()))
+		{
+			if (UCBCharacterRotationComponent* RotationComp = Chaser->GetCharacterRotationComponent())
+			{
+				RotationComp->AlignFacingToControlRotation();
+			}
+		}
 	}
 
 	// 몽타주 재생

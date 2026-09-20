@@ -59,6 +59,15 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UBehaviorTree> BehaviorTree = nullptr;
 
+private:
+	/** [서버] 폰 ASC 이벤트 구독.  */
+	void BindPawnASCEvents();
+	/** [서버] 폰 ASC 구독 정리. */
+	void UnbindPawnASCEvents();
+
+	/** 구독을 건 폰의 ASC (해제용). */
+	TWeakObjectPtr<UAbilitySystemComponent> CachedPawnASC;
+
 #pragma region Perception
 	/** 시야·청각 퍼셉션으로 적을 감지 → 타겟 재선정 요청. */
 protected:
@@ -170,22 +179,11 @@ protected:
 
 private:
 	/** [서버] 피격 반응 이벤트(Event.Combat.HitReact) 구독/해제. */
-	void BindHitReactEvent();
-	void UnbindHitReactEvent();
+	void BindHitReactEvent(UAbilitySystemComponent& InASC);
+	void UnbindHitReactEvent(UAbilitySystemComponent& InASC);
 
 	/** 피격 반응 이벤트 콜백. 가해자를 폰으로 정규화해 최근 피격 정보로 기록. */
 	void HandleHitReactEvent(const FGameplayEventData* Payload);
-
-	/**
-	 * 가해자 액터를 가해자 소유 폰으로 변환.
-	 * 이벤트가 싣고 오는 Instigator는 가해자의 ASC 소유 액터라, 플레이어는 폰이 아니라 PlayerState가 들어옴.
-	 * @param InActor 이벤트가 실어 온 가해자
-	 * @return 가해자의 액터. 변환할 수 없으면 입력 그대로.
-	 */
-	static const AActor* ResolveThreatPawn(const AActor* InActor);
-
-	/** 피격 이벤트를 구독한 ASC (해제용). */
-	TWeakObjectPtr<UAbilitySystemComponent> CachedThreatASC;
 
 	/** 피격 이벤트 구독 핸들. */
 	FDelegateHandle HitReactEventHandle;
@@ -195,6 +193,24 @@ private:
 
 	/** 마지막 피격 시각(초). 음수면 피격 기록 없음. */
 	float LastDamageTime = -1.f;
+#pragma endregion
+
+#pragma region Stagger
+	/** 피격 경직 상태(Status.Combat.Staggered)를 블랙보드로 미러링. */
+public:
+	/** 블랙보드 경직 키 이름 (에디터 BB 키 이름과 반드시 일치). */
+	static const FName StaggeredKey;
+
+private:
+	/** [서버] 경직 상태 태그 구독/해제. */
+	void BindStaggerStateEvent(UAbilitySystemComponent& InASC);
+	void UnbindStaggerStateEvent(UAbilitySystemComponent& InASC);
+
+	/** 경직 태그 변화 콜백. 블랙보드 bool 키에 그대로 반영. */
+	void OnStaggerTagChanged(const FGameplayTag CallbackTag, int32 NewCount);
+
+	/** 경직 태그 구독 핸들. */
+	FDelegateHandle StaggerTagHandle;
 #pragma endregion
 
 #pragma region CrowdAvoidance

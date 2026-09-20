@@ -125,10 +125,23 @@
 | ③ 복제 | 서버 → 다른 클라 | `TargetRotation`은 `DOREPLIFETIME_CONDITION(..., COND_SkipOwner)` — 오너는 이미 알고 있으므로 제외 |
 | ④ 적용 | 모든 머신 | `OnRep_TargetRotation`이 `SmoothedTargetRotation`을 갱신하고, 매 틱 `RInterpTo(개이트별 보간 속도)`로 `SetActorRotation` |
 
+- **`OnRep_TargetRotation`은 루트모션 중이면 즉시 `SetActorRotation`까지 한다.** 그 상황에서는 틱이 회전 갱신을 통째로 건너뛰므로(아래 절) 보간에 맡기면 값이 영원히 반영되지 않는다. 조준 정렬처럼 몽타주 시작과 같은 타이밍에 도착하는 값을 위한 경로다.
+
 - **`Unreliable`인 이유**: 회전은 매 틱 갱신되는 **연속 상태**라 최신 값만 맞으면 되고, 놓친 값은 다음 갱신이 덮는다. Reliable로 보내면 매 틱 순서·재전송 보장 비용만 늘어난다. (이산 이벤트 — 어빌리티 활성화·이벤트 RPC 등 — 은 반대로 Reliable이어야 한다, [Multiplayer.md](Multiplayer.md))
 - **결과가 아니라 목표를 보내는 이유**: 보간을 각 머신이 자기 프레임률로 수행하므로 지연·프레임률이 달라도 같은 값으로 수렴하고, 전송량도 목표 갱신 시에만 발생한다.
 - 보간 속도는 개이트 태그로 `FCBGaitMovementData`에서 조회하고, 데이터가 없으면 컴포넌트의 `RotationInterpSpeed` 폴백을 쓴다 (`UCBLocomotionProcessor`가 가속·감속을 조회하는 구조와 동일).
 - 루트모션 재생 중에는 ①~④ 전체를 스킵한다 (아래 절) — 목표 전송도 함께 멈춘다.
+- 회전 갱신은 **이동 입력이 살아있을 때만** 돈다(`GetCurrentAcceleration()` 기준). 제자리에서 마우스만 돌려도 몸은 돌지 않는다 — 의도된 동작이며, 제자리 조준 회전은 turn-in-place 애니메이션이 없어 도입하지 않았다.
+
+### 조준 정렬 — 액션 몽타주를 카메라 방향으로 재생하기
+
+`AlignFacingToControlRotation()`은 컨트롤 회전 Yaw로 **`TargetRotation` · `SmoothedTargetRotation` · 액터 회전 세 값을 한꺼번에** 맞추는 1회성 요청이다. 어빌리티가 몽타주 재생 직전에 호출한다.
+
+- **세 값을 다 맞추는 이유**: 액터 회전만 돌리면 컴포넌트의 목표가 옛 값으로 남아, 몽타주가 끝나 회전 잠금이 풀리는 순간 이전 방향으로 스냅백한다. 반대로 목표만 갱신하면 보간이 루트모션 잠금에 막혀 정렬이 시작되지 않는다.
+- **보간 없이 즉시 스냅**하는 이유: 다음 프레임부터 루트모션 잠금이 걸려 보간이 진행되지 않는다.
+- **소유 클라와 서버가 각자 계산한다.** 서버의 컨트롤 회전은 `FCharacterNetworkMoveData::ControlRotation`으로 매 무브마다 갱신되므로(`CharacterMovementComponent::ServerMove_PerformMovement` → `SetControlRotation`) 별도 RPC 없이 같은 값이 나온다. 기존 `Server_SetTargetRotation`은 **Unreliable**이라 어빌리티 활성화와의 순서·도달이 보장되지 않으므로 정렬을 그 RPC에 의존시키지 않는다. 다른 클라 전파는 서버가 쓴 `TargetRotation` 복제가 담당.
+- 현재 호출자는 `UCBChaserAttackAbility`(`bAlignToAimOnActivate`, 기본 켜짐) 하나다. 콤보는 타격마다 어빌리티를 재활성화하므로 **타격마다 현재 조준으로 다시 정렬**된다.
+- 조준이 아니라 **적을 향해** 정렬하는 것은 모션 워핑으로 처리할 예정이며 아직 미구현이다 → [Montage.md](Montage.md)
 
 ## 루트모션 재생 중 회전 잠금
 

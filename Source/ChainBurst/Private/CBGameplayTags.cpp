@@ -28,6 +28,7 @@ namespace CBGameplayTags
 	/** Status Tags. (캐릭터 상태 — 소유자·복제 규칙은 Docs/Tech/GameplayTags.md 참고) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_InCombat, "Status.Combat.InCombat", "현재 전투 상태")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_SuperArmor, "Status.Combat.SuperArmor", "슈퍼아머 상태 — 피격 반응에 끊기지 않음 (어빌리티가 ActivationOwnedTags로 부여)")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_Staggered, "Status.Combat.Staggered", "피격 경직 상태 — 피격 어빌리티가 ActivationOwnedTags로 부여")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Overridden, "Status.Movement.Overridden", "GE에 의해 이동속도가 오버라이드 된 상태")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Dashing, "Status.Movement.Dashing", "대시 중 상태")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Idle, "Status.Movement.Idle", "지상 정지(이동 없음) 파생 상태 — 공중에서는 부여되지 않음 (InAir와 배타)")

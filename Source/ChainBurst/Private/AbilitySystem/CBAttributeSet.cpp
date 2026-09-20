@@ -67,6 +67,10 @@ void UCBAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallback
 				Payload.Instigator = Data.EffectSpec.GetContext().GetInstigator();
 				Payload.Target = TargetActor;
 
+				// GE 컨텍스트를 그대로 실어 보냄 (무기 트레이스가 넣어둔 HitResult 포함).
+				// 피격 어빌리티가 타격 지점으로 넉백 방향을 잡는데 사용함. (ImpactPoint 사용)
+				Payload.ContextHandle = Data.EffectSpec.GetContext();
+
 				UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
 					TargetActor, CBGameplayTags::Event_Combat_HitReact, Payload);
 			}

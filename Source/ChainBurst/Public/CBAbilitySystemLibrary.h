@@ -117,4 +117,12 @@ public:
 	 * @return ASC 반환. 실패 시 nullptr 반환.
 	 */
 	static UAbilitySystemComponent* GetASC(const AActor* InActor);
+
+	/**
+	 * ASC 소유 액터를 그 ASC 를 쓰는 폰으로 변환하는 함수.
+	 * 플레이어는 폰이 아니라 PlayerState 가 들어오기 때문에 소유 액터로 변환해야 함.
+	 * @param InActor 환원할 액터 (폰 / 컨트롤러 / PlayerState)
+	 * @return 대응하는 폰. 환원할 수 없으면 입력 그대로 반환.
+	 */
+	static const AActor* ResolveOwningPawn(const AActor* InActor);
 };

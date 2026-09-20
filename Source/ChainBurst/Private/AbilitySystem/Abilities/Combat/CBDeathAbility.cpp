@@ -14,8 +14,8 @@ UCBDeathAbility::UCBDeathAbility()
 	// 재생할 사망 몽타주 태그
 	BoundActionTag = CBGameplayTags::Action_Combat_Death;
 
-	// 사망은 종류를 가리지 않고 전부 끊으므로 베이스의 부분 캔슬(CancelActionTag)은 쓰지 않음
-	CancelActionTag = FGameplayTag::EmptyTag;
+	// 사망은 종류를 가리지 않고 전부 끊으므로 베이스의 부분 캔슬(CancelAbilityTag)은 쓰지 않음
+	CancelAbilityTag = FGameplayTag::EmptyTag;
 
 	// Event.Combat.Death 이벤트로 자동 발동되도록 트리거 등록
 	RegisterEventTrigger(CBGameplayTags::Event_Combat_Death);

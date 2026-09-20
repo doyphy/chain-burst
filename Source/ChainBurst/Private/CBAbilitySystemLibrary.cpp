@@ -8,6 +8,24 @@
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
 #include "Engine/Engine.h"
+#include "GameFramework/Controller.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
+
+// ASC 소유 액터를 폰으로 변환. 이미 폰이면 그대로 반환.
+const AActor* UCBAbilitySystemLibrary::ResolveOwningPawn(const AActor* InActor)
+{
+	if (!InActor) return nullptr;
+
+	// AI 는 캐릭터가 ASC 를 소유하므로 바로 반환.
+	if (const APawn* Pawn = Cast<APawn>(InActor)) return Pawn;
+
+	// 컨트롤러·PlayerState 는 조종 중인 폰으로 변환 (플레이어는 PlayerState 가 ASC 소유자)
+	if (const AController* Controller = Cast<AController>(InActor)) return Controller->GetPawn();
+	if (const APlayerState* PlayerState = Cast<APlayerState>(InActor)) return PlayerState->GetPawn();
+
+	return InActor;
+}
 
 UAbilitySystemComponent* UCBAbilitySystemLibrary::GetASC(const AActor* InActor)
 {

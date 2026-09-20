@@ -6,7 +6,8 @@
 
 /**
  * 추격자 공격 어빌리티.
- * 콤보 여부 및 공격력 계수를 설정할 수 있으며, 공격 시 타겟에게 데미지 GE를 적용한다.
+ * 콤보 여부 및 공격력 계수를 설정할 수 있으며, 공격 시 타겟에게 데미지 GE를 적용함.
+ * bAlignToAimOnActivate - 발동 시 캐릭터를 조준 방향으로 정렬해 몽타주가 카메라가 보는 쪽으로 재생.
  */
 UCLASS()
 class CHAINBURST_API UCBChaserAttackAbility : public UCBInputActionAbility
@@ -32,6 +33,14 @@ protected:
 	/** 이 어빌리티와 연결된 액션(몽타주)의 콤보 여부. 끄면 단일 몽타주(인덱스 0)로 재생 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")
 	bool IsCombo = false;
+
+	/**
+	 * 발동 시 캐릭터를 조준(컨트롤 회전) 방향으로 즉시 정렬할지 여부 (기본값 : true).
+	 * 끄면 발동 시점의 몸 방향 그대로 몽타주가 재생.
+	 * 콤보는 매 타격마다 어빌리티를 재활성화하므로, 켜두면 타격마다 현재 조준으로 다시 정렬됨.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat")
+	bool bAlignToAimOnActivate = true;
 
 	/** 타겟에게 적용할 데미지 GE 클래스 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Damage")

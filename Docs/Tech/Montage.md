@@ -215,6 +215,31 @@ UCBGCN_PlayAction: Location 이 0 이 아니면
 - 큐 경로라 서버·소유 클라·Simulated Proxy 가 **동일한 워프 타겟**을 받는다. 각자 계산하지 않는다.
 - `Location` 을 안 채우는 액션은 그냥 건너뛴다(무해). 새 액션에 워프를 붙이려면 그 어빌리티가 `BuildActionCueParameters()` 만 채우면 되고 큐는 손댈 필요 없다.
 
+### ⚠️ `CueParams.Normal` 은 회전 워프로 들어간다
+
+큐가 고정 워프를 등록할 때 `Parameters.Normal.Rotation()` 을 회전 목표로 쓴다.
+
+```cpp
+AddOrUpdateWarpTargetFromLocationAndRotation(ActionTag.GetTagName(), Parameters.Location, Parameters.Normal.Rotation());
+```
+
+`Location` 만 채우고 `Normal` 을 비워두면 `ZeroRotator` 가 들어가 **캐릭터가 월드 정면으로 홱 돌아간다.** 같은 필드를 액션마다 반대 의도로 쓰므로 주의:
+
+고정 워프를 쓰는 액션은 `Location` 과 `Normal` 을 **반드시 함께** 채운다. 대시(`UCBGADash`)는 진행 방향을 실어 그 방향으로 돌면서 나가고, 방향을 유지해야 하는 액션이라면 현재 `GetActorForwardVector()` 를 실어야 한다.
+
+### ⚠️ 같은 몽타주를 다시 재생하면 워프가 죽는다
+
+`UMotionWarpingComponent::UpdateWithContext` 는 워프 윈도우를 스캔할 때 **Animation 포인터 + StartTime + EndTime** 이 같으면 기존 모디파이어를 재사용한다(`ContainsModifier`). 그래서 **워프 윈도우가 살아 있는 동안 같은 몽타주를 다시 재생하면** 지난 재생의 모디파이어가 그대로 쓰인다.
+
+낡은 모디파이어가 제거되지도 않는다 — `URootMotionModifier::Update` 가 제거 조건을 검사하기 **전에** 멤버 `PreviousPosition` 을 컨텍스트 값으로 덮어쓰기 때문에, "재생 위치가 되감겼다"를 알아볼 수단이 사라진다.
+
+결과는 `StartTransform` 이 첫 재생 시점에 고정된 채 남는 것이다. 거리 상한을 두는 `UCBRootMotionModifier_ClampedSkewWarp` 에서는 상한이 이미 소진된 상태가 되어 **이동량이 0으로 깎인다.**
+
+- 실제로 피격 넉백을 워핑으로 만들었을 때 **연쇄 피격의 첫 타만 밀리는** 증상으로 드러났고, 그래서 넉백은 루트모션 소스로 갈아탔다 (→ [Abilities.md](Abilities.md) "피격 넉백").
+- **콤보가 같은 클립을 연속 재생하면 같은 증상이 난다.** 워프를 쓰는 액션에 재생 반복이 생기면 이 함정을 먼저 의심할 것.
+- 진단은 `log LogMotionWarping Verbose` — `RootMotionModifier added` / `removed` 가 재생마다 한 쌍씩 찍혀야 정상이다.
+- 굳이 워핑을 유지해야 한다면 모디파이어가 `Update` 에서 되감김(`Context.PreviousPosition < PreviousPosition`)을 감지해 스스로 `MarkedForRemoval` 하면 된다. 그러면 다음 프레임에 새 인스턴스가 만들어진다.
+
 ### 주의
 
 - **발 미끄러짐** — 제자리 클립 + 합성 이동은 거리가 길수록 미끄러져 보인다. 워프 구간을 짧게 잡거나 거리 상한을 둘 것. 사거리 보정 정도의 짧은 거리는 티가 안 난다.

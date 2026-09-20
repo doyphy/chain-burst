@@ -209,9 +209,50 @@ ScoreTarget() 의 최근 피격 가산점
 ```
 
 - **새 배관을 만들지 않고 피격 반응 이벤트를 구독한다.** 구독은 베이스 `StartAILogic()`(SystemReady 이후라 ASC 확정), 해제는 `OnUnPossess()`. **자식 컨트롤러는 `StartAILogic()` 에서 반드시 `Super` 를 호출할 것** — 안 부르면 위협 가산점만 조용히 죽는다.
+- **폰 ASC 에 거는 구독은 전부 `BindPawnASCEvents()` / `UnbindPawnASCEvents()` 한 쌍을 통한다.** ASC 조회와 캐시(`CachedPawnASC`)를 여기서만 하고, 개별 구독 함수는 넘겨받은 ASC 로 자기 핸들만 다룬다. 구독이 늘어도 이 두 함수만 고치면 되고 호출 지점(`StartAILogic`·`OnUnPossess`)은 건드리지 않는다 — 짝이 어긋나는 것을 구조적으로 막는 배치다.
 - **함정 — `Payload.Instigator` 는 폰이 아니다.** `UAbilitySystemComponent::MakeEffectContext()` 가 `AddInstigator(OwnerActor, AvatarActor)` 로 채우므로 `GetInstigator()` 는 **ASC 소유 액터**다. 플레이어는 ASC 가 PlayerState 에 있어(→ [ASC-Ownership.md](ASC-Ownership.md)) 여기로 `ACBPlayerState` 가 들어온다. 퍼셉션 후보(폰)와 그대로 비교하면 **영원히 일치하지 않으므로**, `ResolveThreatPawn()` 이 컨트롤러·PlayerState 를 폰으로 환원한다.
 - **한계(수용)**: 이 이벤트는 GE 의 `Effect.HitReact` **옵트인**이라, 태그가 없는 지속(DoT)·환경 데미지는 위협으로 잡히지 않는다. 체력이 0 이 되는 타격도 스킵되지만 죽는 순간이라 무관. 모든 데미지를 위협으로 삼으려면 어트리뷰트셋에 별도 이벤트를 하나 더 발행해야 한다.
 - 기록만 하고 **타겟을 즉시 바꾸지는 않는다.** 피격은 점수 항목일 뿐이고 전환 여부는 잠금·문턱을 거친다. (도발은 2차에서 즉시 전환 예외로 들어올 자리)
+
+## 피격 경직 (Stagger)
+
+피격 어빌리티가 활성인 동안 `Status.Combat.Staggered` 를 소유하고(→ [Abilities.md](Abilities.md) "피격 반응"), 컨트롤러가 그 태그를 블랙보드로 옮긴다. **판단은 전부 BT 가 한다** — 컨트롤러는 옮기기만 한다.
+
+```
+UCBHitReactAbility (ActivationOwnedTags)  →  Status.Combat.Staggered
+        ▼
+ACBAIController::OnStaggerTagChanged  →  Blackboard::bIsStaggered (SetValueAsBool)
+        ▼
+BehaviorTree  →  경직 분기 (Blackboard 데코레이터, Observer Aborts = Lower Priority)
+```
+
+- 키 이름은 `ACBAIController::StaggeredKey`(= `"bIsStaggered"`) 상수. **에디터 BB 키 이름과 반드시 일치.**
+- **연속 피격 시 태그가 1 → 0 → 1로 한 번 튄다** (피격 어빌리티 재발동 → `ActivationOwnedTags` 재부여). 같은 호출 스택이라 BT 는 다음 틱에 최종값만 보지만, 데코레이터 옵저버가 두 번 울려 경직 브랜치가 한 번 재진입(= `Wait` 재시작)할 수 있다. 동작상 무해하다.
+- 구독/해제는 위협 판정과 같은 진입점(`BindPawnASCEvents()`)을 탄다. 단 **구독은 `RunBehaviorTree()` 보다 앞서므로 초기 값 1회 반영은 블랙보드가 없어 버려진다.** 태그·BB 키 둘 다 기본값이 false 라 어긋나지 않는다.
+
+### 이벤트가 아니라 태그를 구독하는 이유
+
+같은 컨트롤러가 이미 `Event.Combat.HitReact` 를 구독하고 있어 그 콜백에 얹고 싶어지지만, 두 가지가 어긋난다.
+
+- **끄는 신호가 없다.** 이벤트는 데미지 시점 1회성이라 경직이 풀리는 시점을 알 수 없다. 타이머나 고정 시간으로 풀면 경직 시간의 진실이 어빌리티 수명과 따로 흘러, 몽타주가 더 길면 BT 만 먼저 깨어나 헛돌고 더 짧으면 끝난 모션으로 서서 기다린다.
+- **이벤트 발행 ≠ 어빌리티 발동.** `UCBAttributeSet` 은 `Effect.HitReact` 만 보고 이벤트를 쏘므로, **슈퍼아머로 반응이 차단돼도 이벤트는 나간다.** 이벤트를 구독하면 몽타주 없이 BT 만 경직 분기로 빠져 "스킬 시전 중엔 안 끊긴다"는 설계가 AI 에서만 깨진다.
+
+태그를 구독하면 켜짐·꺼짐이 한 콜백에서 나오고, 어빌리티가 실제로 발동했을 때만 켜지므로 둘 다 해소된다. 경직 중 사망도 따로 처리할 게 없다 — `UCBDeathAbility` 의 `CancelAllAbilities` 가 피격 어빌리티를 끊으면 `ActivationOwnedTags` 가 자동 제거된다.
+
+### 밀려나기 (넉백)
+
+피격 어빌리티가 **GAS 루트모션 소스**로 AI 를 타격 반대 방향으로 민다 (설계·한계는 → [Abilities.md](Abilities.md) "피격 넉백"). 플레이어는 `bKnockbackAIOnly` 로 제외된다 — 3인칭 액션에서 조작감이 나빠지기 때문.
+
+AI 쪽에서 눈여겨볼 두 가지:
+
+- **전투 사이클이 진동할 수 있다.** 전투 브랜치가 `IsAtLocation(TargetActor, 근접 반경)` 으로 갈리는데, 넉백이 그 경계를 넘나들면 추격↔경계가 프레임마다 뒤집힌다. **넉백 거리를 근접 반경의 여유분보다 작게** 두거나 `IsAtLocation` 쪽에 히스테리시스를 넣는다.
+- **내비메시 밖으로 밀리면 경로를 잃는다.** 그래서 피격 어빌리티가 `bClampToNavMesh` 로 목표를 검증하고, 내비 밖이면 아예 밀지 않는다.
+- 군중 회피(Detour Crowd)는 **경로 추종 중에만** 돈다. 경직 중에는 `MoveTo` 가 없어 꺼져 있으므로 밀림을 피해주지 않는다 — 뒤에 다른 몬스터가 있으면 그냥 막힌다.
+
+### 진행 중이던 행동은 어떻게 끊기나
+
+- **어빌리티**: 피격 어빌리티의 `CancelAbilityTag`(`Ability.Combat.Attack`)가 즉시 끊고, `UCBBTTask_ActivateAbilityAndWait` 가 캔슬을 `Failed` 로 변환해 BT 에 알린다.
+- **이동**: GAS 밖(BT `MoveTo` → PathFollowing → CMC)이라 어빌리티 캔슬로는 멈추지 않는다. 데코레이터의 Lower Priority Abort 가 `MoveTo` 태스크를 중단시키는 것이 정지 경로다. **Abort 는 다음 BT 틱**이고 CMC 브레이킹으로 감속하므로 살짝 미끄러진다 — 즉시 정지가 필요하면 캐릭터 쪽에서 `StopMovementImmediately()` 를 붙인다(현재 미적용).
 
 ## BT 커스텀 노드
 

@@ -9,7 +9,6 @@
 #include "AbilitySystemComponent.h"
 #include "Abilities/GameplayAbility.h"
 #include "BehaviorTree/BlackboardComponent.h"
-#include "GameFramework/PlayerState.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISense_Sight.h"
@@ -18,6 +17,9 @@
 
 // 블랙보드 타겟 키 이름 (에디터 BB 키 이름과 반드시 일치)
 const FName ACBAIController::TargetActorKey(TEXT("TargetActor"));
+
+// 블랙보드 경직 키 이름 (에디터 BB 키 이름과 반드시 일치)
+const FName ACBAIController::StaggeredKey(TEXT("bIsStaggered"));
 
 // 경로 추종 컴포넌트를 군중 회피(Detour Crowd) 버전으로 교체.
 // 엔진 ADetourCrowdAIController 가 하는 일과 같으며, 베이스에서 하므로 Rogue·Outlaw 가 모두 물려받음.
@@ -58,11 +60,11 @@ ACBAIController::ACBAIController(const FObjectInitializer& ObjectInitializer)
 	// 타겟 감지 상태가 바뀔 때(감지↔상실) 호출될 콜백 바인딩
 	PerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(this, &ACBAIController::HandleTargetPerceptionUpdated);
 
-	// 공격 어빌리티가 도는 동안에는 타겟을 교체하지 않는다 (부모 태그라 기본 공격·스킬 전부 매칭)
+	// 공격 어빌리티가 도는 동안에는 타겟을 교체하지 않음 (부모 태그라 기본 공격·스킬 전부 매칭)
 	TargetLockAbilityTags.AddTag(CBGameplayTags::Ability_Combat_Attack);
 }
 
-// [서버] 컨트롤러가 폰을 빙의할 때 호출. AI 두뇌 시작을 준비 완료 시점까지 게이트.
+// [서버] 컨트롤러가 폰을 빙의할 때 호출. AI BT 시작을 준비 완료 시점까지 게이트.
 void ACBAIController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
@@ -74,14 +76,14 @@ void ACBAIController::OnPossess(APawn* InPawn)
 	CachedAICharacter = Cast<ACBAICharacter>(InPawn);
 	if (!CachedAICharacter) return;
 
-	// 빙의로 이 컨트롤러의 진영이 확정됐으므로 퍼셉션에 재평가를 요청한다.
-	// (퍼셉션 등록이 빙의보다 먼저면 팀 미확정 상태로 소속 필터가 계산돼 적을 놓친다)
+	// 빙의로 이 컨트롤러의 진영이 확정됐으므로 퍼셉션에 재평가를 요청.
+	// (퍼셉션 등록이 빙의보다 먼저면 팀 미확정 상태로 소속 필터가 계산돼 적을 놓침)
 	if (PerceptionComponent)
 	{
 		PerceptionComponent->RequestStimuliListenerUpdate();
 	}
 
-	// 이미 준비 완료면 즉시 두뇌 시작, 아직이면 준비 완료 델리게이트에 바인딩해 대기
+	// 이미 준비 완료면 즉시 BT 시작, 아직이면 준비 완료 델리게이트에 바인딩해 대기
 	if (CachedAICharacter->IsCharacterSystemReady())
 	{
 		StartAILogic();
@@ -103,18 +105,46 @@ void ACBAIController::OnUnPossess()
 	SystemReadyHandle.Reset();
 	CachedAICharacter = nullptr;
 
-	// 폰의 ASC 에 걸어둔 피격 이벤트 구독 정리
-	UnbindHitReactEvent();
+	// 폰의 ASC 에 걸어둔 구독 정리
+	UnbindPawnASCEvents();
 
 	Super::OnUnPossess();
 }
 
-// AI 두뇌 시작 진입점. 베이스는 위협 판정용 구독만 하고, 두뇌 구동은 자식이 담당한다.
+// AI BT 시작 진입점. 베이스는 태그 이벤트 구독만 하고, BT 구동은 자식이 담당.
 void ACBAIController::StartAILogic()
 {
-	// 피격 이벤트 구독 (위협 판정용)
+	// 폰 ASC 구독 일괄 (위협 판정 + 경직)
 	// 준비 완료 이후라 폰의 ASC 가 확정돼 있음
-	BindHitReactEvent();
+	BindPawnASCEvents();
+}
+
+// [서버] 폰 ASC 에 거는 구독의 단일 진입점.
+void ACBAIController::BindPawnASCEvents()
+{
+	// 이미 구독 중이면 스킵 (자식이 Super 를 중복 호출해도 넘어가도록 방어)
+	if (CachedPawnASC.IsValid()) return;
+
+	// 폰의 ASC 조회 (AI는 캐릭터가 ASC를 소유)
+	UAbilitySystemComponent* ASC = UCBAbilitySystemLibrary::GetASC(GetPawn());
+	if (!ASC) return;
+
+	CachedPawnASC = ASC;
+
+	BindHitReactEvent(*ASC);      // 위협 판정
+	BindStaggerStateEvent(*ASC);  // BT 경직 분기
+}
+
+// [서버] 폰 ASC 구독 일괄 해제.
+void ACBAIController::UnbindPawnASCEvents()
+{
+	if (UAbilitySystemComponent* ASC = CachedPawnASC.Get())
+	{
+		UnbindHitReactEvent(*ASC);
+		UnbindStaggerStateEvent(*ASC);
+	}
+
+	CachedPawnASC.Reset();
 }
 
 // 빙의한 폰의 팀 ID를 반환
@@ -345,69 +375,84 @@ bool ACBAIController::IsTargetAlive(const AActor* InActor) const
 }
 
 // [서버] 피격 반응 이벤트 구독 (위협 판정 입력)
-void ACBAIController::BindHitReactEvent()
+void ACBAIController::BindHitReactEvent(UAbilitySystemComponent& InASC)
 {
 	// 이미 구독 중이면 스킵
-	// 자식이 Super 를 중복 호출해도 넘어가도록 방어
 	if (HitReactEventHandle.IsValid()) return;
 
-	// 폰의 ASC 조회 (AI는 캐릭터가 ASC를 소유)
-	UAbilitySystemComponent* ASC = UCBAbilitySystemLibrary::GetASC(GetPawn());
-	if (!ASC) return;
-
 	// 피격 이벤트 구독 (Event_Combat_HitReact 태그 이벤트)
-	CachedThreatASC = ASC;
-	HitReactEventHandle = ASC->GenericGameplayEventCallbacks.FindOrAdd(CBGameplayTags::Event_Combat_HitReact)
+	HitReactEventHandle = InASC.GenericGameplayEventCallbacks.FindOrAdd(CBGameplayTags::Event_Combat_HitReact)
 		.AddUObject(this, &ACBAIController::HandleHitReactEvent);
 }
 
-// [서버] 피격 반응 이벤트 구독 해제
-void ACBAIController::UnbindHitReactEvent()
+// [서버] 피격 반응 이벤트 구독 해제 (위협 기록도 함께 비운다)
+void ACBAIController::UnbindHitReactEvent(UAbilitySystemComponent& InASC)
 {
-	if (UAbilitySystemComponent* ASC = CachedThreatASC.Get())
+	// 피격 이벤트 구독중이라면 해제
+	if (HitReactEventHandle.IsValid())
 	{
-		// 피격 이벤트 구독중이라면
-		if (HitReactEventHandle.IsValid())
-		{
-			// 피격 이벤트 구독 해제
-			ASC->GenericGameplayEventCallbacks.FindOrAdd(CBGameplayTags::Event_Combat_HitReact).Remove(HitReactEventHandle);
-		}
+		InASC.GenericGameplayEventCallbacks.FindOrAdd(CBGameplayTags::Event_Combat_HitReact).Remove(HitReactEventHandle);
 	}
 
-	// 캐싱·핸들 초기화
+	// 핸들·위협 기록 초기화
 	HitReactEventHandle.Reset();
-	CachedThreatASC.Reset();
 	LastDamageInstigator.Reset();
 	LastDamageTime = -1.f;
 }
 
-// 피격 반응 이벤트 콜백 — 누가 때렸는지만 기록하고, 전환 여부는 UpdateTarget 이 판단
+// 피격 반응 이벤트 콜백 - 누가 때렸는지만 기록하고, 전환 여부는 UpdateTarget 이 판단
 void ACBAIController::HandleHitReactEvent(const FGameplayEventData* Payload)
 {
 	if (!Payload) return;
 
 	// 가해자 소유 폰 가져오기
 	// 플레이어는 ASC 소유자가 PlayerState라 폰이 아니라, 폰으로 변환해야 함
-	const AActor* ThreatPawn = ResolveThreatPawn(Payload->Instigator.Get());
+	const AActor* ThreatPawn = UCBAbilitySystemLibrary::ResolveOwningPawn(Payload->Instigator.Get());
 	if (!ThreatPawn) return;
 
 	const UWorld* World = GetWorld();
 	LastDamageInstigator = ThreatPawn;
 	LastDamageTime = World ? World->GetTimeSeconds() : 0.f;
 }
+#pragma endregion
 
-// 가해자 액터를 가해자 소유 폰으로 변환. (플레이어는 ASC 소유자가 PlayerState라 폰이 아님)
-const AActor* ACBAIController::ResolveThreatPawn(const AActor* InActor)
+#pragma region Stagger
+// [서버] 경직 상태 태그 구독 (피격 어빌리티가 ActivationOwnedTags 로 부여하는 태그)
+void ACBAIController::BindStaggerStateEvent(UAbilitySystemComponent& InASC)
 {
-	if (!IsValid(InActor)) return nullptr;
+	// 이미 구독 중이면 스킵
+	if (StaggerTagHandle.IsValid()) return;
 
-	// 폰이면 그대로 (AI 는 캐릭터가 ASC 를 소유하므로 여기서 끝남)
-	if (const APawn* Pawn = Cast<APawn>(InActor)) return Pawn;
+	// 태그 추가/제거 이벤트 구독
+	StaggerTagHandle = InASC.RegisterGameplayTagEvent(
+		CBGameplayTags::Status_Combat_Staggered, EGameplayTagEventType::NewOrRemoved)
+		.AddUObject(this, &ACBAIController::OnStaggerTagChanged);
 
-	// 컨트롤러·PlayerState 는 조종 중인 폰으로 환원 (플레이어는 PlayerState 가 ASC 소유자)
-	if (const AController* Controller = Cast<AController>(InActor)) return Controller->GetPawn();
-	if (const APlayerState* PlayerState = Cast<APlayerState>(InActor)) return PlayerState->GetPawn();
+	// 현재 값을 1회 반영. (구독 전 상태 갱신)
+	OnStaggerTagChanged(CBGameplayTags::Status_Combat_Staggered,
+		InASC.GetTagCount(CBGameplayTags::Status_Combat_Staggered));
+}
 
-	return InActor;
+// [서버] 경직 상태 태그 구독 해제
+void ACBAIController::UnbindStaggerStateEvent(UAbilitySystemComponent& InASC)
+{
+	if (StaggerTagHandle.IsValid())
+	{
+		InASC.RegisterGameplayTagEvent(
+			CBGameplayTags::Status_Combat_Staggered, EGameplayTagEventType::NewOrRemoved)
+			.Remove(StaggerTagHandle);
+	}
+
+	StaggerTagHandle.Reset();
+}
+
+// 경직 태그 변화 콜백 - 블랙보드에 그대로 반영. (경직 중 무엇을 할지는 BT 가 판단)
+void ACBAIController::OnStaggerTagChanged(const FGameplayTag /*CallbackTag*/, int32 NewCount)
+{
+	// 블랙보드 미준비(BT 미시작) 시 무시
+	UBlackboardComponent* BB = GetBlackboardComponent();
+	if (!BB) return;
+
+	BB->SetValueAsBool(StaggeredKey, NewCount > 0);
 }
 #pragma endregion

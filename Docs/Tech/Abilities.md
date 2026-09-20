@@ -24,12 +24,13 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
     │   │   • NetExecutionPolicy 기본값: LocalPredicted
     │   │
     │   ├── UCBChaserAttackAbility ← 공격 베이스 (BP 확장 전제 — 기본/특수/약/강 공격 등 BP 자식으로 다양화, GAS 표준 쿨다운(CommitAbility) 적용 — CooldownGameplayEffectClass는 BP 자식이 지정)
+    │   │      • 발동 시 조준(컨트롤 회전) 방향으로 즉시 정렬 후 몽타주 재생 (bAlignToAimOnActivate) → [Locomotion.md](Locomotion.md)
     │   ├── UCBGAChaserEquipWeapon (무기 장착 — 개이트로 몽타주 인덱스 분기: Idle 0/Walk 1/Run·Sprint 2)
     │   ├── UCBGAChaserUnequipWeapon (무기 해제 — 개이트로 몽타주 인덱스 분기: Idle 0/Walk 1/Run·Sprint 2)
     │   └── UCBGADash (전방 대시 — C++ 최종 엣지. Sprint 진입 연출 겸용, GAS 표준 쿨다운, 활성 중 Status.Movement.Dashing 부여, 전투 상태로 몽타주 인덱스 분기: 비전투 0/전투 1)
     │
     ├── UCBEventActionAbility (Abstract) ← 게임플레이 이벤트로 발동되는 액션 베이스
-    │   │   • RegisterEventTrigger(EventTag)로 트리거 등록, CancelActionTag로 진행 액션 캔슬
+    │   │   • RegisterEventTrigger(EventTag)로 트리거 등록, CancelAbilityTag로 진행 중인 어빌리티 캔슬
     │   │   • NetExecutionPolicy 기본값: ServerInitiated
     │   │
     │   ├── UCBHitReactAbility (피격 반응, Event.Combat.HitReact 트리거 — 슈퍼아머 중에는 발동 차단)
@@ -53,6 +54,84 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 
 서버가 데미지 적용 시 `Event.Combat.HitReact`를 발행하면 발동해, 피격 몽타주(`Action.Combat.HitReact`)를 GameplayCue로 전 클라 재생한다. 전투 상태면 인덱스 1(전투 피격), 비전투면 0.
 
+**경직 중 또 맞으면 재발동한다** (`bRetriggerInstancedAbility = true`). 엔진이 기존 인스턴스를 `EndAbility(bWasCancelled = false)`로 끝내고 곧바로 다시 활성화하므로, 피격 몽타주가 처음부터 다시 재생되고 경직도 그만큼 이어진다 — 타격감을 위한 선택이다.
+
+- ⚠️ **재발동은 캔슬이 아니라 정상 종료로 보인다.** 지금은 피격 어빌리티의 종료를 `bWasCancelled`로 분기하는 소비자가 없어 무해하지만(`UCBBTTask_ActivateAbilityAndWait`는 자기가 켠 핸들만 본다), 생기면 재발동을 정상 종료로 착각한다.
+
+#### 무한 경직 방지 — 연쇄 경직 제한
+
+재발동에 제한이 없으면 여러 마리에게 둘러싸였을 때 영영 경직에서 못 나온다. **연쇄 경직이 `MaxChainStaggerTime`을 넘으면 `ChainStaggerCooldown` 동안 발동을 차단**해 탈출구를 만든다. 차단 구간에도 데미지 GE는 그대로 적용되고 반응 모션만 생략된다(슈퍼아머와 같은 동작). 경직 태그가 붙지 않으므로 그 1초 동안 BT는 정상 행동으로 돌아온다.
+
+| 값 | 현재 값 (`GA_HitReact`) | 의미 |
+|---|---|---|
+| `MaxChainStaggerTime` | 5초 | 연쇄가 이 시간을 넘으면 차단. 0 이하면 제한 없음 |
+| `ChainStaggerCooldown` | 5초 | 차단 지속 시간 |
+| `ChainBreakTime` | 1초 | 직전 경직 종료 후 이 시간 안에 다시 맞으면 **같은 연쇄**로 본다 |
+
+> **값의 진실은 BP(`GA_HitReact`)에 있다.** C++ 생성자의 초기값은 BP를 새로 만들 때의 출발점일 뿐이므로, 튜닝은 BP에서 하고 이 표를 함께 갱신한다.
+>
+> `ChainBreakTime`이 1초로 넉넉해 AI 공격 간격 정도는 연쇄로 이어지고, 그만큼 5초 한도에 쉽게 닿는다. 차단 5초는 그 대가로 꽤 긴 무반응 구간이라, **맞고 있는데 아파 보이지 않는** 느낌이 나면 여기를 먼저 줄인다.
+
+- **연쇄 판정 기준은 "직전 경직이 끝난 뒤 얼마나 쉬었나"다.** 재발동은 종료(`EndAbility`)와 활성화가 같은 프레임이라 언제나 연쇄로 잡히고, 경직이 풀린 뒤 `ChainBreakTime`이 지나서 맞으면 연쇄가 새로 시작된다.
+- **차단 종료 시각을 따로 들지 않고 연쇄 시작 시각 하나에서 유도한다.** `CanActivateAbility`가 const라, 별도 변수를 두면 그 안에서 상태를 써야 해(= `mutable`) 검사 함수가 부작용을 갖게 된다. 경과가 `[Max, Max + Cooldown)` 구간이면 차단으로 판정하는 계산 하나로 끝낸다.
+- **상태를 태그가 아니라 어빌리티 멤버로 둔다.** 소비자가 이 클래스 하나뿐이라 태그로 만들 이유가 없다 ("한 클래스 내부에서만 쓰는 값 → 멤버 변수" → [GameplayTags.md](GameplayTags.md)). `InstancedPerActor`라 인스턴스가 ASC당 하나이므로 발동 사이에는 값이 유지되고 개체끼리는 섞이지 않는다.
+  - 플레이어는 ASC가 PlayerState 소유라 **인스턴스가 폰 재스폰을 넘어 살아남지만**, 리스폰 시간이 `ChainBreakTime`보다 훨씬 길어 다음 피격에서 자연히 새 연쇄가 된다. 따로 회수할 것이 없다.
+- 더 정교한 규칙(누적 데미지 기반 강인도, 등급별 경직 저항)이 필요해지면 이 세 값을 어트리뷰트로 옮긴다. 지금은 BP에서 만질 수 있는 상수로 충분하다.
+
+**활성 구간 동안 경직 상태(`Status.Combat.Staggered`)를 `ActivationOwnedTags`로 소유한다.** GAS가 `PreActivate`에서 붙이고 `EndAbility`에서 떼므로 캔슬·사망 등 어떤 종료 경로에서도 태그가 남지 않는다. AI는 `ACBAIController`가 이 태그를 블랙보드로 미러링해 BT가 경직 분기로 빠진다 (→ [AI.md](AI.md) "피격 경직"). 경직 길이를 GE로 따로 떼지 않고 어빌리티 수명에 묶은 근거는 → [GameplayTags.md](GameplayTags.md) "① GE와 ② 어빌리티 자체 프로퍼티 중 무엇을 고를까".
+
+#### 피격 넉백 — 밀려나는 연출
+
+타격 반대 방향으로 밀려나는 연출을 **GAS 루트모션 소스**(`UAbilityTask_ApplyRootMotionConstantForce`)로 적용한다. 발동할 때마다 새 소스를 얹고, 재발동 시에는 `EndAbility`가 이전 태스크를 정리하므로 이전 넉백이 남지 않는다.
+
+**모션 워핑을 쓰지 않는 이유 (한 번 만들었다가 갈아탄 경로)**
+
+처음에는 대시와 같은 방식(큐 파라미터 `Location` → 모션 워핑 고정 타겟)으로 만들었으나, **연쇄 피격에서 첫 타만 밀리고 그 뒤로는 밀리지 않는** 문제가 나왔다. 원인은 엔진의 모디파이어 재사용이다:
+
+```cpp
+// UMotionWarpingComponent::UpdateWithContext
+if (!ContainsModifier(Animation, StartTime, EndTime))   // Animation + 윈도우가 같으면 재사용
+    MotionWarpingNotify->OnBecomeRelevant(...);
+```
+
+재발동은 **같은 몽타주를 다시 재생**하는 것이라 셋이 전부 같아 새 모디파이어가 만들어지지 않는다. 낡은 모디파이어가 제거되지도 않는데, `URootMotionModifier::Update`가 제거 조건을 검사하기 **전에** 멤버 `PreviousPosition`을 컨텍스트 값으로 덮어써서 "되감겼다"를 알아볼 수단이 사라지기 때문이다. 그 결과 `StartTransform`이 첫 피격 지점에 고정되고, 거리 상한을 두는 `UCBRootMotionModifier_ClampedSkewWarp`가 이미 소진된 상한을 보고 이동량을 0으로 깎았다.
+
+이건 우회할 수 있는 버그였지만(모디파이어가 되감김을 감지해 스스로 물러나게), **구조적 불일치의 증상**으로 판단해 경로를 바꿨다. 워핑은 "이동이 몽타주 재생 수명에 매달린" 방식인데, 이 프로젝트의 피격은 재발동을 정식 기능으로 삼아 **몽타주를 자주 재시작한다.** 대시가 워핑과 잘 맞는 것은 1회성이고 재시작이 없기 때문이다.
+
+| | 모션 워핑 | 루트모션 소스 (채택) |
+|---|---|---|
+| 재발동 | ❌ 모디파이어 재사용으로 이동 죽음 | ✅ 매번 새 소스 |
+| 서버 권위 | ❌ GameplayCue 경유 (연출 경로) | ✅ 서버 적용 → CMC 복제 |
+| 거리 제어 | 목표 좌표 명시 | 속도 × 시간 명시 |
+| 충돌 처리 | 목표를 미리 스윕해 계산 | CMC 가 매 프레임 |
+
+`LaunchCharacter`류를 쓰지 않은 이유는 **거리가 `BrakingDecelerationWalking`에 좌우되는데 `UCBLocomotionProcessor`가 그 값을 개이트별로 계속 세팅**하기 때문이다 — 걷다 맞을 때와 달리다 맞을 때 밀리는 거리가 달라진다. 루트모션 소스는 브레이킹을 거치지 않아 `거리 ÷ 시간 = 속도`가 그대로 성립한다.
+
+**적용 규칙**
+
+- **방향**: 타격 지점(`ContextHandle`의 `HitResult`) → 공격자 폰 위치 → 자기 뒤쪽 순으로 폴백. 수평 성분만 쓴다.
+  - 이를 위해 `UCBAttributeSet`이 피격 이벤트에 **GE 컨텍스트를 실어 보낸다**(`Payload.ContextHandle`). 공격 어빌리티가 `AddHitResult()`로 넣어둔 타격 지점이 여기로 흘러온다.
+  - `Payload.Instigator`는 ASC 소유 액터라 플레이어는 PlayerState다. 폰 환원은 `UCBAbilitySystemLibrary::ResolveOwningPawn()` 공용 헬퍼가 담당한다(`ACBAIController`의 위협 판정도 같은 함수를 쓴다).
+- **플레이어는 밀지 않는다**(`bKnockbackAIOnly`, 기본 true). 3인칭 액션에서 조작감이 나빠지기 때문이다.
+- **공중이면 생략**: 루트모션이 수직 속도를 덮어써 낙하가 멈춘다. `GA_Jump`가 대시 중 점프를 막는 것, 공중 사망 시 시체가 떠 있던 것과 같은 종류의 함정이다.
+- **내비메시 검증**(`bClampToNavMesh`): 도착 예정 지점이 내비메시 밖이면 넉백 자체를 생략한다. 실제 이동은 충돌로 더 짧게 끝날 수 있으므로 어디까지나 근사 검사다.
+- **끝날 때 잔여 속도를 0으로 클램프**해(`ERootMotionFinishVelocityMode::ClampVelocity`) 미끄러짐을 남기지 않는다.
+
+| 값 | 기본 | 의미 |
+|---|---|---|
+| `KnockbackDistance` | 50cm | 0 이하면 넉백 없음 |
+| `KnockbackDuration` | 0.2초 | 짧으면 다른 클라 화면에서 보간에 뭉개진다 |
+| `bKnockbackAIOnly` | true | 플레이어 제외 |
+| `bClampToNavMesh` / `NavProjectExtent` | true / 100cm | 내비메시 밖이면 생략 |
+
+**한계(수용)**
+- **뒤에 다른 캐릭터가 있으면 안 밀린다.** CMC는 캐릭터끼리 밀지 않는다(`ApplyImpactPhysicsForces`가 물리 시뮬 바디에만 힘을 준다). 막히면 `SlideAlongSurface`로 옆으로 비껴가고, 정면이면 제자리다. 몬스터가 몰릴수록 밀림이 덜 보인다.
+- **애니메이션은 제자리 클립이라 발이 미끄러진다.** 거리와 시간의 함수이므로 미끄러져 보이면 거리부터 줄인다.
+- **재발동마다 넉백이 새로 적용되어 누적된다.** 연쇄 경직 차단이 사실상의 상한 역할을 한다.
+- **전투 사이클이 진동할 수 있다.** 넉백이 `IsAtLocation(근접 반경)` 경계를 넘나들면 추격↔경계가 플리커한다 (→ [AI.md](AI.md)).
+
+> AI 피격 몽타주의 `Enable Root Motion`은 **꺼야 한다.** 루트모션 몽타주와 루트모션 소스가 같은 프레임에 이동을 다투면 결과가 애매해진다.
+
 ### 슈퍼아머 — 끊기지 않는 어빌리티
 
 **끊기지 않을 어빌리티가 스스로 선언한다.** 스킬 어빌리티가 `ActivationOwnedTags`로 `Status.Combat.SuperArmor`를 부여하면, `UCBHitReactAbility`의 `ActivationBlockedTags`가 그 태그를 보고 피격 반응 자체를 발동시키지 않는다. 데미지 GE는 그대로 적용되고 반응 모션만 생략된다.
@@ -61,7 +140,9 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 
 **캔슬 예외가 아니라 발동 차단인 이유** — 어빌리티 캔슬만 막아도 피격 몽타주가 같은 슬롯의 시전 몽타주를 덮어써서(`Montage_PlayWithBlendIn`) 결국 동작이 끊겨 보인다. 애니메이션까지 지키려면 피격 반응이 아예 시작되지 않아야 한다.
 
-> **알려진 불일치**: 베이스의 `CancelActionTag = Action.Combat`은 현재 아무것도 캔슬하지 않는다. `UAbilitySystemComponent::CancelAbilities`는 어빌리티의 **AssetTags**(이 프로젝트에선 `Ability.*`)와 비교하는데 넘기는 값은 `Action.*`(몽타주 네임스페이스)이라 절대 매칭되지 않는다. 부분 캔슬을 실제로 쓰게 되면 `Ability.*` 태그로 교정해야 한다.
+**부분 캔슬은 `Ability.*` 태그로 지정한다.** `UCBHitReactAbility`는 `CancelAbilityTag = Ability.Combat.Attack`으로 진행 중인 공격만 끊는다. `UAbilitySystemComponent::CancelAbilities`가 어빌리티의 **Asset Tags**와 비교하므로, 몽타주 네임스페이스인 `Action.*`을 넣으면 매칭되는 어빌리티가 하나도 없다.
+
+> 부모 태그인 `Ability.Combat.Attack` 하나로 하위 공격(Basic·Skill A~D)이 전부 걸린다. `FGameplayTagContainer::HasAny`가 **비교당하는 쪽**(어빌리티의 Asset Tags)을 부모까지 확장해 비교하기 때문이다. 반대 방향(자식 태그를 넘겨 부모 태그를 가진 어빌리티를 잡는 것)은 성립하지 않는다.
 
 ## 사망 (`UCBDeathAbility`)
 
@@ -69,7 +150,7 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 
 `ActivateAbility`의 순서가 곧 설계다.
 
-1. **`CancelAllAbilities(this)`** — 공격·대시·질주 등 진행 중인 어빌리티를 종류를 가리지 않고 전부 끊는다. 그래서 베이스의 부분 캔슬(`CancelActionTag`)은 쓰지 않는다.
+1. **`CancelAllAbilities(this)`** — 공격·대시·질주 등 진행 중인 어빌리티를 종류를 가리지 않고 전부 끊는다. 그래서 베이스의 부분 캔슬(`CancelAbilityTag`)은 쓰지 않는다.
 2. **사망 상태 GE 적용** (`DeadStateEffectClass`, 서버 권위) — **몽타주보다 먼저** 한다. 몽타주가 등록되어 있지 않거나 재생에 실패해도 사망 상태는 확정되어야 하기 때문.
 3. **베이스가 사망 몽타주 재생** (`Action.Combat.Death` → GameplayCue로 전 클라 동기화)
 
@@ -109,7 +190,7 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 
 그 결과가 **"스킬 쓰다 죽으면 안 죽는다"** 였다. 사망 어빌리티가 활성화되지 못해 `CancelAllAbilities`도 `GE_Dead` 적용도 몽타주도 실행되지 않고, **사망 이벤트는 데미지 GE 실행 시 1회성**이라 스킬이 끝난 뒤에도 다시 오지 않아 체력 0인 채로 살아남았다. (피격 어빌리티는 AssetTag가 비어 있어 이 차단에 걸리지 않았고, 그래서 "맞기는 하는데 죽지는 않는" 모습이 됐다)
 
-**해법은 사망만 차단 검사를 건너뛰는 것이다.** `UCBGameplayAbility::bIgnoreAbilityBlocking`을 켜면 `DoesAbilitySatisfyTagRequirements`가 통째로 통과하고, 프로젝트가 추가한 부모 태그 차단 검사(`CanActivateAbility`)도 건너뛴다. 현재 켜는 건 `UCBDeathAbility` 하나다.
+**해법은 사망만 차단 검사를 건너뛰는 것이다.** `UCBGameplayAbility::bIgnoreAbilityBlocking`을 켜면 `DoesAbilitySatisfyTagRequirements`가 통째로 통과한다. 현재 켜는 건 `UCBDeathAbility` 하나다.
 
 > **켜면 요구 태그도 함께 무시된다.** 엔진이 요구·차단을 한 함수에서 판정하므로 차단만 골라 뺄 수 없다. 이 플래그를 켠 어빌리티는 BP에서 `ActivationRequiredTags` / `ActivationBlockedTags`를 설정해도 걸리지 않는다.
 
@@ -182,6 +263,7 @@ AssetTag(`Ability.Combat.Death`)는 예외적으로 **C++ 생성자에서** 지�
 > **문서 유지 규칙:** 이 계층도에는 **베이스/추상 클래스만** 나열하고, 구체(엣지) 어빌리티는 대표 예시 외에는 나열하지 않는다. 베이스/추상 어빌리티 클래스를 추가·변경·삭제하면 **같은 작업에서 이 문서의 계층도도 갱신**한다.
 
 ## 관련 문서
+- 어빌리티의 태그 프로퍼티(Owned/Block/Cancel/Required)를 GE로 할지 어빌리티 자체 설정으로 할지: [GameplayTags.md](GameplayTags.md) "① GE와 ② 어빌리티 자체 프로퍼티 중 무엇을 고를까"
 - 로코모션 어빌리티(Walk/Sprint/Dash/Jump)의 시스템 전체 맥락: [Locomotion.md](Locomotion.md)
 - NetExecutionPolicy 상세·Simulated Proxy 처리: [Multiplayer.md](Multiplayer.md)
 - 몽타주 재생 흐름(인덱스 결정 → GameplayCue): [Montage.md](Montage.md)

@@ -65,17 +65,6 @@ bool UCBGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Han
 		{
 			return false;
 		}
-
-		// 현재 어빌리티 태그 (Asset Tags)의 부모 태그들 가져오기
-		FGameplayTagContainer ParentTags = GetAssetTags().GetGameplayTagParents();
-
-		// ASC의 Block된 태그에 내 부모 태그가 있는지 검사.
-		// 차단 무시 어빌리티(사망)는 이 검사도 건너뜀 — 엔진 검사만 뚫고 여기서 막히면 의미가 없음
-		if (!bIgnoreAbilityBlocking && ASC->AreAbilityTagsBlocked(ParentTags))
-		{
-			// 어빌리티 활성화 거부
-			return false;
-		}
 	}
 	// 어빌리티 활성화 허용
 	return true;

@@ -1,6 +1,6 @@
 # 게임플레이 태그 시스템 (`CBGameplayTags`)
 
-> 태그의 4역할 분류, 생성 기준, 상태 태그의 소유권·복제 규칙, 네임스페이스 인덱스. 태그를 추가·변경할 때 반드시 이 문서의 기준을 따른다.
+> 태그의 4역할 분류, 생성 기준, 상태 태그의 소유권·복제 규칙, 어빌리티 태그 프로퍼티(GE vs 자체 설정) 선택 기준, 네임스페이스 인덱스. 태그를 추가·변경할 때 반드시 이 문서의 기준을 따른다.
 
 ## 태그의 4역할
 
@@ -48,6 +48,40 @@
 
 **②③은 어빌리티 NetExecutionPolicy에 따라 적용 범위가 달라진다**: `LocalPredicted`/`ServerInitiated` = 서버+오너, `ServerOnly` = 서버만(오너도 못 봄 — 상태 태그는 ①로만), `LocalOnly` = 로컬만(게임플레이 판정용 상태 태그 부여 금지, 연출 전용).
 
+## 어빌리티가 태그를 다루는 두 계열 — 쓰기와 읽기
+
+어빌리티 클래스 디폴트의 태그 프로퍼티 8개는 성격이 둘로 갈리고, **어느 쪽이냐에 따라 복제를 걱정할 지점이 달라진다.**
+
+| 계열 | 프로퍼티 | 하는 일 | 복제 |
+|---|---|---|---|
+| **쓰기** | `ActivationOwnedTags` | `PreActivate`에 루스 태그 부여 / `EndAbility`에 제거 | 기본 없음. 옵트인(`ShouldReplicateActivationOwnedTags()`) 시에도 `CountToOwner`(오너 전용) |
+| | `BlockAbilitiesWithTag` | ASC의 `BlockedAbilityTags` 카운터 증감 | **복제 옵션 자체가 없음** — 순수 로컬 |
+| | `CancelAbilitiesWithTag` | `CancelAbilities()` 즉시 호출 | 없음 (호출 자체가 로컬 행위) |
+| **읽기** | `ActivationRequiredTags` / `ActivationBlockedTags` / `SourceRequired·BlockedTags` / `TargetRequired·BlockedTags` | **아무것도 적용하지 않는다.** 활성화를 시도하는 머신에서 ASC의 현재 태그를 조회만 함 | — |
+
+- **쓰기 계열이 미치는 범위는 "오너 클라"가 아니라 "어빌리티가 실행되는 머신"이다.** `NetExecutionPolicy`가 그걸 정한다 — `LocalPredicted`/`ServerInitiated`=서버+오너, `ServerOnly`=서버만, **AI는 오너 클라가 없으므로 정책과 무관하게 언제나 서버만**. 시뮬 프록시는 어빌리티 자체가 돌지 않아 절대 생기지 않는다.
+- **읽기 계열은 "로컬이냐"를 물을 대상이 아니다.** 관건은 **읽히는 태그의 출처**다. 부여와 검사가 같은 머신에서 끝나면 어긋날 일이 없다(`Status.Combat.SuperArmor`가 그 형태).
+  - ⚠️ `LocalPredicted` 어빌리티가 **복제되지 않는 태그**(②·④)를 검사에 쓰면 클라는 통과·서버는 거부 → **예측 롤백**. 예측 어빌리티의 검사 대상은 ① GE GrantedTags처럼 복제되는 출처에서 와야 한다.
+
+## ① GE와 ② 어빌리티 자체 프로퍼티 중 무엇을 고를까
+
+②는 부여·제거가 어빌리티 수명에 자동으로 묶여 실수할 여지가 없고 에셋도 늘지 않는다. 그래서 **②로 될 때는 ②를 쓰고, 안 될 때만 ①로 간다.** 판정은 두 질문이다:
+
+> **1. 시뮬 프록시에 이 태그의 소비자가 있는가?**
+> **2. 있다면, 그 소비가 다른 동기화 경로로 이미 대체되는가?**
+
+| 상황 | 경로 |
+|---|---|
+| 소비자가 서버(또는 서버+오너)뿐 — 어빌리티 발동 판정·차단·AI 두뇌 | **② ActivationOwnedTags** |
+| 프록시도 결과를 봐야 하지만, 그 결과가 **GameplayCue 몽타주 등 별도 동기화 경로**로 이미 전달됨 | **② ActivationOwnedTags** — 태그까지 복제할 이유가 없다 |
+| 프록시가 **태그 자체를** 읽어야 하는데 대체할 연출 경로가 없음 — ABP 상태머신 분기, 머리 위 UI, 시체 정리 | **① GE GrantedTags** |
+
+- `Status.Combat.SuperArmor` → ②. 판정도 몽타주 스킵도 어빌리티 발동 단계에서 끝난다.
+- `Status.Combat.Staggered`(경직) → ②. 경직 연출인 피격 몽타주는 `GameplayCue.PlayAction`으로 이미 전 클라에 가고, 태그의 소비자는 서버의 BT/블랙보드뿐이다. **"프록시가 경직을 알아야 한다"처럼 보이지만, 알아야 하는 건 태그가 아니라 모션이고 그 경로는 따로 있다.**
+- `Status.Dead` → ①. 시뮬 프록시 캐릭터가 태그 콜백으로 충돌·UI를 각자 정리해야 하는데, 그 일을 대신해 줄 연출 경로가 없다 (→ [Abilities.md](Abilities.md) "사망 처리의 세 갈래").
+
+> 어빌리티가 부여 주체가 아니거나(BT 서비스·컴포넌트) 어빌리티 수명과 태그 구간이 어긋나면 ②가 성립하지 않는다. 그때는 ③·④로 간다 — `Status.Movement.Strafe`는 ABP가 직접 읽어야 해 복제가 필수인데 부여 주체가 BT 서비스라 ③이다.
+
 ## 네임스페이스 인덱스
 
 | 네임스페이스 | 역할 | 용도 |
@@ -60,7 +94,7 @@
 | `Action.*` | 식별 | 몽타주 식별 태그 (UCBActionComponent에서 몽타주 선택) |
 | `GameplayCue.*` | 식별 | 게임플레이 큐 라우팅 |
 | `Effect.*` | 속성 | GE 동작 의도 선언 (Opt-in, 여러 GE 공유 가능) |
-| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망) |
+| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`, `Staggered`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망) |
 | `Cooldown.*` | 상태 | 어빌리티 쿨다운 (쿨다운 GE의 GrantedTags — GAS가 자동 검사. 관례상 별도 루트 유지) |
 | `Event.*` | 이벤트 | 애님노티파이 등 이벤트 트리거 |
 
@@ -77,6 +111,8 @@ Status.Movement.Overridden                  ← 속도 오버라이드 GE
 `Status.Movement.Strafe` 는 **애님이 2D 블렌드스페이스로 전환하는 기준**이다. BT(서버)에서만 갱신되므로 `TagOnly` 로 복제해야 시뮬 프록시에서도 같은 모션이 나온다. 소비자는 `UCBAIAnimInstance` (→ [AnimInstance.md](AnimInstance.md), [AI.md](AI.md)).
 
 **`Status.Dead`** — 소유자는 `GE_Dead`(무한 지속)의 GrantedTags, 복제 경로 ①. 부여 주체는 `UCBDeathAbility`이며, 이 태그를 들고 있으면 `UCBGameplayAbility::CanActivateAbility`가 사망 전용 외 모든 어빌리티를 차단한다 (→ [Abilities.md](Abilities.md)). 제거 주체는 `ACBGameplayGameMode`로, 리스폰 직전에 이 태그를 부여한 GE를 `RemoveActiveEffectsWithGrantedTags`로 지운다 (→ [GameFlow.md](GameFlow.md) "사망과 리스폰"). AI는 제거하지 않고 그대로 파괴된다.
+
+**`Status.Combat.Staggered`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 `UCBHitReactAbility` 하나이고, **어빌리티 활성 구간이 곧 경직 구간**이다(= 피격 몽타주의 `Event.Action.EndAbility` 노티파이 위치가 경직 길이를 정한다). 소비자는 `ACBAIController` 로, 태그 변화를 블랙보드 bool 키로 미러링해 BT 가 경직 분기로 빠지게 한다 (→ [AI.md](AI.md) "피격 경직"). 시뮬 프록시는 이 태그를 알 필요가 없다 — 프록시가 봐야 하는 경직 연출은 피격 몽타주이고 그건 GameplayCue 로 이미 동기화된다.
 
 **`Status.Combat.SuperArmor`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 "피격에 끊기지 않아야 하는" 어빌리티 자신(스킬 BP 등)이고, 소비자는 `UCBHitReactAbility`의 `ActivationBlockedTags` 하나뿐이다 (→ [Abilities.md](Abilities.md) "슈퍼아머"). 서버와 오너 클라에서만 존재하면 충분하다 — 판정도 몽타주 스킵도 어빌리티 발동 단계에서 끝나므로 시뮬 프록시는 이 태그를 알 필요가 없다.
 

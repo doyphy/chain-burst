@@ -41,13 +41,13 @@ void UCBEventActionAbility::ActivateAbility(const FGameplayAbilitySpecHandle Han
 			NetContext, *ActorName, *GetClass()->GetName(), *TriggerTag);
 	}
 
-	// 발동 시 진행 중인 지정 액션을 캔슬 (예: 공격 중 피격 → 휘두르던 공격 중단)
-	if (CancelActionTag.IsValid())
+	// 발동 시 진행 중인 지정 어빌리티를 캔슬 (예: 공격 중 피격 → 휘두르던 공격 중단)
+	if (CancelAbilityTag.IsValid())
 	{
 		if (UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo())
 		{
 			FGameplayTagContainer CancelTags;
-			CancelTags.AddTag(CancelActionTag);
+			CancelTags.AddTag(CancelAbilityTag);
 			CBASC->CancelAbilities(&CancelTags, nullptr, this);
 		}
 	}

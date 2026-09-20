@@ -26,6 +26,13 @@ public:
 	 */
 	void SetMoveInputDirection(const FVector& InWorldDir) { CachedMoveInputDir = InWorldDir; }
 
+	/**
+	 * 컨트롤 회전(조준) 방향으로 즉시 정렬함. 액션 몽타주를 조준 방향으로 재생하기 위한 1회성 요청.
+	 * 목표·스무스 목표·액터 회전 세 값을 한꺼번에 맞춤.
+	 * 로컬 컨트롤 폰과 서버에서 호출되고, 다른 클라이언트는 TargetRotation 복제로 처리.
+	 */
+	void AlignFacingToControlRotation();
+
 protected:
 	virtual void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	

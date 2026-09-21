@@ -17,7 +17,7 @@
 2. 인덱스를 **GameplayCue 파라미터(`RawMagnitude`)** 에 실어 `GameplayCue.PlayAction` 실행.
 3. 각 클라의 `UCBGCN_PlayAction`이 태그·인덱스를 꺼내 `RequestPlayMontage(Tag, Index)` → `UCBActionComponent`가 재생.
 
-**멀티플레이 동기화:** 모든 액션 몽타주는 **GameplayCue**(`GameplayCue.PlayAction` → `UCBGCN_PlayAction`)를 경유해 전 클라 동기화. 서버가 직접 재생하지 않고 큐 파라미터에 **액션 태그 + 콤보 인덱스**를 담아 전달하면, 각 클라의 `UCBActionComponent`가 해당 인덱스의 몽타주를 재생한다. 인덱스를 큐로 전달하므로 Simulated Proxy도 서버와 동일 클립을 재생. (어빌리티가 Simulated Proxy에서 실행되지 않는 문제를 GameplayCue로 해결 — [Multiplayer.md](Multiplayer.md) 참고)
+**멀티플레이 동기화:** 모든 액션 몽타주는 **GameplayCue**(`GameplayCue.PlayAction` → `UCBGCN_PlayAction`)를 경유해 전 클라 동기화. 서버가 직접 재생하지 않고 큐 파라미터에 **액션 태그 + 콤보 인덱스**를 담아 전달하면, 각 클라의 `UCBActionComponent`가 해당 인덱스의 몽타주를 재생한다. 인덱스를 큐로 전달하므로 Simulated Proxy도 서버와 동일 클립을 재생. (어빌리티가 Simulated Proxy에서 실행되지 않는 문제를 GameplayCue로 해결 — [Multiplayer.md](../Conventions/Multiplayer.md) 참고)
 
 > **이 선택은 2026-09-02에 `PlayMontageAndWait`와 재비교해 "유지"로 재확정했다.** 원래 동기 중 하나였던 "`PlayMontageAndWait`는 몽타주 위치 동기화 때문에 끊긴다"는 전제는 더 이상 성립하지 않는다. 갱신된 유지 근거와 전환을 재검토할 트리거는 아래 **검증 기록** 절에 있다.
 
@@ -249,5 +249,5 @@ AddOrUpdateWarpTargetFromLocationAndRotation(ActionTag.GetTagName(), Parameters.
 ## 관련 문서
 - 콤보 인덱스 전진/리셋 소유: [Combat.md](Combat.md)
 - 몽타주 재생을 트리거하는 어빌리티: [Abilities.md](Abilities.md)
-- GameplayCue로 Simulated Proxy 동기화하는 이유: [Multiplayer.md](Multiplayer.md)
+- GameplayCue로 Simulated Proxy 동기화하는 이유: [Multiplayer.md](../Conventions/Multiplayer.md)
 - 몽타주 정지 후 포즈 전환(관성화), 루트모션 접근 시 캐릭터 간 밀림 규칙: [Locomotion.md](Locomotion.md)

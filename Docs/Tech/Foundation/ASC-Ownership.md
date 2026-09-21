@@ -26,7 +26,7 @@ ASC를 누가 소유하느냐에 따라 복제 모드를 다르게 설정해 복
 
 ## 로드아웃 부여분은 회수할 수 있어야 한다
 
-**플레이어의 ASC는 PlayerState 소유라 폰보다 오래 산다.** 캐릭터를 바꿔 다시 스폰하면(→ [GameFlow.md](GameFlow.md) "무기 변경 = 캐릭터 변경") 이전 로드아웃이 부여한 어빌리티·스탯 GE가 그대로 남은 채 새 로드아웃이 얹혀 **바꿀수록 쌓인다.** AI는 ASC가 캐릭터 소유라 이 문제가 없다 — 소유 구조가 만드는 수명 차이다.
+**플레이어의 ASC는 PlayerState 소유라 폰보다 오래 산다.** 캐릭터를 바꿔 다시 스폰하면(→ [GameFlow.md](../Flow/GameFlow.md) "무기 변경 = 캐릭터 변경") 이전 로드아웃이 부여한 어빌리티·스탯 GE가 그대로 남은 채 새 로드아웃이 얹혀 **바꿀수록 쌓인다.** AI는 ASC가 캐릭터 소유라 이 문제가 없다 — 소유 구조가 만드는 수명 차이다.
 
 그래서 로드아웃의 부여는 전부 **핸들을 기록하는 경로**를 지난다.
 
@@ -55,5 +55,5 @@ ASC 소유 구조가 캐릭터마다 달라서(플레이어=PlayerState, AI=Char
 - **라이브러리에 태그 Add/Remove 함수를 만들지 않는다** — 상태 태그의 소유자 단일화 규칙([GameplayTags.md](GameplayTags.md))이 깨진다.
 
 ## 관련 문서
-- 초기화 흐름(`PossessedBy` / `OnRep_PlayerState` → `InitializePlayerSystem`): [Multiplayer.md](Multiplayer.md)
+- 초기화 흐름(`PossessedBy` / `OnRep_PlayerState` → `InitializePlayerSystem`): [Multiplayer.md](../Conventions/Multiplayer.md)
 - 캐릭터가 참조하는 에셋 일괄 적용: [Loadout.md](Loadout.md)

@@ -21,7 +21,7 @@
 | `OnCharacterSystemReadyDelegate` | 준비 완료 시 방송되는 멀티캐스트 델리게이트 |
 | `HandleCharacterSystemReady()` | 공용 데이터(로드아웃) 적용 완료 시 **1회** 호출 → 상태 Ready 전환 + 델리게이트 방송 + `InitializeAttributes()`. **멱등**(중복 방송 방지) |
 
-- 방송 시점 = **로드아웃 로드 + 기본 의상 로드, 2단계가 모두 끝난 뒤**. 로드아웃 내부 에셋은 하드 참조라 1단계에서 resolve되지만, **기본 의상은 카탈로그의 소프트 메시**라 한 단계가 더 필요하다(→ [Cosmetic.md](Cosmetic.md), [AssetReference.md](AssetReference.md)).
+- 방송 시점 = **로드아웃 로드 + 기본 의상 로드, 2단계가 모두 끝난 뒤**. 로드아웃 내부 에셋은 하드 참조라 1단계에서 resolve되지만, **기본 의상은 카탈로그의 소프트 메시**라 한 단계가 더 필요하다(→ [Cosmetic.md](../Presentation/Cosmetic.md), [AssetReference.md](../Conventions/AssetReference.md)).
 
 ```
 LoadAssetAsync<Loadout>
@@ -49,7 +49,7 @@ LoadAssetAsync<Loadout>
 | 그 이상 | 초기화 파이프라인 (단계 목록 + 순차 실행) |
 
 **지금 체인을 택한 근거는 "2개라서"다.** 이 기준을 적어두지 않으면 5단계가 되어도 관성으로 체인을 이어붙이게 되고, 그때부터는 "이 경로에서도 방송을 빠뜨리지 않았나"를 사람이 매번 검사해야 한다.
-- 진입점·서버/클라 흐름 상세는 [Multiplayer.md](Multiplayer.md)의 "캐릭터 시스템 준비(Ready) 신호" 참고.
+- 진입점·서버/클라 흐름 상세는 [Multiplayer.md](../Conventions/Multiplayer.md)의 "캐릭터 시스템 준비(Ready) 신호" 참고.
 
 ## 소비 패턴 — "구독 또는 즉시" 1회성 훅
 
@@ -77,7 +77,7 @@ void UpdateX()
 **예시:**
 - `UCBCharacterAnimInstance`: `OnCharacterSystemReady()` → `InitAnimData()`에서 **ASC 준비 후** 전투 태그 이벤트를 등록. 그전까지 업데이트는 `IsSystemLocked()`로 게이트.
 - `UCBAttributeSet`: `HandleCharacterSystemReady()` → `InitializeAttributes()` → `OnCharacterSystemReady()`로 어트리뷰트 초기화.
-- `ACBChaserController`: 베이스를 못 쓰는 외부 액터 사례. 델리게이트를 직접 구독해 **캐릭터가 준비될 때까지 화면을 검게 유지**한다(의상이 늦게 붙는 것을 가림). 핸들 유효성으로 중복 구독을 막고 콜백에서 해제한다 → [GameFlow.md](GameFlow.md)
+- `ACBChaserController`: 베이스를 못 쓰는 외부 액터 사례. 델리게이트를 직접 구독해 **캐릭터가 준비될 때까지 화면을 검게 유지**한다(의상이 늦게 붙는 것을 가림). 핸들 유효성으로 중복 구독을 막고 콜백에서 해제한다 → [Lobby.md](../Flow/Lobby.md)
 
 ## 준비 완료를 BP로 중계할 때 — `UCBLocalReadySubsystem`
 
@@ -90,7 +90,7 @@ void UpdateX()
           → BP 구독자
 ```
 
-중계 지점을 컨트롤러로 둔 이유는 **거기가 로컬·로비 여부·폰 유효성을 이미 판별한 자리**이기 때문이다. 소유자를 왜 서브시스템으로 했는지, 구독자가 왜 "구독 + 즉시 확인" 두 갈래를 모두 처리해야 하는지는 → [GameFlow.md](GameFlow.md)
+중계 지점을 컨트롤러로 둔 이유는 **거기가 로컬·로비 여부·폰 유효성을 이미 판별한 자리**이기 때문이다. 소유자를 왜 서브시스템으로 했는지, 구독자가 왜 "구독 + 즉시 확인" 두 갈래를 모두 처리해야 하는지는 → [Lobby.md](../Flow/Lobby.md)
 
 ## 설계 규칙 (필수)
 
@@ -102,8 +102,8 @@ void UpdateX()
 - **멱등·1회성 유지.** 델리게이트가 여러 번 불릴 가능성에 대비해 잠금 플래그로 훅이 1회만 실행되게 한다.
 
 ## 관련 문서
-- 초기화 흐름(서버/클라 진입점, 단일 신호): [Multiplayer.md](Multiplayer.md)
+- 초기화 흐름(서버/클라 진입점, 단일 신호): [Multiplayer.md](../Conventions/Multiplayer.md)
 - ASC 소유·복제(플레이어=PlayerState, AI=Character): [ASC-Ownership.md](ASC-Ownership.md)
-- 로드아웃 비동기 로드·공용 데이터 적용: [Loadout.md](Loadout.md), [AssetReference.md](AssetReference.md)
-- 애님 인스턴스 계층·Lifecycle region: [AnimInstance.md](AnimInstance.md)
+- 로드아웃 비동기 로드·공용 데이터 적용: [Loadout.md](Loadout.md), [AssetReference.md](../Conventions/AssetReference.md)
+- 애님 인스턴스 계층·Lifecycle region: [AnimInstance.md](../Presentation/AnimInstance.md)
 - 컴포넌트 베이스(`UCBExtensionComponent`): [Components.md](Components.md)

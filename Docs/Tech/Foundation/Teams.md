@@ -69,8 +69,8 @@ const IGenericTeamAgentInterface* OtherTeamAgent = Cast<const IGenericTeamAgentI
 
 - **퍼셉션 소속 필터**: Sight·Hearing 모두 `DetectionByAffiliation`이 **적만 감지**(`bDetectEnemies`만 true). 아군·중립은 자극조차 오지 않는다.
 - **타겟 선별 seam**: `ACBAIController::IsValidTarget()` = `GetAttitude(this, InActor) == Hostile`. 퍼셉션과 같은 기준이라 두 단계가 어긋나지 않는다. `virtual`이므로 자식이 좁힐 수 있다.
-- **무기 트레이스 히트 필터**: `UCBCombatComponent::IsHostileTarget()` = `GetAttitude(GetOwner(), InActor) == Hostile`. **로컬 트레이스와 서버 검증 양쪽**에서 호출한다 — 클라가 보낸 히트를 서버가 그대로 믿지 않기 위해. 중립·팀 인터페이스 없는 액터는 피격되지 않는다. → [Combat.md](Combat.md)
-- **팀 변경 통지**: `OnTeamChangedDelegate`(서버는 `Auth_SetTeam`에서, 클라는 `OnRep_Team`에서 방송). 현재 구독자는 없고 향후 UI 색 구분용 훅. → [UI.md](UI.md)
+- **무기 트레이스 히트 필터**: `UCBCombatComponent::IsHostileTarget()` = `GetAttitude(GetOwner(), InActor) == Hostile`. **로컬 트레이스와 서버 검증 양쪽**에서 호출한다 — 클라가 보낸 히트를 서버가 그대로 믿지 않기 위해. 중립·팀 인터페이스 없는 액터는 피격되지 않는다. → [Combat.md](../Gameplay/Combat.md)
+- **팀 변경 통지**: `OnTeamChangedDelegate`(서버는 `Auth_SetTeam`에서, 클라는 `OnRep_Team`에서 방송). 현재 구독자는 없고 향후 UI 색 구분용 훅. → [UI.md](../Presentation/UI.md)
 
 ## 팀 할당 — C++ 생성자
 
@@ -93,7 +93,7 @@ const IGenericTeamAgentInterface* OtherTeamAgent = Cast<const IGenericTeamAgentI
 - **중립은 "무관심"이지 "평화주의"가 아니다.** 공격받으면 반격하는 중립이 필요해지면 solver가 아니라 별도 어그로 로직으로 다뤄야 한다.
 
 ## 관련 문서
-- 무기 트레이스 히트 판정에서의 소비: [Combat.md](Combat.md)
-- 퍼셉션·타겟 선별·BT 데이터 흐름: [AI.md](AI.md)
-- 서버 권위·`Auth_` 접두사 규칙: [Multiplayer.md](Multiplayer.md)
-- 팀 색 구분이 붙을 UI 계층: [UI.md](UI.md)
+- 무기 트레이스 히트 판정에서의 소비: [Combat.md](../Gameplay/Combat.md)
+- 퍼셉션·타겟 선별·BT 데이터 흐름: [AI.md](../Gameplay/AI.md)
+- 서버 권위·`Auth_` 접두사 규칙: [Multiplayer.md](../Conventions/Multiplayer.md)
+- 팀 색 구분이 붙을 UI 계층: [UI.md](../Presentation/UI.md)

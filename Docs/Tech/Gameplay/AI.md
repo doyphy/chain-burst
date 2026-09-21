@@ -37,7 +37,7 @@ BehaviorTree/StateTree는 **결정만** 한다. 실제 이동은 아래 스택�
 
 기본값(`false`)이면 **애님 인스턴스의 `bHasAcceleration`이 항상 false**가 되고(애님이 읽는 `GetCurrentAcceleration()`은 `Acceleration` 멤버이며, 경로 추종이 쓰는 내부 `RequestedAcceleration`과는 별개), 정지 애님 판정도 무너진다.
 
-→ 그래서 `ACBAICharacter` 생성자에서 **`NavMovementProperties.bUseAccelerationForPaths = true`** 로 켠다. 이렇게 해야 `UCBLocomotionProcessor`가 세팅하는 `MaxAcceleration`·`BrakingDecelerationWalking`이 AI에도 의미를 갖고, 출발/정지 애님 판정(`StartSpeedRatioThreshold`/`StopSpeedRatioThreshold`)이 플레이어와 동일한 전제로 동작한다. → [Locomotion.md](Locomotion.md), [AnimInstance.md](AnimInstance.md)
+→ 그래서 `ACBAICharacter` 생성자에서 **`NavMovementProperties.bUseAccelerationForPaths = true`** 로 켠다. 이렇게 해야 `UCBLocomotionProcessor`가 세팅하는 `MaxAcceleration`·`BrakingDecelerationWalking`이 AI에도 의미를 갖고, 출발/정지 애님 판정(`StartSpeedRatioThreshold`/`StopSpeedRatioThreshold`)이 플레이어와 동일한 전제로 동작한다. → [Locomotion.md](Locomotion.md), [AnimInstance.md](../Presentation/AnimInstance.md)
 
 (UE 5.5부터 `UNavMovementComponent::bUseAccelerationForPaths`는 deprecated이고 `NavMovementProperties` 구조체로 옮겨졌다)
 
@@ -58,7 +58,7 @@ ACBAIController::ACBAIController(const FObjectInitializer& ObjectInitializer)
 
 ## 두뇌 시작 게이트 (핵심)
 
-AI 두뇌는 로드아웃 비동기 로드가 끝나(어빌리티·이동 데이터 준비) **준비 완료(SystemReady) 후**에 시작해야 한다. → [SystemReady.md](SystemReady.md)
+AI 두뇌는 로드아웃 비동기 로드가 끝나(어빌리티·이동 데이터 준비) **준비 완료(SystemReady) 후**에 시작해야 한다. → [SystemReady.md](../Foundation/SystemReady.md)
 
 `ACBAIController::OnPossess()`가 이를 게이트한다:
 - 빙의한 폰을 `ACBAICharacter`로 캐싱.
@@ -66,7 +66,7 @@ AI 두뇌는 로드아웃 비동기 로드가 끝나(어빌리티·이동 데이
 - 아직이면 `OnCharacterSystemReadyDelegate`에 바인딩해 대기(핸들은 `OnUnPossess`에서 해제).
 - `StartAILogic()`은 **베이스는 비어 있는 가상 함수**. 자식이 오버라이드해 실제 두뇌(BT/StateTree)를 구동한다 — 두뇌 방식은 아직 미결정이라 훅만 열어둔 상태.
 
-**서버 권위**: AIController는 서버에만 존재하므로 `StartAILogic()` 이하 AI 결정은 자연히 서버 권위다. → [Multiplayer.md](Multiplayer.md)
+**서버 권위**: AIController는 서버에만 존재하므로 `StartAILogic()` 이하 AI 결정은 자연히 서버 권위다. → [Multiplayer.md](../Conventions/Multiplayer.md)
 
 ## 두뇌 방식 (등급별)
 
@@ -77,7 +77,7 @@ AI 두뇌는 로드아웃 비동기 로드가 끝나(어빌리티·이동 데이
 
 ## BT 데이터 흐름 (Rogue)
 
-BT 애셋은 "AI를 정의하는 에셋"이므로 로드아웃이 관리한다 (에셋 등록 원칙 → [Loadout.md](Loadout.md)). BT를 **쓰는 주체는 컨트롤러**(두뇌)이므로, 로드아웃은 BT를 **컨트롤러에 하드 참조로 주입(inject)**한다 — 캐릭터가 MontageData를 ActionComponent에 넘기는 것과 동일한 "에셋을 사용처에 주입" 패턴. 캐릭터는 자기 컨트롤러를 로드아웃 함수에 넘겨 **호출만** 한다.
+BT 애셋은 "AI를 정의하는 에셋"이므로 로드아웃이 관리한다 (에셋 등록 원칙 → [Loadout.md](../Foundation/Loadout.md)). BT를 **쓰는 주체는 컨트롤러**(두뇌)이므로, 로드아웃은 BT를 **컨트롤러에 하드 참조로 주입(inject)**한다 — 캐릭터가 MontageData를 ActionComponent에 넘기는 것과 동일한 "에셋을 사용처에 주입" 패턴. 캐릭터는 자기 컨트롤러를 로드아웃 함수에 넘겨 **호출만** 한다.
 
 ```
 UCBRogueLoadout::BehaviorTree (하드 참조)
@@ -124,7 +124,7 @@ ACBRogueController::StartAILogic()  (SystemReady 후)
 | **Sight** | 전방 부채꼴 (반각 60° = 전체 120°), 반경 1500 | **적용** (벽 뒤 못 봄) | 시야 안 + 가림 없음 + **진영이 적** |
 | **Hearing** | **전방위**, 기준 반경 1500 | 무관 | 대상이 **소음을 낼 때만** + **진영이 적** |
 
-두 감각 모두 `DetectionByAffiliation`이 적만 감지로 설정돼 있어 아군·중립은 자극조차 오지 않는다. 진영 판정 규칙은 → [Teams.md](Teams.md)
+두 감각 모두 `DetectionByAffiliation`이 적만 감지로 설정돼 있어 아군·중립은 자극조차 오지 않는다. 진영 판정 규칙은 → [Teams.md](../Foundation/Teams.md)
 
 - **시각은 순수하게 시각으로 둔다** — "근접이면 360° 시야" 같은 인위적 처리를 하지 않는다(AI가 뒤통수로 보는 셈이라 부자연스러움).
 - **등 뒤 사각지대는 청각이 보완한다.** 대신 **가만히 서 있으면 소음이 없어 감지되지 않는다** — 버그가 아니라 의도된 스텔스 규칙.
@@ -146,16 +146,16 @@ ACBRogueController::StartAILogic()  (SystemReady 후)
 | Run | 0.65 | ~975 |
 | Sprint | 1.0 | 1500 |
 
-개이트 판별은 `UCBAbilitySystemLibrary::GetCurrentGaitTag(ASC)` 재사용. → [GameplayTags.md](GameplayTags.md)
+개이트 판별은 `UCBAbilitySystemLibrary::GetCurrentGaitTag(ASC)` 재사용. → [GameplayTags.md](../Foundation/GameplayTags.md)
 
 - 퍼셉션은 **`ACBAIController`(베이스)**가 소유 (Rogue·Outlaw 공통 두뇌 기능). 생성자에서 `UAISenseConfig_Sight`·`UAISenseConfig_Hearing`을 구성 후 `OnTargetPerceptionUpdated`에 바인딩. 콜백은 감각 종류를 가리지 않으며, 감지·상실 어느 쪽이든 `UpdateTarget()` 재선정으로 합류시킨다(아래).
 - **함정 — 한 감각의 만료를 "상실"로 읽지 말 것.** 콜백은 감각을 가리지 않고 한 덩어리로 오는데, 청각 자극은 `MaxAge`(3초)가 지나면 `UAIPerceptionComponent::AgeStimuli()` 가 만료 표시 후 **자극을 다시 등록**해 `WasSuccessfullySensed() == false` 인 업데이트를 보낸다. 타겟이 멈춰 소음이 끊기면 이 만료가 반드시 오고, 실패 분기가 무조건 지우면 **눈앞에 보이는 타겟이 3초마다 None 으로 초기화**된다(움직일 땐 소음이 갱신돼 증상이 안 보임). 그래서 만료를 그 자리에서 "상실"로 처리하지 않고 재선정에 넘긴다 — 후보 수집(`GetCurrentlyPerceivedActors`)과 `IsTargetStillValid()` 의 `HasAnyCurrentStimulus(Actor)` 검사가 **다른 감각이 아직 인지 중인지**를 대신 판단한다.
   - 시야 자극은 만료되지 않는다 — `UAISense_Sight` 는 보이는 동안 매 업데이트마다 성공 자극을 재등록하므로 `MaxAge` 에 걸릴 일이 없다. 그래서 "청각 만료 + 시야 유효"가 정상 상태로 존재한다.
-- **적 판정 seam — `IsValidTarget(AActor*)`**: 이 한 함수가 "적이냐"를 격리한다. 현재는 `FGenericTeamId::GetAttitude(this, InActor) == Hostile`(진영 판정)만 본다 — 퍼셉션 소속 필터와 **같은 기준**이라 두 단계의 결론이 어긋나지 않는다. `virtual`이므로 자식이 추가 조건(생존·등급 등)으로 좁힐 수 있다. → [Teams.md](Teams.md)
+- **적 판정 seam — `IsValidTarget(AActor*)`**: 이 한 함수가 "적이냐"를 격리한다. 현재는 `FGenericTeamId::GetAttitude(this, InActor) == Hostile`(진영 판정)만 본다 — 퍼셉션 소속 필터와 **같은 기준**이라 두 단계의 결론이 어긋나지 않는다. `virtual`이므로 자식이 추가 조건(생존·등급 등)으로 좁힐 수 있다. → [Teams.md](../Foundation/Teams.md)
 - **컨트롤러는 팀을 보유하지 않는다.** `ACBAIController::GetGenericTeamId()`는 빙의한 폰의 진영을 **위임 반환**한다(`CachedAICharacter`, 없으면 `GetPawn()` 폴백). 퍼셉션 등록이 빙의보다 먼저일 수 있으므로 `OnPossess`에서 `RequestStimuliListenerUpdate()`로 소속 필터를 1회 재평가시킨다.
 - **시드**: `OnTargetPerceptionUpdated`는 상태 변화 시에만 발화하므로, BT 시작(`RunBehaviorTree`) 직후 `UpdateTarget()`을 1회 불러 이미 시야에 있던 정지 타겟을 시드한다. 별도 시드 함수를 두지 않는 이유는 "현재 인지 중인 후보에서 고른다"가 재선정과 완전히 같은 일이기 때문.
 - 블랙보드 키 이름은 `ACBAIController::TargetActorKey`(= `"TargetActor"`) 상수. **에디터 BB 키 이름과 반드시 일치.**
-- 서버 권위: 컨트롤러가 서버 전용이라 인식·판단이 전부 서버에서 돌고, 이동 결과만 CMC가 복제. → [Multiplayer.md](Multiplayer.md)
+- 서버 권위: 컨트롤러가 서버 전용이라 인식·판단이 전부 서버에서 돌고, 이동 결과만 CMC가 복제. → [Multiplayer.md](../Conventions/Multiplayer.md)
 
 ### 타겟 선정 — `ACBAIController::UpdateTarget()`
 
@@ -210,7 +210,7 @@ ScoreTarget() 의 최근 피격 가산점
 
 - **새 배관을 만들지 않고 피격 반응 이벤트를 구독한다.** 구독은 베이스 `StartAILogic()`(SystemReady 이후라 ASC 확정), 해제는 `OnUnPossess()`. **자식 컨트롤러는 `StartAILogic()` 에서 반드시 `Super` 를 호출할 것** — 안 부르면 위협 가산점만 조용히 죽는다.
 - **폰 ASC 에 거는 구독은 전부 `BindPawnASCEvents()` / `UnbindPawnASCEvents()` 한 쌍을 통한다.** ASC 조회와 캐시(`CachedPawnASC`)를 여기서만 하고, 개별 구독 함수는 넘겨받은 ASC 로 자기 핸들만 다룬다. 구독이 늘어도 이 두 함수만 고치면 되고 호출 지점(`StartAILogic`·`OnUnPossess`)은 건드리지 않는다 — 짝이 어긋나는 것을 구조적으로 막는 배치다.
-- **함정 — `Payload.Instigator` 는 폰이 아니다.** `UAbilitySystemComponent::MakeEffectContext()` 가 `AddInstigator(OwnerActor, AvatarActor)` 로 채우므로 `GetInstigator()` 는 **ASC 소유 액터**다. 플레이어는 ASC 가 PlayerState 에 있어(→ [ASC-Ownership.md](ASC-Ownership.md)) 여기로 `ACBPlayerState` 가 들어온다. 퍼셉션 후보(폰)와 그대로 비교하면 **영원히 일치하지 않으므로**, `ResolveThreatPawn()` 이 컨트롤러·PlayerState 를 폰으로 환원한다.
+- **함정 — `Payload.Instigator` 는 폰이 아니다.** `UAbilitySystemComponent::MakeEffectContext()` 가 `AddInstigator(OwnerActor, AvatarActor)` 로 채우므로 `GetInstigator()` 는 **ASC 소유 액터**다. 플레이어는 ASC 가 PlayerState 에 있어(→ [ASC-Ownership.md](../Foundation/ASC-Ownership.md)) 여기로 `ACBPlayerState` 가 들어온다. 퍼셉션 후보(폰)와 그대로 비교하면 **영원히 일치하지 않으므로**, `ResolveThreatPawn()` 이 컨트롤러·PlayerState 를 폰으로 환원한다.
 - **한계(수용)**: 이 이벤트는 GE 의 `Effect.HitReact` **옵트인**이라, 태그가 없는 지속(DoT)·환경 데미지는 위협으로 잡히지 않는다. 체력이 0 이 되는 타격도 스킵되지만 죽는 순간이라 무관. 모든 데미지를 위협으로 삼으려면 어트리뷰트셋에 별도 이벤트를 하나 더 발행해야 한다.
 - 기록만 하고 **타겟을 즉시 바꾸지는 않는다.** 피격은 점수 항목일 뿐이고 전환 여부는 잠금·문턱을 거친다. (도발은 2차에서 즉시 전환 예외로 들어올 자리)
 
@@ -342,7 +342,7 @@ bUseControllerDesiredRotation = true;
 - **복원값은 캐릭터 클래스의 CDO 에서 읽는다.** 노드가 기본값을 하드코딩해 들고 있으면 BP 에서 설정을 바꿨을 때 조용히 어긋난다.
 - `bUseStrafeRotation` 을 끄면 포커스만 걸고 회전 모드·태그는 건드리지 않는다.
 
-**③ 애님 전환** — 회전 모드와 함께 `Status.Movement.Strafe` 태그를 `TagOnly` 로 걸고 뺀다. 회전 설정은 서버에서만 바뀌므로(BT 가 서버 전용) **애님이 읽을 상태는 복제되어야** 시뮬 프록시에서도 옆걸음 모션이 나온다. 소비자는 `UCBAIAnimInstance::IsStrafing()`. → [AnimInstance.md](AnimInstance.md), [GameplayTags.md](GameplayTags.md)
+**③ 애님 전환** — 회전 모드와 함께 `Status.Movement.Strafe` 태그를 `TagOnly` 로 걸고 뺀다. 회전 설정은 서버에서만 바뀌므로(BT 가 서버 전용) **애님이 읽을 상태는 복제되어야** 시뮬 프록시에서도 옆걸음 모션이 나온다. 소비자는 `UCBAIAnimInstance::IsStrafing()`. → [AnimInstance.md](../Presentation/AnimInstance.md), [GameplayTags.md](../Foundation/GameplayTags.md)
 
 **③ 이동 속도** — 경계 중에는 걷기(`SpeedAbilityTag`, 기본 `Ability.Movement.Walk`)로 낮춘다. **속도 값을 CMC 에 직접 쓰지 않고 어빌리티를 켠다.**
 
@@ -446,7 +446,7 @@ Root
 - **[애님]** 후진 클립이 없어 경계 이동을 접선(좌/우)으로 제한하고 있다. 2D 블렌드스페이스에 후진이 들어오면 반경 제약과 `Dot` 필터를 완화할 수 있다.
 
 ## 관련 문서
-- **진영(팀) 판정 규칙·팀 데이터 소유**: [Teams.md](Teams.md)
-- 준비 완료 신호까지 초기화를 미루는 패턴: [SystemReady.md](SystemReady.md)
-- 서버 권위·초기화 흐름: [Multiplayer.md](Multiplayer.md)
-- AI 캐릭터 계층·컴포넌트: [Components.md](Components.md)
+- **진영(팀) 판정 규칙·팀 데이터 소유**: [Teams.md](../Foundation/Teams.md)
+- 준비 완료 신호까지 초기화를 미루는 패턴: [SystemReady.md](../Foundation/SystemReady.md)
+- 서버 권위·초기화 흐름: [Multiplayer.md](../Conventions/Multiplayer.md)
+- AI 캐릭터 계층·컴포넌트: [Components.md](../Foundation/Components.md)

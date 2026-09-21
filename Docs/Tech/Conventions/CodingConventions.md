@@ -63,4 +63,4 @@ bool UCBActionComponent::RequestPlayMontage(const FGameplayTag& InActionTag, int
 
 **단, 절대 규칙은 아님:** 비용을 따져 서로 엮는 게 더 효율적이거나 유지보수가 더 낫다고 판단되면 결합 구조도 채택 가능. 트레이드오프를 제시하고 정할 것.
 
-**예:** 콤보 최대치를 `CBCombatComponent`가 `ActionComponent`에서 fetch하지 말고, 오케스트레이터(어빌리티)가 몽타주 개수를 구해 `AdvanceCombo(Tag, MaxCount)`로 주입. (→ [Combat.md](Combat.md), [Montage.md](Montage.md))
+**예:** 콤보 최대치를 `CBCombatComponent`가 `ActionComponent`에서 fetch하지 말고, 오케스트레이터(어빌리티)가 몽타주 개수를 구해 `AdvanceCombo(Tag, MaxCount)`로 주입. (→ [Combat.md](../Gameplay/Combat.md), [Montage.md](../Gameplay/Montage.md))

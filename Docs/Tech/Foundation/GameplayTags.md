@@ -78,7 +78,7 @@
 
 - `Status.Combat.SuperArmor` → ②. 판정도 몽타주 스킵도 어빌리티 발동 단계에서 끝난다.
 - `Status.Combat.Staggered`(경직) → ②. 경직 연출인 피격 몽타주는 `GameplayCue.PlayAction`으로 이미 전 클라에 가고, 태그의 소비자는 서버의 BT/블랙보드뿐이다. **"프록시가 경직을 알아야 한다"처럼 보이지만, 알아야 하는 건 태그가 아니라 모션이고 그 경로는 따로 있다.**
-- `Status.Dead` → ①. 시뮬 프록시 캐릭터가 태그 콜백으로 충돌·UI를 각자 정리해야 하는데, 그 일을 대신해 줄 연출 경로가 없다 (→ [Abilities.md](Abilities.md) "사망 처리의 세 갈래").
+- `Status.Dead` → ①. 시뮬 프록시 캐릭터가 태그 콜백으로 충돌·UI를 각자 정리해야 하는데, 그 일을 대신해 줄 연출 경로가 없다 (→ [Abilities.md](../Gameplay/Abilities.md) "사망 처리의 세 갈래").
 
 > 어빌리티가 부여 주체가 아니거나(BT 서비스·컴포넌트) 어빌리티 수명과 태그 구간이 어긋나면 ②가 성립하지 않는다. 그때는 ③·④로 간다 — `Status.Movement.Strafe`는 ABP가 직접 읽어야 해 복제가 필수인데 부여 주체가 BT 서비스라 ③이다.
 
@@ -88,7 +88,7 @@
 |---|---|---|
 | `Input.*` | 식별 | InputAction과 바인딩되는 태그. `Input.Action.*`(액션 입력), `Input.UI.*`(예정) |
 | `Item.*` | 식별 | 아이템/무기 식별 (`Item.Weapon.Sword`), 의상 파츠 식별 (`Item.Cosmetic.*` — 아래 구조) |
-| ↳ `Item.Weapon.*` | 식별 | **무기 종류가 곧 캐릭터 종류**라 캐릭터 선택 키를 겸한다 (`UCBCharacterCatalog` 조회 → 스폰할 캐릭터 클래스) → [GameFlow.md](GameFlow.md) |
+| ↳ `Item.Weapon.*` | 식별 | **무기 종류가 곧 캐릭터 종류**라 캐릭터 선택 키를 겸한다 (`UCBCharacterCatalog` 조회 → 스폰할 캐릭터 클래스) → [GameFlow.md](../Flow/GameFlow.md) |
 | `Data.*` | 식별 | SetByCaller 전용 키 (Damage, Speed, AttackPower 등) |
 | `Ability.*` | 식별 | 어빌리티 식별 태그 (AssetTags) |
 | `Action.*` | 식별 | 몽타주 식별 태그 (UCBActionComponent에서 몽타주 선택) |
@@ -108,17 +108,17 @@ Status.Movement.Strafe                      ← ③ 수동 루스 태그(TagOnly
 Status.Movement.Overridden                  ← 속도 오버라이드 GE
 ```
 
-`Status.Movement.Strafe` 는 **애님이 2D 블렌드스페이스로 전환하는 기준**이다. BT(서버)에서만 갱신되므로 `TagOnly` 로 복제해야 시뮬 프록시에서도 같은 모션이 나온다. 소비자는 `UCBAIAnimInstance` (→ [AnimInstance.md](AnimInstance.md), [AI.md](AI.md)).
+`Status.Movement.Strafe` 는 **애님이 2D 블렌드스페이스로 전환하는 기준**이다. BT(서버)에서만 갱신되므로 `TagOnly` 로 복제해야 시뮬 프록시에서도 같은 모션이 나온다. 소비자는 `UCBAIAnimInstance` (→ [AnimInstance.md](../Presentation/AnimInstance.md), [AI.md](../Gameplay/AI.md)).
 
-**`Status.Dead`** — 소유자는 `GE_Dead`(무한 지속)의 GrantedTags, 복제 경로 ①. 부여 주체는 `UCBDeathAbility`이며, 이 태그를 들고 있으면 `UCBGameplayAbility::CanActivateAbility`가 사망 전용 외 모든 어빌리티를 차단한다 (→ [Abilities.md](Abilities.md)). 제거 주체는 `ACBGameplayGameMode`로, 리스폰 직전에 이 태그를 부여한 GE를 `RemoveActiveEffectsWithGrantedTags`로 지운다 (→ [GameFlow.md](GameFlow.md) "사망과 리스폰"). AI는 제거하지 않고 그대로 파괴된다.
+**`Status.Dead`** — 소유자는 `GE_Dead`(무한 지속)의 GrantedTags, 복제 경로 ①. 부여 주체는 `UCBDeathAbility`이며, 이 태그를 들고 있으면 `UCBGameplayAbility::CanActivateAbility`가 사망 전용 외 모든 어빌리티를 차단한다 (→ [Abilities.md](../Gameplay/Abilities.md)). 제거 주체는 `ACBGameplayGameMode`로, 리스폰 직전에 이 태그를 부여한 GE를 `RemoveActiveEffectsWithGrantedTags`로 지운다 (→ [GameFlow.md](../Flow/GameFlow.md) "사망과 리스폰"). AI는 제거하지 않고 그대로 파괴된다.
 
-**`Status.Combat.Staggered`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 `UCBHitReactAbility` 하나이고, **어빌리티 활성 구간이 곧 경직 구간**이다(= 피격 몽타주의 `Event.Action.EndAbility` 노티파이 위치가 경직 길이를 정한다). 소비자는 `ACBAIController` 로, 태그 변화를 블랙보드 bool 키로 미러링해 BT 가 경직 분기로 빠지게 한다 (→ [AI.md](AI.md) "피격 경직"). 시뮬 프록시는 이 태그를 알 필요가 없다 — 프록시가 봐야 하는 경직 연출은 피격 몽타주이고 그건 GameplayCue 로 이미 동기화된다.
+**`Status.Combat.Staggered`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 `UCBHitReactAbility` 하나이고, **어빌리티 활성 구간이 곧 경직 구간**이다(= 피격 몽타주의 `Event.Action.EndAbility` 노티파이 위치가 경직 길이를 정한다). 소비자는 `ACBAIController` 로, 태그 변화를 블랙보드 bool 키로 미러링해 BT 가 경직 분기로 빠지게 한다 (→ [AI.md](../Gameplay/AI.md) "피격 경직"). 시뮬 프록시는 이 태그를 알 필요가 없다 — 프록시가 봐야 하는 경직 연출은 피격 몽타주이고 그건 GameplayCue 로 이미 동기화된다.
 
-**`Status.Combat.SuperArmor`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 "피격에 끊기지 않아야 하는" 어빌리티 자신(스킬 BP 등)이고, 소비자는 `UCBHitReactAbility`의 `ActivationBlockedTags` 하나뿐이다 (→ [Abilities.md](Abilities.md) "슈퍼아머"). 서버와 오너 클라에서만 존재하면 충분하다 — 판정도 몽타주 스킵도 어빌리티 발동 단계에서 끝나므로 시뮬 프록시는 이 태그를 알 필요가 없다.
+**`Status.Combat.SuperArmor`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 "피격에 끊기지 않아야 하는" 어빌리티 자신(스킬 BP 등)이고, 소비자는 `UCBHitReactAbility`의 `ActivationBlockedTags` 하나뿐이다 (→ [Abilities.md](../Gameplay/Abilities.md) "슈퍼아머"). 서버와 오너 클라에서만 존재하면 충분하다 — 판정도 몽타주 스킵도 어빌리티 발동 단계에서 끝나므로 시뮬 프록시는 이 태그를 알 필요가 없다.
 
 `Gait` 중간 계층 덕에 `HasTag(Status.Movement.Gait)` 부모 매칭으로 "개이트 태그 보유 여부"를 한 번에 검사할 수 있다. 개이트 판별은 `UCBAbilitySystemLibrary::GetCurrentGaitTag()` 공용 헬퍼 사용 (Sprint > Walk > 기본 Run).
 
-**`Item.Cosmetic.*` 구조** — 모듈러 의상 파츠 식별 (시스템 전반은 → [Cosmetic.md](Cosmetic.md)):
+**`Item.Cosmetic.*` 구조** — 모듈러 의상 파츠 식별 (시스템 전반은 → [Cosmetic.md](../Presentation/Cosmetic.md)):
 
 ```
 Item.Cosmetic.<슬롯>.<테마><번호>      예: Item.Cosmetic.Torso.SciFi02
@@ -157,5 +157,5 @@ Item.Cosmetic.<슬롯>.<테마><번호>      예: Item.Cosmetic.Torso.SciFi02
 - 태그 픽커 필터(`meta = (Categories = "...")`)를 쓰는 프로퍼티가 있으면 경로 변경 시 함께 갱신할 것 (예: `CBGAChangeSpeed::SpeedDataTag`, `CBCharacterMovementData::MovementDataMap`).
 
 ## 관련 문서
-- 상태 태그가 많이 쓰이는 로코모션(개이트/파생 상태): [Locomotion.md](Locomotion.md)
-- 서버 권위·NetExecutionPolicy 상세: [Multiplayer.md](Multiplayer.md)
+- 상태 태그가 많이 쓰이는 로코모션(개이트/파생 상태): [Locomotion.md](../Gameplay/Locomotion.md)
+- 서버 권위·NetExecutionPolicy 상세: [Multiplayer.md](../Conventions/Multiplayer.md)

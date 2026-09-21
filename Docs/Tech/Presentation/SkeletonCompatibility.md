@@ -108,7 +108,7 @@
 
 따라서 **팔로워는 리더와 같은 체형 기준으로 제작된 것**이어야 한다. 본 이름이 100% 일치하고 부모 불일치가 0이어도 볼륨 차이는 해결되지 않는다.
 
-구현: `UCBModularMeshComponent` → [Components.md](Components.md)
+구현: `UCBModularMeshComponent` → [Components.md](../Foundation/Components.md)
 
 ---
 
@@ -152,7 +152,7 @@
 | 리타게팅 모드 | `Animation` |
 | 소켓 | `weapon_r1Socket`, 부모 본 `weapon_r1`, 트랜스폼 **아이덴티티** |
 
-소켓 이름 `weapon_r1Socket`은 `DA_WeaponSocketData`의 `Sword → CombatSocket` 및 `BP_Weapon_Chaser_Sword.CombatSocketOverride`와 맞춘 값이다. → [Combat.md](Combat.md)
+소켓 이름 `weapon_r1Socket`은 `DA_WeaponSocketData`의 `Sword → CombatSocket` 및 `BP_Weapon_Chaser_Sword.CombatSocketOverride`와 맞춘 값이다. → [Combat.md](../Gameplay/Combat.md)
 
 ---
 
@@ -219,7 +219,7 @@ MetaHuman은 손 회전차가 있고 **볼륨 차이는 리더 포즈가 보정�
 ---
 
 ## 관련 문서
-- 로드아웃에 메시·애님BP 등록: [Loadout.md](Loadout.md)
-- 무기 소켓·부착 경로: [Combat.md](Combat.md)
+- 로드아웃에 메시·애님BP 등록: [Loadout.md](../Foundation/Loadout.md)
+- 무기 소켓·부착 경로: [Combat.md](../Gameplay/Combat.md)
 - 애님 인스턴스 계층: [AnimInstance.md](AnimInstance.md)
-- 에셋 참조 방식: [AssetReference.md](AssetReference.md)
+- 에셋 참조 방식: [AssetReference.md](../Conventions/AssetReference.md)

@@ -74,11 +74,11 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 
 - **연쇄 판정 기준은 "직전 경직이 끝난 뒤 얼마나 쉬었나"다.** 재발동은 종료(`EndAbility`)와 활성화가 같은 프레임이라 언제나 연쇄로 잡히고, 경직이 풀린 뒤 `ChainBreakTime`이 지나서 맞으면 연쇄가 새로 시작된다.
 - **차단 종료 시각을 따로 들지 않고 연쇄 시작 시각 하나에서 유도한다.** `CanActivateAbility`가 const라, 별도 변수를 두면 그 안에서 상태를 써야 해(= `mutable`) 검사 함수가 부작용을 갖게 된다. 경과가 `[Max, Max + Cooldown)` 구간이면 차단으로 판정하는 계산 하나로 끝낸다.
-- **상태를 태그가 아니라 어빌리티 멤버로 둔다.** 소비자가 이 클래스 하나뿐이라 태그로 만들 이유가 없다 ("한 클래스 내부에서만 쓰는 값 → 멤버 변수" → [GameplayTags.md](GameplayTags.md)). `InstancedPerActor`라 인스턴스가 ASC당 하나이므로 발동 사이에는 값이 유지되고 개체끼리는 섞이지 않는다.
+- **상태를 태그가 아니라 어빌리티 멤버로 둔다.** 소비자가 이 클래스 하나뿐이라 태그로 만들 이유가 없다 ("한 클래스 내부에서만 쓰는 값 → 멤버 변수" → [GameplayTags.md](../Foundation/GameplayTags.md)). `InstancedPerActor`라 인스턴스가 ASC당 하나이므로 발동 사이에는 값이 유지되고 개체끼리는 섞이지 않는다.
   - 플레이어는 ASC가 PlayerState 소유라 **인스턴스가 폰 재스폰을 넘어 살아남지만**, 리스폰 시간이 `ChainBreakTime`보다 훨씬 길어 다음 피격에서 자연히 새 연쇄가 된다. 따로 회수할 것이 없다.
 - 더 정교한 규칙(누적 데미지 기반 강인도, 등급별 경직 저항)이 필요해지면 이 세 값을 어트리뷰트로 옮긴다. 지금은 BP에서 만질 수 있는 상수로 충분하다.
 
-**활성 구간 동안 경직 상태(`Status.Combat.Staggered`)를 `ActivationOwnedTags`로 소유한다.** GAS가 `PreActivate`에서 붙이고 `EndAbility`에서 떼므로 캔슬·사망 등 어떤 종료 경로에서도 태그가 남지 않는다. AI는 `ACBAIController`가 이 태그를 블랙보드로 미러링해 BT가 경직 분기로 빠진다 (→ [AI.md](AI.md) "피격 경직"). 경직 길이를 GE로 따로 떼지 않고 어빌리티 수명에 묶은 근거는 → [GameplayTags.md](GameplayTags.md) "① GE와 ② 어빌리티 자체 프로퍼티 중 무엇을 고를까".
+**활성 구간 동안 경직 상태(`Status.Combat.Staggered`)를 `ActivationOwnedTags`로 소유한다.** GAS가 `PreActivate`에서 붙이고 `EndAbility`에서 떼므로 캔슬·사망 등 어떤 종료 경로에서도 태그가 남지 않는다. AI는 `ACBAIController`가 이 태그를 블랙보드로 미러링해 BT가 경직 분기로 빠진다 (→ [AI.md](AI.md) "피격 경직"). 경직 길이를 GE로 따로 떼지 않고 어빌리티 수명에 묶은 근거는 → [GameplayTags.md](../Foundation/GameplayTags.md) "① GE와 ② 어빌리티 자체 프로퍼티 중 무엇을 고를까".
 
 #### 피격 넉백 — 밀려나는 연출
 
@@ -189,7 +189,7 @@ if (!ContainsModifier(Animation, StartTime, EndTime))   // Animation + 윈도우
 - ⚠️ **`ECC_Pawn` 만 `ECR_Ignore` 로 꺼야 한다.** 시체가 산 캐릭터·무기 트레이스를 통과하게 하되 `WorldStatic` 은 살려둬야 바닥에 닿는다. 충돌을 통째로 끄면 영원히 떨어진다.
 - 라그돌을 도입하면 이 분기는 물리가 대체한다. 그때까지의 몽타주 기반 처리다.
 
-**`GameplayCue.Death`는 ini 태그로 만든다.** C++이 이름으로 참조하지 않고 GE·노티파이 에셋만 쓰므로 네이티브로 만들 이유가 없다 (→ [GameplayTags.md](GameplayTags.md)). GE에 붙는 큐는 `OnActive`(그 순간) + `WhileActive`(나중에 관련성을 얻은 클라)를 둘 다 태우므로, 멀리 있다가 접근한 클라이언트도 시체 상태를 따라잡는다.
+**`GameplayCue.Death`는 ini 태그로 만든다.** C++이 이름으로 참조하지 않고 GE·노티파이 에셋만 쓰므로 네이티브로 만들 이유가 없다 (→ [GameplayTags.md](../Foundation/GameplayTags.md)). GE에 붙는 큐는 `OnActive`(그 순간) + `WhileActive`(나중에 관련성을 얻은 클라)를 둘 다 태우므로, 멀리 있다가 접근한 클라이언트도 시체 상태를 따라잡는다.
 
 > **큐에 게임플레이 로직을 넣지 말 것.** `UGameplayCueManager::ShouldSuppressGameplayCues()`가 데디케이트 서버에서 큐를 통째로 억제하고(`GameplayCueRunOnDedicatedServer` 기본 0), 원샷 큐(`ExecuteGameplayCue`)는 신뢰성 없는 멀티캐스트라 유실될 수 있다. 큐가 사라져도 게임플레이는 정확해야 한다.
 
@@ -230,7 +230,7 @@ AssetTag(`Ability.Combat.Death`)는 예외적으로 **C++ 생성자에서** 지�
 
 - **죽은 뒤 관련성을 얻은 클라이언트는 서 있는 시체를 본다** — 몽타주 재생 큐를 못 받기 때문. 마지막 프레임 유지 자체는 구현됨 (→ [Montage.md](Montage.md) "마지막 프레임을 유지하는 액션").
 - **공중에서 죽으면 그 자리에 멈춘다** (`DisableMovement()`). 라그돌 도입 시 함께 해소된다.
-- ~~`Status.Dead` 제거 책임(리스폰) 없음~~ → **플레이어는 해소됨.** `ACBGameplayGameMode`가 리스폰 직전에 `Status.Dead`를 부여한 GE를 제거하고 폰을 다시 스폰한다 (→ [GameFlow.md](GameFlow.md) "사망과 리스폰"). 시체가 `DespawnDelay = 0`으로 남는 것도 그 재스폰 시점에 정리된다. **AI는 여전히 부활 없이 파괴로 끝난다.**
+- ~~`Status.Dead` 제거 책임(리스폰) 없음~~ → **플레이어는 해소됨.** `ACBGameplayGameMode`가 리스폰 직전에 `Status.Dead`를 부여한 GE를 제거하고 폰을 다시 스폰한다 (→ [GameFlow.md](../Flow/GameFlow.md) "사망과 리스폰"). 시체가 `DespawnDelay = 0`으로 남는 것도 그 재스폰 시점에 정리된다. **AI는 여전히 부활 없이 파괴로 끝난다.**
 - `GameplayCue.Death` 노티파이(파티클·사운드) 미작성
 
 ## AI 공격 (`UCBAIAttackAbility`)
@@ -272,8 +272,8 @@ AssetTag(`Ability.Combat.Death`)는 예외적으로 **C++ 생성자에서** 지�
 > **문서 유지 규칙:** 이 계층도에는 **베이스/추상 클래스만** 나열하고, 구체(엣지) 어빌리티는 대표 예시 외에는 나열하지 않는다. 베이스/추상 어빌리티 클래스를 추가·변경·삭제하면 **같은 작업에서 이 문서의 계층도도 갱신**한다.
 
 ## 관련 문서
-- 어빌리티의 태그 프로퍼티(Owned/Block/Cancel/Required)를 GE로 할지 어빌리티 자체 설정으로 할지: [GameplayTags.md](GameplayTags.md) "① GE와 ② 어빌리티 자체 프로퍼티 중 무엇을 고를까"
+- 어빌리티의 태그 프로퍼티(Owned/Block/Cancel/Required)를 GE로 할지 어빌리티 자체 설정으로 할지: [GameplayTags.md](../Foundation/GameplayTags.md) "① GE와 ② 어빌리티 자체 프로퍼티 중 무엇을 고를까"
 - 로코모션 어빌리티(Walk/Sprint/Dash/Jump)의 시스템 전체 맥락: [Locomotion.md](Locomotion.md)
-- NetExecutionPolicy 상세·Simulated Proxy 처리: [Multiplayer.md](Multiplayer.md)
+- NetExecutionPolicy 상세·Simulated Proxy 처리: [Multiplayer.md](../Conventions/Multiplayer.md)
 - 몽타주 재생 흐름(인덱스 결정 → GameplayCue): [Montage.md](Montage.md)
 - 콤보 소유·전진/리셋: [Combat.md](Combat.md)

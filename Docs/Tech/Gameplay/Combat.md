@@ -35,7 +35,7 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
   - **왜 서버가 직접 훑지 않는가(= 왜 로컬 감지인가).** 몽타주 재생 위치는 머신마다 미세하게 어긋난다. 서버가 직접 트레이스하면 **레이턴시만큼 늦은 자세로 판정**해, 때린 쪽 화면에서 분명히 맞은 스윙이 빗나간다. 그래서 보이는 화면(`IsLocallyControlled`, AI는 서버가 곧 로컬)에서 판정하고 서버는 결과만 다시 잰다
   - **클라 필터만으로는 부족하다.** 트레이스는 로컬에서 돌고 결과만 RPC로 올라오므로, 조작된 클라가 아군 타겟을 실어 보낼 수 있다. 서버가 같은 기준으로 한 번 더 판정한다
   - **클라가 보내는 것은 "누구를 맞췄는가"뿐이다.** 데미지 값·계수는 전부 서버가 스펙을 만들어 적용하므로 RPC 페이로드를 조작해도 피해량은 바뀌지 않는다
-- **진영 판정 기준은 한 곳**: `FGenericTeamId::GetAttitude(공격자, 대상) == Hostile`. `ACBAIController::IsValidTarget()`·퍼셉션 소속 필터와 같은 전역 attitude solver를 탄다 → [Teams.md](Teams.md)
+- **진영 판정 기준은 한 곳**: `FGenericTeamId::GetAttitude(공격자, 대상) == Hostile`. `ACBAIController::IsValidTarget()`·퍼셉션 소속 필터와 같은 전역 attitude solver를 탄다 → [Teams.md](../Foundation/Teams.md)
   - ⚠️ **중립은 때릴 수 없다.** solver는 한쪽이라도 Neutral이면 Neutral을 반환한다. `ACBBaseCharacter`의 팀 기본값이 Neutral이므로, **팀 지정이 빠진 캐릭터는 조용히 무적이 된다**
   - ⚠️ **`IGenericTeamAgentInterface`를 구현하지 않은 액터도 걸러진다**(엔진 구현상 Neutral). 파괴 가능한 오브젝트를 무기로 때리려면 그때 별도 경로가 필요하다 — 오브젝트가 `Weapon` 채널에 응답하게 만드는 것만으로는 진영 필터에서 걸린다
 - **데미지 적용은 히트마다 타겟 하나씩.** 히트가 배칭되어 한 이벤트에 여러 피격자가 실려 오므로(`FGameplayAbilityTargetDataHandle`), 어빌리티(`UCBChaserAttackAbility`/`UCBAIAttackAbility`의 `OnAttackHit`)는 **그 회차의 HitResult 하나만 담은 핸들**을 만들어 적용한다.
@@ -104,7 +104,7 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
 - ⚠️ **`CapsuleTraceMulti`의 반환값을 쓰면 안 된다.** 이 함수는 **블로킹 히트가 있을 때만** `true`를 돌려준다(`SweepMultiByChannel`). 대상이 `Overlap`이면 적을 맞혀도 `false`가 나오고, 오버랩 결과는 `bHit`와 무관하게 `HitResults`에만 담긴다. 그래서 `TickWeaponTrace()`는 반환값을 무시하고 배열을 그대로 순회한다. (`SphereTraceMulti`에서 바꿔 왔지만 주의 내용은 그대로 유효하다 — 스윕 계열 전부가 같다)
 - ⚠️ **채널은 이름이 아니라 인덱스(`ECC_GameTraceChannelN`)로 에셋에 저장된다.** ini에서 순서를 바꾸거나 지우면 저장된 콜리전 설정이 다른 채널로 밀린다. 추가만 하고 제거·재배치는 하지 말 것.
 
-**회피 무적을 얹을 때 주의** — 콜리전 응답은 복제되지 않는데 **트레이스는 공격자 머신에서 돈다.** 회피하는 쪽이 자기 클라에서만 응답을 꺼봐야 공격자 화면에서는 그대로 맞는다. 사망과 같은 패턴으로 가야 한다: 복제되는 태그를 진입점으로 두고 **각 인스턴스가 태그 콜백에서 자기 몫의 응답을 끄고**, 권위 판정은 `Server_NotifyAttackHit()`에서 타깃의 무적 태그를 확인한다 (→ [Abilities.md](Abilities.md)의 사망 라이프사이클, [Multiplayer.md](Multiplayer.md)).
+**회피 무적을 얹을 때 주의** — 콜리전 응답은 복제되지 않는데 **트레이스는 공격자 머신에서 돈다.** 회피하는 쪽이 자기 클라에서만 응답을 꺼봐야 공격자 화면에서는 그대로 맞는다. 사망과 같은 패턴으로 가야 한다: 복제되는 태그를 진입점으로 두고 **각 인스턴스가 태그 콜백에서 자기 몫의 응답을 끄고**, 권위 판정은 `Server_NotifyAttackHit()`에서 타깃의 무적 태그를 확인한다 (→ [Abilities.md](Abilities.md)의 사망 라이프사이클, [Multiplayer.md](../Conventions/Multiplayer.md)).
 
 ## 중복 히트 방지와 히트 배칭 — 별개의 두 장치
 
@@ -156,7 +156,7 @@ ACBBaseWeapon
 - **메시 없는 일반 무기로는 대체할 수 없다.** `WeaponMesh`는 생성자에서 만들어지는 디폴트 서브오브젝트라 스태틱 메시를 비워도 포인터가 유효하다. 그래서 베이스 getter가 `if (WeaponMesh)` 분기를 타고, 소켓이 없는 빈 메시에서 `GetSocketLocation`은 **컴포넌트 자기 위치**를 돌려준다 → root == tip == 부착 지점이 되어 판정이 사라진다.
 - **오너 메시 조회 경로**: `Auth_SpawnWeapon`이 `SpawnParams.Owner`에 캐릭터를 지정하고 `AActor::Owner`는 복제되므로, 서버·클라이언트 모두 `GetOwner()` → `ACharacter::GetMesh()`로 찾을 수 있다. 매 틱 조회를 피하려고 약참조로 지연 캐싱한다.
 - **소켓은 반드시 떨어진 두 지점을 쓴다.** 트레이스는 `root→tip` 선분(`Alpha` 등분) × 프레임 이동이 만드는 면을 훑으므로, 두 지점이 같으면 등분마다 **동일한 트레이스를 중복 발사**하고 판정 면이 점으로 쪼그라든다. 발톱이면 손목/발톱 끝처럼 벌려 잡을 것.
-- **본 이름을 그대로 써도 된다.** 스켈레탈 메시의 `GetSocketLocation`·`DoesSocketExist`는 소켓뿐 아니라 본 이름도 받는다. 다만 본은 관절 위치라 발톱 끝 같은 지점은 소켓을 따로 심는 편이 정확하다 → [SkeletonCompatibility.md](SkeletonCompatibility.md)
+- **본 이름을 그대로 써도 된다.** 스켈레탈 메시의 `GetSocketLocation`·`DoesSocketExist`는 소켓뿐 아니라 본 이름도 받는다. 다만 본은 관절 위치라 발톱 끝 같은 지점은 소켓을 따로 심는 편이 정확하다 → [SkeletonCompatibility.md](../Presentation/SkeletonCompatibility.md)
 - **소켓 이름 오타는 조용히 실패한다.** 못 찾으면 캐릭터 원점이 반환되어 판정이 엉뚱한 곳에서 난다. 그래서 오너 메시를 처음 찾은 시점에 이름 존재를 1회 검증해 경고 로그를 남긴다(매 틱 로그 방지).
 - `WeaponSocketType`은 `None`(소켓 미점유)이 기본값이라 등록 시 소켓 중복 검사에서 제외된다. 데미지·공격력 GE는 일반 무기와 똑같이 `UCBWeaponData` 데이터 에셋에서 온다 — 본체 무기도 데이터 에셋이 하나 필요하다.
 - 최대 등록 수는 일반 무기와 같은 `MaxWeaponCount = 2`다(양 앞발 = 2개). 한 스윙에 같은 대상이 두 부위로 이중 히트되는 것은 기존 `AlreadyHitActors` 공유가 막는다.
@@ -164,5 +164,5 @@ ACBBaseWeapon
 ## 관련 문서
 - 콤보 인덱스를 소비하는 몽타주 재생 흐름: [Montage.md](Montage.md)
 - 콤보 전진/리셋을 호출하는 어빌리티: [Abilities.md](Abilities.md)
-- 로컬 감지 → 서버 검증 패턴: [Multiplayer.md](Multiplayer.md)
-- 진영 값·attitude solver·팀 할당 위치: [Teams.md](Teams.md)
+- 로컬 감지 → 서버 검증 패턴: [Multiplayer.md](../Conventions/Multiplayer.md)
+- 진영 값·attitude solver·팀 할당 위치: [Teams.md](../Foundation/Teams.md)

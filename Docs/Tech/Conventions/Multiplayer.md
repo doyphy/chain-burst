@@ -17,9 +17,9 @@
 `PossessedBy`(서버) / `OnRep_PlayerState`(클라이언트) → `InitializePlayerSystem()` → `Auth_InitServerData()` / `Local_InitClientData()`
 
 ### 캐릭터 시스템 준비(Ready) 신호
-> 아래는 **초기화 흐름(방송하는 쪽)** 관점이다. 이 신호를 **소비**해 의존 로직을 미루는 규칙은 [SystemReady.md](SystemReady.md) 참고.
+> 아래는 **초기화 흐름(방송하는 쪽)** 관점이다. 이 신호를 **소비**해 의존 로직을 미루는 규칙은 [SystemReady.md](../Foundation/SystemReady.md) 참고.
 
-- 캐릭터 초기화는 **공용 데이터(로드아웃) 로드 async 1개로 수렴**한다. 로드아웃 내부 에셋은 모두 하드 참조라 이 로드 하나로 전부 resolve된다. → [Loadout.md](Loadout.md)
+- 캐릭터 초기화는 **공용 데이터(로드아웃) 로드 async 1개로 수렴**한다. 로드아웃 내부 에셋은 모두 하드 참조라 이 로드 하나로 전부 resolve된다. → [Loadout.md](../Foundation/Loadout.md)
 - 그 로드 콜백에서 **`HandleCharacterSystemReady()`를 한 번 호출**해 `OnCharacterSystemReadyDelegate`를 방송한다. 별도의 배리어 카운터를 두지 않는다(단일 완료 지점).
 - 진입점은 캐릭터별로 다르지만 형태는 동일하다: `StartSystemInitialization()`(재진입 가드, `Initializing` 전환) → 공용 로드 → 콜백 끝에서 `HandleCharacterSystemReady()`.
   - **Chaser**: `InitializePlayerSystem()`(`PossessedBy`/`OnRep_PlayerState`)에서 구동. ASC는 PlayerState라 로드 전 동기 캐싱, 콜백에서 `HasAuthority()`/`IsLocallyControlled()`로 분기.
@@ -49,7 +49,7 @@
 ## ASC 복제 모드
 - GameplayEffect 복제 비용을 최소화하기 위해 **AI는 `Minimal`(기본값), 플레이어(PlayerState 소유 ASC)는 `Mixed`** 로 설정한다.
 - Attribute 값은 복제 모드와 무관하게 항상 복제되며, `Mixed`는 유효한 소유 커넥션이 필요하므로 AI에는 쓰지 않는다.
-- 세 모드 비교표·주의사항 등 상세는 [ASC-Ownership.md](ASC-Ownership.md) 참고.
+- 세 모드 비교표·주의사항 등 상세는 [ASC-Ownership.md](../Foundation/ASC-Ownership.md) 참고.
 
 ## 복제 갱신 주기 (ASC를 얹은 액터)
 
@@ -61,6 +61,6 @@
 - 전환 순간의 지연까지 없애야 하면 상태 변경 직후 `ASC->ForceReplication()`으로 다음 네트 틱에 강제 송출한다(현재는 30Hz만으로 충분해 미적용).
 
 ## 관련 문서
-- 어빌리티 베이스별 NetExecutionPolicy 기본값: [Abilities.md](Abilities.md)
-- GameplayCue로 몽타주를 동기화하는 구현: [Montage.md](Montage.md)
-- ASC 소유·초기화 진입점: [ASC-Ownership.md](ASC-Ownership.md)
+- 어빌리티 베이스별 NetExecutionPolicy 기본값: [Abilities.md](../Gameplay/Abilities.md)
+- GameplayCue로 몽타주를 동기화하는 구현: [Montage.md](../Gameplay/Montage.md)
+- ASC 소유·초기화 진입점: [ASC-Ownership.md](../Foundation/ASC-Ownership.md)

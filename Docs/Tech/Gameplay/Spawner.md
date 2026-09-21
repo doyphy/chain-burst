@@ -23,7 +23,7 @@
 
 ## 왜 폴링인가
 
-인원 집계와 전멸 감지를 **`ScanInterval` 주기 타이머 하나**로 처리한다. 트리거 오버랩 이벤트를 쓰지 않는 이유는 이 프로젝트에서 **무기 변경이 곧 폰 재스폰**이라(→ [GameFlow.md](GameFlow.md)), 폰이 갈릴 때마다 오버랩 상태를 다시 맞춰야 하기 때문이다. 매 스캔마다 `GetPlayerControllerIterator`로 현재 폰을 새로 읽으면 그 문제가 없다.
+인원 집계와 전멸 감지를 **`ScanInterval` 주기 타이머 하나**로 처리한다. 트리거 오버랩 이벤트를 쓰지 않는 이유는 이 프로젝트에서 **무기 변경이 곧 폰 재스폰**이라(→ [GameFlow.md](../Flow/GameFlow.md)), 폰이 갈릴 때마다 오버랩 상태를 다시 맞춰야 하기 때문이다. 매 스캔마다 `GetPlayerControllerIterator`로 현재 폰을 새로 읽으면 그 문제가 없다.
 
 같은 이유로 소환한 적의 `OnCharacterDiedDelegate`를 구독하지 않는다. 스캔에서 `IsDead()`와 약참조 유효성만 확인해 목록을 정리하면 되고, 전멸 감지가 최대 `ScanInterval` 늦어져도 뒤에 `RespawnDelay`가 붙으므로 체감 차이가 없다. 구독을 안 하니 **캐릭터 파괴/스포너 종료 시점의 해제 누락 버그가 아예 생기지 않는다.**
 
@@ -31,7 +31,7 @@
 
 범위 안 내비메시에서 **도달 가능한**(reachable) 지점만 뽑아 벽 너머의 끊긴 내비메시 조각에 소환되는 것을 막고, 살아있는 플레이어에게서 `MinSpawnDistanceFromPlayers` 밖인 지점만 채택한다(눈앞에 튀어나오는 것 방지). `MaxSpawnLocationTries` 안에 조건을 만족하는 자리를 못 찾으면 **그 한 마리만 건너뛴다**(웨이브 전체를 취소하지 않음).
 
-내비메시 지점은 바닥 높이라 **캡슐 절반 높이만큼 띄워서** 스폰한다. 스폰된 `ACBAICharacter`는 `AutoPossessAI = PlacedInWorldOrSpawned`라 AI 컨트롤러가 자동으로 빙의하고, 팀도 생성자에서 `ECBTeam::Outlaw`로 고정되어 있어 추가 배선이 필요 없다 (→ [AI.md](AI.md), [Teams.md](Teams.md)).
+내비메시 지점은 바닥 높이라 **캡슐 절반 높이만큼 띄워서** 스폰한다. 스폰된 `ACBAICharacter`는 `AutoPossessAI = PlacedInWorldOrSpawned`라 AI 컨트롤러가 자동으로 빙의하고, 팀도 생성자에서 `ECBTeam::Outlaw`로 고정되어 있어 추가 배선이 필요 없다 (→ [AI.md](AI.md), [Teams.md](../Foundation/Teams.md)).
 
 ## 파라미터
 
@@ -47,7 +47,7 @@
 
 ## 네트워크
 
-`BeginPlay`에서 `HasAuthority()`가 아니면 즉시 반환한다. 클라이언트는 스캔도 소환도 하지 않고 복제된 적만 받는다. 스포너 자신은 복제할 상태가 없어 복제하지 않는다 (→ [Multiplayer.md](Multiplayer.md)).
+`BeginPlay`에서 `HasAuthority()`가 아니면 즉시 반환한다. 클라이언트는 스캔도 소환도 하지 않고 복제된 적만 받는다. 스포너 자신은 복제할 상태가 없어 복제하지 않는다 (→ [Multiplayer.md](../Conventions/Multiplayer.md)).
 
 ## 미구현 (후속)
 

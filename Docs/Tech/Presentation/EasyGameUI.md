@@ -36,7 +36,7 @@
 
 ## 채택 범위
 
-**모든 기능을 쓰지 않는다.** ChainBurst는 리슨 서버·서버 권위 멀티플레이(→ [Multiplayer.md](Multiplayer.md))라 싱글플레이 전제 기능과 충돌한다.
+**모든 기능을 쓰지 않는다.** ChainBurst는 리슨 서버·서버 권위 멀티플레이(→ [Multiplayer.md](../Conventions/Multiplayer.md))라 싱글플레이 전제 기능과 충돌한다.
 
 | 기능 | 채택 | 비고 |
 |---|---|---|
@@ -149,9 +149,9 @@
 
 → 옵션 메뉴 위에 확인 모달이 떴다가 모달만 닫혀도, 옵션 메뉴가 남아 있는 한 게임 입력은 돌아오지 않는다. 의도된 동작이다.
 
-**그래서 맵을 넘기 전에는 IMC를 걷어낸 위젯을 반드시 빼야 한다.** 복구가 스택 변화에 붙어 있는데, HUD는 맵과 함께 통째로 파괴되므로 **재계산 없이 사라지면 복구가 영영 실행되지 않는다.** 정작 IMC를 들고 있는 `EnhancedInputLocalPlayerSubsystem`은 `ULocalPlayer` 소속이라 travel을 넘어 살아남아, **새 레벨에서 입력이 죽은 채로 시작한다.** 로비 → 게임플레이 이동에서 실제로 겪은 증상이며, 해법(이동 직전 방송)은 → [GameFlow.md](GameFlow.md)
+**그래서 맵을 넘기 전에는 IMC를 걷어낸 위젯을 반드시 빼야 한다.** 복구가 스택 변화에 붙어 있는데, HUD는 맵과 함께 통째로 파괴되므로 **재계산 없이 사라지면 복구가 영영 실행되지 않는다.** 정작 IMC를 들고 있는 `EnhancedInputLocalPlayerSubsystem`은 `ULocalPlayer` 소속이라 travel을 넘어 살아남아, **새 레벨에서 입력이 죽은 채로 시작한다.** 로비 → 게임플레이 이동에서 실제로 겪은 증상이며, 해법(이동 직전 방송)은 → [Lobby.md](../Flow/Lobby.md)
 
-**나가기(로비 → 메인 메뉴)도 같은 대상이다.** 맵 전환인 것은 똑같으므로 위젯을 먼저 빼야 한다. 다만 서버가 전원을 이동시키는 게임 시작과 달리 **누른 사람 혼자의 로컬 동작**이라, 신호를 방송할 것 없이 위젯이 스스로 `Remove This Widget` 한 뒤 이동을 호출한다 → [GameFlow.md](GameFlow.md)
+**나가기(로비 → 메인 메뉴)도 같은 대상이다.** 맵 전환인 것은 똑같으므로 위젯을 먼저 빼야 한다. 다만 서버가 전원을 이동시키는 게임 시작과 달리 **누른 사람 혼자의 로컬 동작**이라, 신호를 방송할 것 없이 위젯이 스스로 `Remove This Widget` 한 뒤 이동을 호출한다 → [Session.md](../Flow/Session.md)
 
 **IMC 제거가 게임 입력을 막는 *유일한* 수단이다.** `E_InputModes`에는 `Game Only` / `Game and UI` 둘뿐이고 언리얼 기본에 있는 **`UI Only`가 없다.** 메뉴를 띄울 때 입력 모드로 게임 입력을 통째로 막는 게 아니라, `Game and UI`를 유지한 채 게임플레이 IMC만 걷어내는 방식이다(내비게이션 IMC는 살려둬야 하므로). 따라서 **Global Config에 등록하지 않은 IMC는 메뉴가 떠도 그대로 살아있다** — 아래 필수 등록 체크리스트의 근본 이유다.
 
@@ -170,7 +170,7 @@
 
 복구는 이 값과 무관하게 **제거 직전에 실제로 적용돼 있던 IMC를 되돌린다.** 팩 툴팁이 *"기본으로 추가되지 않을 IMC도 등록하라(boolean = False로)"* 고 안내하는 것과 일치한다 — 복구가 `True` 항목만 되돌린다면 `False` 항목은 메뉴를 처음 여는 순간 영구히 사라질 것이기 때문이다.
 
-**우리 설정은 `False`다.** `IMC_Default`의 추가 주체는 로드아웃(`UCBInputManagerComponent::RegisterMappingContexts`) 하나로 유지한다 → [Input.md](Input.md). `True`로 두면 추가 주체가 팩과 로드아웃 둘로 갈리고, 팩 쪽이 더 일러서 **캐릭터 준비 전에 입력이 살아난다.**
+**우리 설정은 `False`다.** `IMC_Default`의 추가 주체는 로드아웃(`UCBInputManagerComponent::RegisterMappingContexts`) 하나로 유지한다 → [Input.md](../Gameplay/Input.md). `True`로 두면 추가 주체가 팩과 로드아웃 둘로 갈리고, 팩 쪽이 더 일러서 **캐릭터 준비 전에 입력이 살아난다.**
 
 **절대 규칙**:
 - **`AddToViewport` / `Remove From Parent` 금지.** `Insert Widget Instance in Stack` / `Remove Widget Instance from Stack`을 쓴다. 스택 밖의 위젯은 메뉴가 떠도 가려지지 않고 포커스 관리에서도 빠진다.
@@ -204,7 +204,7 @@
 | **로비 (`WBP_CB_Lobby_Main`, `Menu`)** | ✅ | ✅ | ❌ | ✅ |
 | 확인창·경고 (`Modals`) | ✅ | ✅ | ❌ (뒤 메뉴가 보여야 함) | ✅ |
 
-> 로비의 `Should Remove Gameplay IMCs`는 **지금은 아무 효과가 없다** — 로비에서는 게임플레이 IMC를 애초에 붙이지 않으므로 걷어낼 것이 없다(→ [GameFlow.md](GameFlow.md)). 그래도 `Menu` 레이어 규약대로 켜 둔다. 로비에 조작이 생기거나 이 위젯이 다른 레벨에서 뜨는 순간 값이 맞아 있어야 한다.
+> 로비의 `Should Remove Gameplay IMCs`는 **지금은 아무 효과가 없다** — 로비에서는 게임플레이 IMC를 애초에 붙이지 않으므로 걷어낼 것이 없다(→ [Lobby.md](../Flow/Lobby.md)). 그래도 `Menu` 레이어 규약대로 켜 둔다. 로비에 조작이 생기거나 이 위젯이 다른 레벨에서 뜨는 순간 값이 맞아 있어야 한다.
 
 `Global Occluder`의 **정석 용례는 `Loading` 레이어**다 — 열거형 툴팁부터가 "아래 전부를 숨기는 로딩/전환 화면용"으로 정의되어 있다. 반대로 모달에 켜면 배경 메뉴가 사라져 "무엇에 대한 확인인지" 맥락을 잃으므로 끈다.
 
@@ -252,14 +252,14 @@ Function ...:CreateWidgetFromDefinition
 |---|---|---|
 | **HUD가 없는 컨트롤러** | HUD는 **로컬 플레이어의 컨트롤러에만** 존재한다. 서버가 원격 클라이언트의 PC로 `GetHUD()`를 부르면 None이고 **영원히 안 생긴다** | 로컬 여부를 먼저 판별. `UCBUIComponent`의 `IsPlayerControlled() && IsLocallyControlled()` 병행 검사가 그 선례 |
 | **맵 전환 직후** | HUD는 **맵마다 파괴·재생성**된다. 새 맵 로드 시점에 스폰된 액터는 다시 "레벨 시작" 상황이라 위 경합이 되살아난다 | 레벨 시작 케이스로 취급 |
-| **데이터 미준비** | HUD는 멀쩡한데 넣을 값(ASC·로드아웃)이 아직 없을 수 있다. **HUD 타이밍과 별개 문제다** | [SystemReady.md](SystemReady.md)의 준비 완료 훅. 두 문제를 섞지 말 것 |
+| **데이터 미준비** | HUD는 멀쩡한데 넣을 값(ASC·로드아웃)이 아직 없을 수 있다. **HUD 타이밍과 별개 문제다** | [SystemReady.md](../Foundation/SystemReady.md)의 준비 완료 훅. 두 문제를 섞지 말 것 |
 
 **우리 코드의 원칙 — 틱을 세지 말고 순서대로 확인한다**:
 
 1. **로컬인지 확인** — 아니면 애초에 띄우지 않는다 (원격/AI 분기)
 2. **`Get HUD` 유효성 확인** — None이면 경고 로그 남기고 건너뛴다
 3. **삽입 결과를 검사** — 반환된 위젯 인스턴스를 `IsValid`로 확인. 팩 자신도 이렇게 하고 실패 시 에러를 찍는다. **검사를 빼면 "조용히 아무 일도 안 일어남"이 된다**
-4. 그래도 타이밍이 통제되지 않으면 → 틱이 아니라 **`ACBHUD`의 준비 신호**를 기다린다 (캐릭터 쪽 [SystemReady.md](SystemReady.md)와 같은 해법. 필요해지는 시점에 도입)
+4. 그래도 타이밍이 통제되지 않으면 → 틱이 아니라 **`ACBHUD`의 준비 신호**를 기다린다 (캐릭터 쪽 [SystemReady.md](../Foundation/SystemReady.md)와 같은 해법. 필요해지는 시점에 도입)
 
 **프레임 수는 답이 아니다.** 상황마다 달라지고, 맞아도 우연히 맞는 것이다.
 
@@ -314,7 +314,7 @@ PlayerController → Get HUD → (BPI_EGUI_HUDInterface 메시지) Add Widget of
 
 | 대상 | 등록 위치 | 근거 |
 |---|---|---|
-| **캐릭터 종속 UI** — 체력바, 추후 쿨타임·버프 | **로드아웃** (→ [Loadout.md](Loadout.md)) | 캐릭터마다 달라야 한다 |
+| **캐릭터 종속 UI** — 체력바, 추후 쿨타임·버프 | **로드아웃** (→ [Loadout.md](../Foundation/Loadout.md)) | 캐릭터마다 달라야 한다 |
 | **게임 전체 시스템 UI** — 메인메뉴·일시정지·옵션·로딩 | **Global Config** | 캐릭터와 무관하다 |
 
 > Global Config는 **"어떤 클래스를 쓸지"의 등록소**일 뿐 띄우는 주체가 아니다. 실제 스택 삽입은 언제나 `BPI_EGUI_HUDInterface` 호출로 일어난다.
@@ -333,7 +333,7 @@ PlayerController → Get HUD → (BPI_EGUI_HUDInterface 메시지) Add Widget of
 |---|---|
 | **`BP_EGUI_GlobalConfigSelector` → `Global Config Data Asset` = `DA_CB_GlobalConfig`** | **우리 Config를 아무도 안 읽고 데모 설정으로 조용히 동작한다.** 팩 전체가 `BPFL_EGUI_EasyFunctionUtilities` → 이 Selector → Config 순으로 읽으므로 **Config 접근의 유일한 진입점**이다 |
 | **Project Settings → Enhanced Input → Enable User Settings = True** | 실행 시 `Critical Error: The project setting 'Enable User Settings' is not True` |
-| Global Config → **`Gameplay Input Mapping Contexts`** | **메뉴를 열어도 캐릭터가 계속 움직인다.** IMC 제거가 게임 입력을 막는 유일한 수단이므로(`UI Only` 모드 없음), 로드아웃이 적용하는 IMC를 **전부** 등록해야 한다(기본으로 안 켜는 것 포함) → [Input.md](Input.md) |
+| Global Config → **`Gameplay Input Mapping Contexts`** | **메뉴를 열어도 캐릭터가 계속 움직인다.** IMC 제거가 게임 입력을 막는 유일한 수단이므로(`UI Only` 모드 없음), 로드아웃이 적용하는 IMC를 **전부** 등록해야 한다(기본으로 안 켜는 것 포함) → [Input.md](../Gameplay/Input.md) |
 | **`Menu` 레이어 위젯의 `Should Remove Gameplay IMCs = true`** | 위와 **증상이 똑같다.** 등록만 해두고 위젯이 선언하지 않으면 아무도 걷어내라고 하지 않는다. `WBP_EasyMasterWidget`의 기본 구현은 false이므로 **`Get Widget Desired Occlusion Rules`를 오버라이드**해야 한다. 입력 모드를 정하는 `Get Widget Desired Input Config`와 혼동하기 쉬운데, IMC 제거는 **오클루전 함수 소관**이다 |
 | Global Config → `Settings List` | 옵션 메뉴에 설정이 하나도 안 나옴 |
 | Global Config → `Main Menu Level` / `New Game Level` | 메뉴 복귀·게임 시작이 동작 안 함 |
@@ -392,7 +392,7 @@ PlayerController → Get HUD → (BPI_EGUI_HUDInterface 메시지) Add Widget of
 
 - `Gameplay Input Mapping Contexts`에 `IMC_Default` 등록 (`Add Mapping Context on Game Load?` = **False**)
 - 위젯의 `Should Remove Gameplay IMCs = true` 선언 → 메뉴 표시 중 캐릭터 정지, 닫으면 복구 확인
-- **게임플레이 IMC 분할은 하지 않는다.** 지금은 `IMC_Default` 하나뿐이다. `IMC_Movement`/`IMC_Combat` 같은 분할은 **부분 차단**(예: 기절 시 공격만 금지) 요구가 실제로 생길 때 검토한다 — 나누는 만큼 등록 누락 위험이 늘어난다 → [Input.md](Input.md)
+- **게임플레이 IMC 분할은 하지 않는다.** 지금은 `IMC_Default` 하나뿐이다. `IMC_Movement`/`IMC_Combat` 같은 분할은 **부분 차단**(예: 기절 시 공격만 금지) 요구가 실제로 생길 때 검토한다 — 나누는 만큼 등록 누락 위험이 늘어난다 → [Input.md](../Gameplay/Input.md)
 
 **UI 전용 IMC는 등록 대상이 아니다.** 로비 작업에서 `IMC_CB_UI`(+ `IA_CB_Ready` / `IA_CB_Leave`)가 생겼는데, 이것을 `Gameplay Input Mapping Contexts`에 넣으면 안 된다. 그 목록은 **"메뉴가 뜨면 걷어내도 좋다"는 권한 부여**이므로, UI 조작용 IMC를 넣으면 메뉴가 뜨는 순간 자기 자신이 걷혀 나간다. 등록하는 것은 **게임플레이 IMC뿐**이다.
 
@@ -439,11 +439,11 @@ IntroScreenClosed
 | ② | **`Possess`는 서버 권위 함수**다. 이 폰은 `BeginPlay`에서 `Possess(self)`를 호출한다 — 클라이언트에서는 무효고 이어지는 카메라 세팅도 어긋난다 |
 | ③ | **`GetPlayerController(0)`은 "로컬 0번"**이지 "그 플레이어"가 아니다. 서버에서는 호스트 자신을 반환하며, 원격 플레이어의 PC로는 HUD를 얻을 수 없다 |
 
-게임플레이 레벨의 정석은 → 위 "런타임에 띄울 때" + [UI.md](UI.md)의 "UI는 로컬 전용" 원칙. 로컬 전용 로직에는 `Local_` 접두사를 붙인다(→ [Multiplayer.md](Multiplayer.md)).
+게임플레이 레벨의 정석은 → 위 "런타임에 띄울 때" + [UI.md](UI.md)의 "UI는 로컬 전용" 원칙. 로컬 전용 로직에는 `Local_` 접두사를 붙인다(→ [Multiplayer.md](../Conventions/Multiplayer.md)).
 
 #### 호스트/참가 버튼
 
-버튼 흐름을 확장할 지점은 이 폰(또는 `WBP_CB_MainMenu`)이 맞다. 다만 **접속 로직 자체를 폰이나 위젯이 들고 있으면 안 된다** — 메뉴 레벨을 떠나는 순간 함께 사라져 접속 실패 콜백을 받을 주체가 없어진다. 맵을 넘어 살아야 하므로 **`UCBSessionSubsystem`**(게임 인스턴스 서브시스템)이 그 자리이며, 위젯은 호출만 한다 → [GameFlow.md](GameFlow.md)
+버튼 흐름을 확장할 지점은 이 폰(또는 `WBP_CB_MainMenu`)이 맞다. 다만 **접속 로직 자체를 폰이나 위젯이 들고 있으면 안 된다** — 메뉴 레벨을 떠나는 순간 함께 사라져 접속 실패 콜백을 받을 주체가 없어진다. 맵을 넘어 살아야 하므로 **`UCBSessionSubsystem`**(게임 인스턴스 서브시스템)이 그 자리이며, 위젯은 호출만 한다 → [Session.md](../Flow/Session.md)
 
 | 버튼 | 배선 |
 |---|---|
@@ -471,6 +471,6 @@ IntroScreenClosed
 ## 관련 문서
 
 - 캐릭터 부착 UI: [UI.md](UI.md)
-- 서버 권위·로컬 UI 원칙: [Multiplayer.md](Multiplayer.md)
-- IMC·InputConfig: [Input.md](Input.md)
-- 에셋 등록 원칙: [Loadout.md](Loadout.md)
+- 서버 권위·로컬 UI 원칙: [Multiplayer.md](../Conventions/Multiplayer.md)
+- IMC·InputConfig: [Input.md](../Gameplay/Input.md)
+- 에셋 등록 원칙: [Loadout.md](../Foundation/Loadout.md)

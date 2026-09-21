@@ -22,7 +22,7 @@
      - **필요하다 → HUD 스택에 올리고 위치만 투영으로 계산** (아래 레시피)
 2. (화면이라면) **캐릭터에서만 얻을 수 있는 데이터(ASC·로드아웃 위젯 클래스)가 필요한가?** → 그렇다면 `UCBUIComponent`가 생성
 
-**"월드를 따라다니니까 `UWidgetComponent`"로 곧장 가면 안 된다.** 그 경로는 **스택 밖**이라 오클루전·포커스·게임플레이 IMC 제거가 전부 적용되지 않는다(아래 "주의"). 보기만 하는 체력바에는 문제가 없지만, **버튼이 달린 위젯은 그 자체가 메뉴**이므로 스택 안에 있어야 한다. 로비의 머리 위 메뉴가 이 경우다 → [GameFlow.md](GameFlow.md)
+**"월드를 따라다니니까 `UWidgetComponent`"로 곧장 가면 안 된다.** 그 경로는 **스택 밖**이라 오클루전·포커스·게임플레이 IMC 제거가 전부 적용되지 않는다(아래 "주의"). 보기만 하는 체력바에는 문제가 없지만, **버튼이 달린 위젯은 그 자체가 메뉴**이므로 스택 안에 있어야 한다. 로비의 머리 위 메뉴가 이 경우다 → [Lobby.md](../Flow/Lobby.md)
 
 **원칙 세 줄**
 
@@ -65,9 +65,9 @@
 
 ## 왜 네트워크 코드가 필요 없나
 
-- `CurrentHealth`/`MaxHealth`는 AttributeSet의 복제 프로퍼티라 **복제 모드(Minimal/Mixed)와 무관하게 전 클라에 항상 복제**된다(→ [ASC-Ownership.md](ASC-Ownership.md)). Minimal인 AI의 체력도 정상 표시된다.
+- `CurrentHealth`/`MaxHealth`는 AttributeSet의 복제 프로퍼티라 **복제 모드(Minimal/Mixed)와 무관하게 전 클라에 항상 복제**된다(→ [ASC-Ownership.md](../Foundation/ASC-Ownership.md)). Minimal인 AI의 체력도 정상 표시된다.
 - 각 클라이언트의 위젯은 `ASC->GetGameplayAttributeValueChangeDelegate()`에 구독만 하면 되고, 복제 값이 도착하면 클라이언트에서도 이 델리게이트가 발화한다.
-- [Multiplayer.md](Multiplayer.md)의 "UI 띄우기 = 로컬 전용" 원칙 그대로, 서버는 UI에 관여하지 않는다.
+- [Multiplayer.md](../Conventions/Multiplayer.md)의 "UI 띄우기 = 로컬 전용" 원칙 그대로, 서버는 UI에 관여하지 않는다.
 
 ## 구성 요소
 
@@ -84,7 +84,7 @@
 
 ## 생성 흐름 (준비 완료 후)
 
-`UCBUIComponent::OnCharacterSystemReady()`에서 분기 — 준비 전에는 ASC/위젯 클래스가 미완성일 수 있으므로 반드시 준비 신호를 기다린다(→ [SystemReady.md](SystemReady.md)):
+`UCBUIComponent::OnCharacterSystemReady()`에서 분기 — 준비 전에는 ASC/위젯 클래스가 미완성일 수 있으므로 반드시 준비 신호를 기다린다(→ [SystemReady.md](../Foundation/SystemReady.md)):
 
 - **로비 게이트**: `GetWorld()->GetGameState<ACBLobbyGameState>()`가 유효하면(= 지금 로비) HUD·머리 위 바 대신 **발밑 이름표만 만들고 리턴**한다(아래 "로비 발밑 이름표"). 로비도 무기 선택 때 폰을 재스폰하므로 로드아웃→준비 완료 경로를 그대로 타지만, 로비 화면은 `WBP_CB_Lobby_*` 전용 위젯이 담당한다. WBP에서 숨기지 않고 여기서 막는 이유: 머리 위 바(순수 C++ 경로)까지 한 곳에서 커버되고, 위젯 인스턴스·ASC 바인딩·스택 삽입이 아예 일어나지 않는다. `ACBLobbyGameState`는 로비 전용 클래스라 존재만으로 신호가 되고, 클라에 폰보다 먼저 복제된다.
 - **로컬 조작 플레이어** (`IsPlayerControlled() && IsLocallyControlled()`): HUD 위젯 생성 → **`ACBHUD`를 통해 HUD 스택의 `Game` 레이어에 삽입**. AI는 서버에서 `IsLocallyControlled()`가 참이므로 `IsPlayerControlled()` 병행 검사가 필수.
@@ -107,7 +107,7 @@
 |---|---|---|
 | 숨김 → 표시 | **오너의 `CurrentHealth` 감소 + 거리 안** | `UCBUIComponent`가 오너 ASC의 어트리뷰트 변경 델리게이트를 구독. `NewValue < OldValue`이고 `IsWithinOverheadBarDistance()`가 참일 때만 표시 |
 | 표시 → 숨김 | **유지 시간 만료** | `OverheadBarShowDuration`(기본 5초) 원샷 타이머. 표시 중에 다시 맞으면 `SetTimer`가 덮어써 시간이 리셋된다 |
-| 표시 → 숨김 | **오너 사망** | `ACBBaseCharacter::OnCharacterDiedDelegate` 구독 → 피격 구독을 끊고 즉시 숨김. 사망 자체는 복제되는 `Status.Dead`가 알려주므로 시뮬 프록시 화면에서도 시체 위에 바가 남지 않는다 (→ [Abilities.md](Abilities.md)) |
+| 표시 → 숨김 | **오너 사망** | `ACBBaseCharacter::OnCharacterDiedDelegate` 구독 → 피격 구독을 끊고 즉시 숨김. 사망 자체는 복제되는 `Status.Dead`가 알려주므로 시뮬 프록시 화면에서도 시체 위에 바가 남지 않는다 (→ [Abilities.md](../Gameplay/Abilities.md)) |
 | 표시 → 숨김 | **거리 이탈** | `OverheadBarDistanceCheckInterval`(기본 0.2초) 반복 타이머가 같은 거리 판정을 돌려 벗어나면 숨김 |
 
 거리 기준은 `OverheadBarVisibleDistance`(기본 2000cm) 하나를 **표시 게이트와 숨김 검사가 공유**한다. 설정값은 전부 `UCBUIComponent`의 `EditDefaultsOnly`라 캐릭터 BP별로 조정한다. **`bHideOverheadBarUntilDamaged`를 끄면** 종전처럼 생성 직후부터 항상 표시된다(보스 등 예외용 + 롤백 스위치).
@@ -195,7 +195,7 @@ NewObject → SetWidgetSpace / SetDrawAtDesiredSize
 
 **거리 컬링은 머리 위 바와 정책이 다르다.** 바는 "평소 숨김 → 피격 시 일정 시간 표시"라 표시 중일 때만 거리 타이머를 돌리지만, 이름표는 "항상 표시 → 거리로만 숨김"이라 살아 있는 동안 계속 돈다. 그래서 타이머는 각자 두고, **거리 판정 함수만 공유**한다(`IsWithinDistanceFromLocalViewer(기준 거리)`).
 
-**팀 필터는 넣지 않았다.** 지금은 플레이어끼리 모두 같은 편(추격자)이라 "전원 표시"와 "아군만 표시"가 같은 결과다. PvP가 생기면 `ECBTeam` 조건을 생성 단계에 추가한다 (→ [Teams.md](Teams.md)).
+**팀 필터는 넣지 않았다.** 지금은 플레이어끼리 모두 같은 편(추격자)이라 "전원 표시"와 "아군만 표시"가 같은 결과다. PvP가 생기면 `ECBTeam` 조건을 생성 단계에 추가한다 (→ [Teams.md](../Foundation/Teams.md)).
 
 ### 자기 이름표 판정 — 복제 '참조'가 아니라 폰의 넷 롤로 한다
 
@@ -211,7 +211,7 @@ NewObject → SetWidgetSpace / SetDrawAtDesiredSize
 
 특히 `PC->PlayerState`는 접속 순서상 **PlayerState 액터보다 PC 채널이 먼저 열려** 참조가 unmapped 상태로 보류됐다가 `UNetDriver::UpdateUnmappedObjects()`가 나중에 채운다. 반면 폰은 나중에 스폰돼 그 시점엔 PlayerState 액터가 이미 있으니 즉시 해석된다 — 그래서 **폰 쪽이 먼저 완성되는** 역전이 생긴다.
 
-**`OnCharacterSystemReady`는 이 문제를 해결해 주지 않는다.** 그 신호는 "이 폰의 로드아웃 비동기 로드가 끝났다"는 뜻일 뿐이고, 시작점이 폰의 PlayerState 도착이라 **에셋이 캐시돼 있으면 그 직후 1~2프레임 만에** 떨어진다. 네트워크 전반의 도착 상태와는 무관하다 (→ [SystemReady.md](SystemReady.md)).
+**`OnCharacterSystemReady`는 이 문제를 해결해 주지 않는다.** 그 신호는 "이 폰의 로드아웃 비동기 로드가 끝났다"는 뜻일 뿐이고, 시작점이 폰의 PlayerState 도착이라 **에셋이 캐시돼 있으면 그 직후 1~2프레임 만에** 떨어진다. 네트워크 전반의 도착 상태와는 무관하다 (→ [SystemReady.md](../Foundation/SystemReady.md)).
 
 그래서 판정은 **UI 컴포넌트가 자기 오너 캐릭터를 보고** 내려서 위젯에 주입한다. 컴포넌트가 쥔 캐릭터 포인터는 복제를 거치지 않는 로컬 참조다.
 
@@ -233,7 +233,7 @@ NamePlateWidget->InitializeWithPlayerState(OwnerPlayerState, bIsLocalTarget);
 
 ### PlayerState 하나면 이름과 체력이 다 나온다
 
-Chaser는 **ASC를 PlayerState가 소유**하므로(→ [ASC-Ownership.md](ASC-Ownership.md)) 남의 폰을 찾을 필요가 없다.
+Chaser는 **ASC를 PlayerState가 소유**하므로(→ [ASC-Ownership.md](../Foundation/ASC-Ownership.md)) 남의 폰을 찾을 필요가 없다.
 
 ```
 GameState->PlayerArray  →  각 ACBPlayerState
@@ -298,7 +298,7 @@ HUD 스킬 아이콘 위에 검은 오버레이가 12시부터 시계방향으�
 
 `Progress`는 0(방금 시전) → 1(완료). 겹친 쿨다운 GE가 있으면 **가장 늦게 끝나는 것**을 채택한다.
 
-**왜 매 틱 재조회인가** — 시작 시점에 EndTime을 캐싱해 로컬 보간하면 더 싸지만, **쿨타임 감소 적용이나 쿨다운 GE 갱신(재시전)은 태그 카운트를 바꾸지 않아** 이벤트가 오지 않고 눈금이 조용히 어긋난다. 활성 GE 배열 순회일 뿐이라 슬롯 몇 개로는 비용이 문제되지 않는다. 같은 이유로 **전체 지속시간도 하드코딩하지 않고** `GetActiveEffectsTimeRemainingAndDuration`이 돌려주는 쌍에서 함께 받는다(→ [GrowthSystemDesign.md](../GrowthSystemDesign.md)).
+**왜 매 틱 재조회인가** — 시작 시점에 EndTime을 캐싱해 로컬 보간하면 더 싸지만, **쿨타임 감소 적용이나 쿨다운 GE 갱신(재시전)은 태그 카운트를 바꾸지 않아** 이벤트가 오지 않고 눈금이 조용히 어긋난다. 활성 GE 배열 순회일 뿐이라 슬롯 몇 개로는 비용이 문제되지 않는다. 같은 이유로 **전체 지속시간도 하드코딩하지 않고** `GetActiveEffectsTimeRemainingAndDuration`이 돌려주는 쌍에서 함께 받는다(→ [GrowthSystemDesign.md](../../GrowthSystemDesign.md)).
 
 **왜 복제 걱정이 없나** — Chaser의 ASC는 PlayerState에서 `Mixed`라 자기 쿨다운 GE가 소유 클라이언트에 완전 복제되고, 로컬 예측 어빌리티는 커밋 순간 클라에서 바로 태그가 붙는다. 태그는 붙었는데 GE가 아직 도착하지 않은 프레임을 대비해 조회 실패 시 그 프레임 갱신만 건너뛴다.
 
@@ -322,7 +322,7 @@ HUD 스킬 아이콘 위에 검은 오버레이가 12시부터 시계방향으�
 
 ## 위젯 클래스 등록 — 로드아웃
 
-위젯 클래스도 에셋이므로 로드아웃 원칙(→ [Loadout.md](Loadout.md))대로 로드아웃에 등록하고, 컴포넌트 멤버는 런타임 캐시(세터 주입)다. 주입은 모두 Ready 방송 **전**에 실행되므로 준비 완료 훅 시점엔 클래스가 확정돼 있다.
+위젯 클래스도 에셋이므로 로드아웃 원칙(→ [Loadout.md](../Foundation/Loadout.md))대로 로드아웃에 등록하고, 컴포넌트 멤버는 런타임 캐시(세터 주입)다. 주입은 모두 Ready 방송 **전**에 실행되므로 준비 완료 훅 시점엔 클래스가 확정돼 있다.
 
 | 필드 | 위치 | 주입 경로 |
 |---|---|---|
@@ -339,7 +339,7 @@ HUD 스킬 아이콘 위에 검은 오버레이가 12시부터 시계방향으�
 
 - **HUD 체력바 WBP에 `BPI_EGUI_UINavigationInterface` 구현** — 3개 선언 함수를 전부 `false`로. 미구현이어도 인터페이스 메시지 호출은 기본값(`false`)을 반환하므로 **현재 동작에 문제는 없다.** 의도를 명시하는 용도이며 위젯 개편 시 함께 처리 (→ [EasyGameUI.md](EasyGameUI.md))
 - 가림(오클루전) 처리, 데미지 숫자, HUD 확장(버프 표시)
-- 플레이어 목록의 팀 필터 — 팀이 갈리는 매치가 되면 `ECBTeam`으로 아군만 추리는 조건이 필요하다 (→ [Teams.md](Teams.md))
+- 플레이어 목록의 팀 필터 — 팀이 갈리는 매치가 되면 `ECBTeam`으로 아군만 추리는 조건이 필요하다 (→ [Teams.md](../Foundation/Teams.md))
 - 스킬 슬롯 아이콘의 로드아웃 등록 — 현재는 WBP에서 직접 지정. 캐릭터·무기별로 아이콘이 갈리는 시점에 `UCBChaserLoadout`으로 옮길 것
 - 스킬 슬롯의 자원 부족·사용 불가 표시 (쿨다운과 신호가 다름)
 - 데미지 0(빗맞음·완전 방어) 시에도 머리 위 바 표시 (피격 GameplayCue 구독이 필요)
@@ -347,7 +347,7 @@ HUD 스킬 아이콘 위에 검은 오버레이가 12시부터 시계방향으�
 ## 관련 문서
 
 - 시스템 UI(메인메뉴·일시정지·옵션) 프레임워크: [EasyGameUI.md](EasyGameUI.md)
-- 어트리뷰트 복제·ASC 소유: [ASC-Ownership.md](ASC-Ownership.md)
-- 준비 완료까지 초기화 지연: [SystemReady.md](SystemReady.md)
-- 위젯 클래스 등록(로드아웃): [Loadout.md](Loadout.md)
-- 컴포넌트 역할 요약: [Components.md](Components.md)
+- 어트리뷰트 복제·ASC 소유: [ASC-Ownership.md](../Foundation/ASC-Ownership.md)
+- 준비 완료까지 초기화 지연: [SystemReady.md](../Foundation/SystemReady.md)
+- 위젯 클래스 등록(로드아웃): [Loadout.md](../Foundation/Loadout.md)
+- 컴포넌트 역할 요약: [Components.md](../Foundation/Components.md)

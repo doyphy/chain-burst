@@ -6,7 +6,7 @@
 
 | 담당 | 역할 |
 |---|---|
-| `UCBCharacterAnimInstance` | 판정 데이터 제공 (5축 — [AnimInstance.md](AnimInstance.md)) : 이동 방향, 이동 상태(출발/정지 판정), 개이트(+스냅샷), 전투 모드, 공중 상태 |
+| `UCBCharacterAnimInstance` | 판정 데이터 제공 (5축 — [AnimInstance.md](../Presentation/AnimInstance.md)) : 이동 방향, 이동 상태(출발/정지 판정), 개이트(+스냅샷), 전투 모드, 공중 상태 |
 | `UCBLocomotionProcessor` | 매 Tick CMC 가속·감속 적용 (개이트 태그 판별 + 대시 전용 감속) |
 | `UCBCharacterRotationComponent` | 캐릭터 회전 (Walk/Run=aim-facing, Sprint=orient-to-movement) |
 | `UCBInputManagerComponent` | 이동 입력 적용 + **피벗 감지·입력 잠금** |
@@ -15,13 +15,13 @@
 
 ## 개이트 (Walk / Run / Sprint)
 
-- 개이트 = **ASC의 `Status.Movement.Gait.*` 태그** — 항상 정확히 1개 유지. Walk/Sprint(의도)는 `GA_Walk`/`GA_Sprint`가 홀드 동안 GE로 태그+속도(SetByCaller)를 부여하고 릴리즈 시 제거(`UCBGAChangeSpeed`), Run은 `UCBLocomotionProcessor`가 "Walk/Sprint 태그 둘 다 없음"에서 파생해 명시 부여(태그 이벤트 기반). 태그 분류·복제 규칙은 [GameplayTags.md](GameplayTags.md) 참고.
+- 개이트 = **ASC의 `Status.Movement.Gait.*` 태그** — 항상 정확히 1개 유지. Walk/Sprint(의도)는 `GA_Walk`/`GA_Sprint`가 홀드 동안 GE로 태그+속도(SetByCaller)를 부여하고 릴리즈 시 제거(`UCBGAChangeSpeed`), Run은 `UCBLocomotionProcessor`가 "Walk/Sprint 태그 둘 다 없음"에서 파생해 명시 부여(태그 이벤트 기반). 태그 분류·복제 규칙은 [GameplayTags.md](../Foundation/GameplayTags.md) 참고.
 - 판별 우선순위 Sprint > Walk > 기본 Run — **`UCBAbilitySystemLibrary::GetCurrentGaitTag()`** 공용 헬퍼 사용 (AnimInstance·RotationComponent·InputManager·`GetGaitMontageIndex()` 공유, 중복 구현 금지).
 - 개이트별 몽타주 변형을 가진 액션(무기 장착/해제 등)은 **`UCBAbilitySystemLibrary::GetGaitMontageIndex()`** 로 재생 인덱스 결정 — Idle=0, Walk=1, Run/Sprint=2 (순수 태그 조회 — Idle은 아래 파생 상태 태그, [Montage.md](Montage.md) 참고).
 
 ## 파생 상태 태그 미러링 (Idle / InAir / Gait.Run)
 
-어빌리티가 진입점이 될 수 없는 물리 파생 상태는 **`UCBLocomotionProcessor`가 단일 소유자**로서 각 머신에서 비복제 루스 태그를 로컬 부여/제거한다 (CMC가 복제되므로 서버/오너/프록시가 각자 같은 결론 — [GameplayTags.md](GameplayTags.md) 규칙 ④).
+어빌리티가 진입점이 될 수 없는 물리 파생 상태는 **`UCBLocomotionProcessor`가 단일 소유자**로서 각 머신에서 비복제 루스 태그를 로컬 부여/제거한다 (CMC가 복제되므로 서버/오너/프록시가 각자 같은 결론 — [GameplayTags.md](../Foundation/GameplayTags.md) 규칙 ④).
 
 | 태그 | 갱신 방식 | 판정 |
 |---|---|---|
@@ -127,7 +127,7 @@
 
 - **`OnRep_TargetRotation`은 루트모션 중이면 즉시 `SetActorRotation`까지 한다.** 그 상황에서는 틱이 회전 갱신을 통째로 건너뛰므로(아래 절) 보간에 맡기면 값이 영원히 반영되지 않는다. 조준 정렬처럼 몽타주 시작과 같은 타이밍에 도착하는 값을 위한 경로다.
 
-- **`Unreliable`인 이유**: 회전은 매 틱 갱신되는 **연속 상태**라 최신 값만 맞으면 되고, 놓친 값은 다음 갱신이 덮는다. Reliable로 보내면 매 틱 순서·재전송 보장 비용만 늘어난다. (이산 이벤트 — 어빌리티 활성화·이벤트 RPC 등 — 은 반대로 Reliable이어야 한다, [Multiplayer.md](Multiplayer.md))
+- **`Unreliable`인 이유**: 회전은 매 틱 갱신되는 **연속 상태**라 최신 값만 맞으면 되고, 놓친 값은 다음 갱신이 덮는다. Reliable로 보내면 매 틱 순서·재전송 보장 비용만 늘어난다. (이산 이벤트 — 어빌리티 활성화·이벤트 RPC 등 — 은 반대로 Reliable이어야 한다, [Multiplayer.md](../Conventions/Multiplayer.md))
 - **결과가 아니라 목표를 보내는 이유**: 보간을 각 머신이 자기 프레임률로 수행하므로 지연·프레임률이 달라도 같은 값으로 수렴하고, 전송량도 목표 갱신 시에만 발생한다.
 - 보간 속도는 개이트 태그로 `FCBGaitMovementData`에서 조회하고, 데이터가 없으면 컴포넌트의 `RotationInterpSpeed` 폴백을 쓴다 (`UCBLocomotionProcessor`가 가속·감속을 조회하는 구조와 동일).
 - 루트모션 재생 중에는 ①~④ 전체를 스킵한다 (아래 절) — 목표 전송도 함께 멈춘다.
@@ -195,10 +195,10 @@ Velocity += GetImpartedMovementBaseVelocity();   // 베이스(= 돌진 중인 �
 ⚠️ **부작용**: 어떤 캐릭터도 다른 캐릭터 위에 설 수 없다. "적을 밟고 점프" 같은 기믹이 필요해지면 해당 캐릭터만 예외를 둬야 한다.
 
 ## 관련 문서
-- 애님 데이터 5축·스레딩·계층: [AnimInstance.md](AnimInstance.md)
+- 애님 데이터 5축·스레딩·계층: [AnimInstance.md](../Presentation/AnimInstance.md)
 - 루트모션 접근을 만드는 모션 워핑: [Montage.md](Montage.md)
 - 어빌리티 계층·Sprint 종속 체인·AssetTags 규칙: [Abilities.md](Abilities.md)
-- 컴포넌트 역할 (LocomotionProcessor / RotationComponent / InputManager): [Components.md](Components.md)
-- 개이트별 이동 데이터 주입 (로드아웃): [Loadout.md](Loadout.md)
+- 컴포넌트 역할 (LocomotionProcessor / RotationComponent / InputManager): [Components.md](../Foundation/Components.md)
+- 개이트별 이동 데이터 주입 (로드아웃): [Loadout.md](../Foundation/Loadout.md)
 - 몽타주(대시) 재생·동기화: [Montage.md](Montage.md)
-- 서버 권위·복제 원칙: [Multiplayer.md](Multiplayer.md)
+- 서버 권위·복제 원칙: [Multiplayer.md](../Conventions/Multiplayer.md)

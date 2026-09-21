@@ -3,7 +3,7 @@
 > 캐릭터의 의상 파츠를 부위별로 교체하는 시스템. 로비에서 고른 조합이 게임플레이 레벨까지 이어진다.
 > 클래스 6개를 가로지르므로 **의상 관련 작업은 이 문서를 먼저 읽는다.**
 >
-> 모듈러 메시의 조립 원리(리더/팔로워·리더 포즈)는 [Components.md](Components.md), 캐릭터 에셋 등록 원칙은 [Loadout.md](Loadout.md).
+> 모듈러 메시의 조립 원리(리더/팔로워·리더 포즈)는 [Components.md](../Foundation/Components.md), 캐릭터 에셋 등록 원칙은 [Loadout.md](../Foundation/Loadout.md).
 
 ## 구성 요소
 
@@ -79,7 +79,7 @@ UCBChaserLoadout::DefaultCosmeticIds : TMap<ECBCosmeticSlot, FGameplayTag>
 
 > `Item.Cosmetic.None`은 카탈로그에 없는 것이 정상이므로 **프리로드 단계에서 경고 없이 건너뛴다.** 이 예외가 없으면 정상 설정에서도 "카탈로그에서 찾지 못함" 경고가 뜬다.
 
-파츠 태그는 데이터로 늘어나므로 **ini 등록**이고, 코드가 이름으로 비교하는 `None`만 네이티브다 → [GameplayTags.md](GameplayTags.md)
+파츠 태그는 데이터로 늘어나므로 **ini 등록**이고, 코드가 이름으로 비교하는 `None`만 네이티브다 → [GameplayTags.md](../Foundation/GameplayTags.md)
 
 ## 하드/소프트 참조 경계
 
@@ -96,7 +96,7 @@ UCBChaserLoadout::DefaultCosmeticIds : TMap<ECBCosmeticSlot, FGameplayTag>
 
 ### 기본 의상도 소프트지만 준비 완료가 그 로드를 기다린다
 
-기본 의상이 카탈로그에서 오므로 소프트다. 그런데 **"옷 없이 한 번 나타나는" 문제는 생기지 않는다** — 준비 완료 신호가 그 로드까지 기다리고, 화면은 준비 완료까지 검게 덮여 있기 때문이다 → [GameFlow.md](GameFlow.md)
+기본 의상이 카탈로그에서 오므로 소프트다. 그런데 **"옷 없이 한 번 나타나는" 문제는 생기지 않는다** — 준비 완료 신호가 그 로드까지 기다리고, 화면은 준비 완료까지 검게 덮여 있기 때문이다 → [Lobby.md](../Flow/Lobby.md)
 
 ```
 로드아웃 async 로드
@@ -107,7 +107,7 @@ UCBChaserLoadout::DefaultCosmeticIds : TMap<ECBCosmeticSlot, FGameplayTag>
 
 **예전에는 기본 의상을 로드아웃의 하드 메시로 두어 이 문제를 피했다.** 그 방식은 파츠의 출처가 둘로 갈리는 대가가 있었고, 페이드가 준비 완료까지 화면을 덮게 되면서 하드로 묶을 이유가 사라졌다.
 
-`SystemReady`의 "async 1개"가 **2단계**가 된 것이 이 변경의 대가다 → [SystemReady.md](SystemReady.md)
+`SystemReady`의 "async 1개"가 **2단계**가 된 것이 이 변경의 대가다 → [SystemReady.md](../Foundation/SystemReady.md)
 
 교체 파츠는 첫 착용 시 로드 시간만큼 반영이 늦다. 두 번째부터는 메모리에 남아 즉시 적용된다.
 
@@ -122,11 +122,11 @@ UI 클릭
   → UCBModularMeshComponent::RequestCosmeticPart      (각 인스턴스가 로컬로 조립)
 ```
 
-**메시나 컴포넌트를 복제하지 않는다.** 복제되는 건 가벼운 태그 배열뿐이고, 조립은 서버·각 클라이언트가 각자 로컬로 수행한다. 덕분에 `UCBModularMeshComponent`에는 복제 코드가 없다 — 체력바가 어트리뷰트 복제만으로 동작하는 것과 같은 구조다 → [Multiplayer.md](Multiplayer.md)
+**메시나 컴포넌트를 복제하지 않는다.** 복제되는 건 가벼운 태그 배열뿐이고, 조립은 서버·각 클라이언트가 각자 로컬로 수행한다. 덕분에 `UCBModularMeshComponent`에는 복제 코드가 없다 — 체력바가 어트리뷰트 복제만으로 동작하는 것과 같은 구조다 → [Multiplayer.md](../Conventions/Multiplayer.md)
 
 - **서버는 `OnRep`이 불리지 않으므로** `Auth_SetCosmeticPart`가 직접 `OnRep_Cosmetics()`를 호출해 호스트 화면에도 반영한다.
 - **검증은 폰의 컴포넌트를 거친다.** 카탈로그를 밖으로 노출하지 않고 `IsValidCosmeticPart`가 판정만 제공한다. `Item.Cosmetic.None`은 카탈로그와 무관하게 항상 통과한다(어느 부위든 벗을 수 있다).
-- **맵을 넘는 이관**은 `ACBPlayerState::CopyProperties`가 담당한다. seamless travel이 꺼져 있거나 이 함수를 빠뜨리면 로비 선택이 조용히 사라진다 → [GameFlow.md](GameFlow.md)
+- **맵을 넘는 이관**은 `ACBPlayerState::CopyProperties`가 담당한다. seamless travel이 꺼져 있거나 이 함수를 빠뜨리면 로비 선택이 조용히 사라진다 → [GameFlow.md](../Flow/GameFlow.md)
 
 ### 적용 타이밍 — 진입점 셋, 관문 둘
 
@@ -142,7 +142,7 @@ PlayerState 복제 도착과 Pawn 생성은 순서가 보장되지 않는다. �
 
 `APlayerState::OnPawnSet`은 엔진이 제공하므로 **캐릭터에는 코드를 넣지 않는다.** 캐릭터가 PlayerState를 몰라도 된다.
 
-**`BeginPlay`의 즉시 1회 시도가 seamless travel을 살린다.** 맵을 넘으면 새 PlayerState가 만들어지는데, **폰이 붙은 뒤에 그 `BeginPlay`가 실행**되는 경우가 있다. 구독만 해두면 방송은 이미 끝난 뒤라 영영 적용되지 않는다 — 로비에서 고른 의상이 게임플레이 레벨에서 기본 의상으로 돌아가는 형태로 나타났고, **`RequestCosmeticPart`가 한 번도 불리지 않아 경고 한 줄 없이** 조용히 실패했다. [SystemReady.md](SystemReady.md)의 "구독 또는 즉시"와 같은 해법이다.
+**`BeginPlay`의 즉시 1회 시도가 seamless travel을 살린다.** 맵을 넘으면 새 PlayerState가 만들어지는데, **폰이 붙은 뒤에 그 `BeginPlay`가 실행**되는 경우가 있다. 구독만 해두면 방송은 이미 끝난 뒤라 영영 적용되지 않는다 — 로비에서 고른 의상이 게임플레이 레벨에서 기본 의상으로 돌아가는 형태로 나타났고, **`RequestCosmeticPart`가 한 번도 불리지 않아 경고 한 줄 없이** 조용히 실패했다. [SystemReady.md](../Foundation/SystemReady.md)의 "구독 또는 즉시"와 같은 해법이다.
 
 **준비 완료를 기다리는 이유는 덮어쓰기 때문이다.** 로드아웃의 기본 의상(`ApplyDefaultCosmetics`)은 준비 완료 **직전**에 적용된다. 그보다 먼저 조합을 넣으면 기본 의상이 그 위를 덮는다. 그래서 관문이 "폰이 있는가"만으로는 부족하고 "준비가 끝났는가"까지 봐야 한다.
 
@@ -184,7 +184,7 @@ PlayerState 복제 도착과 Pawn 생성은 순서가 보장되지 않는다. �
 
 ## 로비에서
 
-로비는 **실제 `ACBChaserCharacter`를 스폰**한다. 프리뷰 전용 액터를 만들지 않는 이유와 대신 처리할 것(입력 차단·카메라)은 → [GameFlow.md](GameFlow.md)
+로비는 **실제 `ACBChaserCharacter`를 스폰**한다. 프리뷰 전용 액터를 만들지 않는 이유와 대신 처리할 것(입력 차단·카메라)은 → [Lobby.md](../Flow/Lobby.md)
 
 **UI는 부위별 화살표 순회 방식이다.** 목록을 늘어놓지 않고 이전/다음 버튼으로 파츠를 넘긴다.
 
@@ -218,7 +218,7 @@ PlayerState 복제 도착과 Pawn 생성은 순서가 보장되지 않는다. �
 
 1. 카탈로그 에셋(`UCBCosmeticCatalog`)의 **`PartsBySlot`에서 부위를 고르고** 그 목록에 항목 추가
 2. `PartId`는 태그 픽커의 **Add New Gameplay Tag**로 그 자리에서 생성 (Source = `DefaultGameplayTags.ini`)
-3. 명명 규칙 `Item.Cosmetic.<슬롯>.<테마><번호>` → [GameplayTags.md](GameplayTags.md)
+3. 명명 규칙 `Item.Cosmetic.<슬롯>.<테마><번호>` → [GameplayTags.md](../Foundation/GameplayTags.md)
 4. 로드아웃의 `CosmeticCatalog`에 연결
 5. **기본 의상은 로드아웃의 `DefaultCosmeticIds`에 파츠 태그로 지정** — 그 파츠가 카탈로그에 먼저 등록돼 있어야 한다
 
@@ -233,8 +233,8 @@ PlayerState 복제 도착과 Pawn 생성은 순서가 보장되지 않는다. �
 - PlayerState 복제, 서버 검증, `CopyProperties` 이관, 벗기 태그
 - PIE 2인 검증 (양쪽 화면 반영 확인)
 
-- 로비 레벨·GameMode BP·고정 카메라 → [GameFlow.md](GameFlow.md)
-- **선택 UI** (`WBP_CB_CosmeticSelector`, `Menu` 레이어) — 화살표 순회 → `Server_RequestCosmeticPart`. 위젯 구성은 → [GameFlow.md](GameFlow.md)
+- 로비 레벨·GameMode BP·고정 카메라 → [Lobby.md](../Flow/Lobby.md)
+- **선택 UI** (`WBP_CB_CosmeticSelector`, `Menu` 레이어) — 화살표 순회 → `Server_RequestCosmeticPart`. 위젯 구성은 → [Lobby.md](../Flow/Lobby.md)
 - **로비 교체 2인 검증** — 서버·클라 양쪽 화면에 반영 확인
 
 **미구현**
@@ -247,9 +247,10 @@ PlayerState 복제 도착과 Pawn 생성은 순서가 보장되지 않는다. �
 
 ## 관련 문서
 
-- 모듈러 메시 조립 원리(리더/팔로워): [Components.md](Components.md)
-- 로드아웃이 담는 필드와 주입 경로: [Loadout.md](Loadout.md)
-- 태그 네임스페이스·등록 경로: [GameplayTags.md](GameplayTags.md)
-- 하드/소프트 참조 판단: [AssetReference.md](AssetReference.md)
-- 복제 원칙·서버 권위: [Multiplayer.md](Multiplayer.md)
-- 로비·맵 전환·PlayerState 이관: [GameFlow.md](GameFlow.md)
+- 모듈러 메시 조립 원리(리더/팔로워): [Components.md](../Foundation/Components.md)
+- 로드아웃이 담는 필드와 주입 경로: [Loadout.md](../Foundation/Loadout.md)
+- 태그 네임스페이스·등록 경로: [GameplayTags.md](../Foundation/GameplayTags.md)
+- 하드/소프트 참조 판단: [AssetReference.md](../Conventions/AssetReference.md)
+- 복제 원칙·서버 권위: [Multiplayer.md](../Conventions/Multiplayer.md)
+- 맵 전환·PlayerState 이관: [GameFlow.md](../Flow/GameFlow.md)
+- 로비 스폰·선택 UI·카메라: [Lobby.md](../Flow/Lobby.md)

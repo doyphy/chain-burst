@@ -59,14 +59,14 @@ EnhancedInput 기반이며, 모든 입력은 **입력 태그(`Input.*`)에 바�
 | `UCBInputConfig::MappingContexts` (로드아웃) | **추가 주체.** 언제 켤지 (`AllowGameplayInput()` 이후) |
 | Global Config `Gameplay Input Mapping Contexts` | **제거 권한.** UI가 걷어낼 수 있게 등록 (`Add Mapping Context on Game Load?` = False) |
 
-**등록을 빠뜨리면 에러 없이 메뉴 중에도 캐릭터가 움직인다.** 반대로 **메뉴가 떠도 살아 있어야 하는 IMC는 일부러 등록하지 않는다** — 상황별 조작(로비 프리뷰 회전 등)을 넣게 되면 이 경로를 쓴다. 상세는 → [EasyGameUI.md](EasyGameUI.md)
+**등록을 빠뜨리면 에러 없이 메뉴 중에도 캐릭터가 움직인다.** 반대로 **메뉴가 떠도 살아 있어야 하는 IMC는 일부러 등록하지 않는다** — 상황별 조작(로비 프리뷰 회전 등)을 넣게 되면 이 경로를 쓴다. 상세는 → [EasyGameUI.md](../Presentation/EasyGameUI.md)
 
 **이 경로는 게임플레이 레벨 안에서만 의미가 있다.** 로비는 IMC를 애초에 등록하지 않으므로(위 절) 일시정지·옵션 메뉴가 IMC를 걷어내는 것과는 별개 문제다.
 
 `FCBMappingContextEntry`의 주석대로 **캐릭터 조작에 본질적인 IMC만 `UCBInputConfig`에 둔다.** 상황·전역 컨텍스트는 그 상황과 가장 밀접한 클래스(위젯 등)가 소유한다.
 
 ## 관련 문서
-- 로드아웃의 `InputConfig` 주입(`Local_ApplyToCharacter`): [Loadout.md](Loadout.md)
-- UI가 IMC를 걷어내는 규칙·등록 체크리스트: [EasyGameUI.md](EasyGameUI.md)
+- 로드아웃의 `InputConfig` 주입(`Local_ApplyToCharacter`): [Loadout.md](../Foundation/Loadout.md)
+- UI가 IMC를 걷어내는 규칙·등록 체크리스트: [EasyGameUI.md](../Presentation/EasyGameUI.md)
 - 입력으로 발동되는 어빌리티 베이스(`UCBInputActionAbility`): [Abilities.md](Abilities.md)
-- `Input.*` 태그 네임스페이스: [GameplayTags.md](GameplayTags.md)
+- `Input.*` 태그 네임스페이스: [GameplayTags.md](../Foundation/GameplayTags.md)

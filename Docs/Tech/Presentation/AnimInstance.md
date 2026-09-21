@@ -54,7 +54,7 @@ UAnimInstance
 
 ### 폰보다 오래 사는 발행자의 델리게이트는 반드시 해제한다
 
-애님 인스턴스는 폰과 함께 사라지지만 **플레이어 ASC는 PlayerState 소유라 폰 재스폰을 넘어 살아남는다.** 그런데 이 프로젝트는 **무기 변경 = 캐릭터 변경 = 폰 재스폰**이다([GameFlow.md](GameFlow.md)).
+애님 인스턴스는 폰과 함께 사라지지만 **플레이어 ASC는 PlayerState 소유라 폰 재스폰을 넘어 살아남는다.** 그런데 이 프로젝트는 **무기 변경 = 캐릭터 변경 = 폰 재스폰**이다([GameFlow.md](../Flow/GameFlow.md)).
 
 해제하지 않으면 무기를 바꿀 때마다 파괴된 캐릭터의 애님 인스턴스가 ASC에 구독자로 남아 **GC 전까지 계속 콜백을 받는다**(로그에 `Actor=None`인 콜백이 찍히는 것으로 발견). 콜백이 불값 하나만 세우는 동안은 증상이 없지만, 부수효과가 생기는 순간 버그가 된다.
 
@@ -73,7 +73,7 @@ UAnimInstance
 - **폰 교체** — 리스폰·무기 변경으로 새 폰이 스폰되는데 ASC(PlayerState 소유)에는 `Status.Combat.InCombat`이 그대로 남아 있으면, 새 애님은 비전투 모션으로 시작해 ASC 상태와 어긋난다
 - **뒤늦은 관련성** — 이미 스트레이프 중인 AI에 나중에 관련성을 얻은 클라이언트는 `Status.Movement.Strafe` 변경을 놓쳐 주시하지 않는 모션으로 재생한다
 
-그래서 `UCBCharacterAnimInstance::InitAnimData`(`bIsCombatMode`)와 `UCBAIAnimInstance::OnCharacterSystemReady`(`bIsStrafing`) 모두 **등록 직후 `HasMatchingGameplayTag()`로 현재 상태를 한 번 반영**한다. `ACBBaseCharacter::BindDeathStateEvent`가 같은 이유로 쓰는 패턴이다(→ [Abilities.md](Abilities.md)).
+그래서 `UCBCharacterAnimInstance::InitAnimData`(`bIsCombatMode`)와 `UCBAIAnimInstance::OnCharacterSystemReady`(`bIsStrafing`) 모두 **등록 직후 `HasMatchingGameplayTag()`로 현재 상태를 한 번 반영**한다. `ACBBaseCharacter::BindDeathStateEvent`가 같은 이유로 쓰는 패턴이다(→ [Abilities.md](../Gameplay/Abilities.md)).
 
 ## Character가 상태 머신에 제공하는 데이터 (4축)
 
@@ -87,7 +87,7 @@ UAnimInstance
 | **④ 전투 모드** | `bIsCombatMode` | 이벤트 — `Status.Combat.InCombat` 콜백 | 전투/비전투 포즈 전환 |
 | **⑤ 공중 상태** | `IsInAir()` (CMC `IsFalling` 캐싱), `GetVerticalVelocity()` (＋상승/－하강) | Update | 지상↔공중 전이, 점프↔낙하 블렌드, 착지 판별 |
 
-> ②·③·⑤축을 소비하는 **상태 머신 배선(지상/공중 전이 표), 출발/정지 판정식, 개이트 스냅샷, 피벗, 관성화 정책** 등 로코모션 기능 상세는 [Locomotion.md](Locomotion.md)로 분리했다. 이 문서는 데이터 계산·계층·스레딩까지만 다룬다.
+> ②·③·⑤축을 소비하는 **상태 머신 배선(지상/공중 전이 표), 출발/정지 판정식, 개이트 스냅샷, 피벗, 관성화 정책** 등 로코모션 기능 상세는 [Locomotion.md](../Gameplay/Locomotion.md)로 분리했다. 이 문서는 데이터 계산·계층·스레딩까지만 다룬다.
 
 **전투/비전투 전환 구현 (④):** 링크드 레이어가 아니라 **애님그래프 분기**로 처리한다.
 - 전투용·비전투용 상태머신을 각각 별도로 두고 캐시(캐시드 포즈)한다.
@@ -116,7 +116,7 @@ UAnimInstance
 - 트래젝토리 캐싱, 미래 속도 예측(`GetTrajectoryVelocity`), 예측 기반 `IsStarting`/`IsPivoting`, 개이트 속도 임계값
 - `UCBCharacterTrajectoryComponent`(삭제), `MotionTrajectory`/`PoseSearch` 모듈·플러그인 의존성 제거
 
-상태 전이 판단에는 남은 데이터(`IsMoving`/`IsStopping`/`IsStarting`, `GetSpeedRatio`, `MoveX`/`MoveY`, 개이트, 전투 모드, 공중 상태)를 사용한다 — 판정식·전이 표는 [Locomotion.md](Locomotion.md).
+상태 전이 판단에는 남은 데이터(`IsMoving`/`IsStopping`/`IsStarting`, `GetSpeedRatio`, `MoveX`/`MoveY`, 개이트, 전투 모드, 공중 상태)를 사용한다 — 판정식·전이 표는 [Locomotion.md](../Gameplay/Locomotion.md).
 
 ## 문서 유지 규칙
 
@@ -124,8 +124,8 @@ UAnimInstance
 - 애님 인스턴스 클래스를 추가·이동·삭제하거나 로직을 다른 계층으로 옮기면 **같은 작업에서 이 문서도 갱신**한다.
 
 ## 관련 문서
-- **로코모션 기능 상세 (상태 머신 배선·출발/정지/피벗/대시/점프·관성화)**: [Locomotion.md](Locomotion.md)
-- 캐릭터 시스템 준비까지 초기화를 미루는 패턴(Lifecycle region의 `OnCharacterSystemReady`): [SystemReady.md](SystemReady.md)
-- 캐릭터가 소유하는 컴포넌트: [Components.md](Components.md)
-- 몽타주 재생 흐름(`PlayMontage` 호출 경로): [Montage.md](Montage.md)
-- 서버 권위·Simulated Proxy 반영: [Multiplayer.md](Multiplayer.md)
+- **로코모션 기능 상세 (상태 머신 배선·출발/정지/피벗/대시/점프·관성화)**: [Locomotion.md](../Gameplay/Locomotion.md)
+- 캐릭터 시스템 준비까지 초기화를 미루는 패턴(Lifecycle region의 `OnCharacterSystemReady`): [SystemReady.md](../Foundation/SystemReady.md)
+- 캐릭터가 소유하는 컴포넌트: [Components.md](../Foundation/Components.md)
+- 몽타주 재생 흐름(`PlayMontage` 호출 경로): [Montage.md](../Gameplay/Montage.md)
+- 서버 권위·Simulated Proxy 반영: [Multiplayer.md](../Conventions/Multiplayer.md)

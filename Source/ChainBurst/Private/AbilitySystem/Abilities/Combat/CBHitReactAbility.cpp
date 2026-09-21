@@ -199,7 +199,7 @@ void UCBHitReactAbility::ApplyKnockback()
 	}
 }
 
-// 넉백 방향 계산. (타격 지점 → 공격자 위치 → 자기 뒤쪽 순)
+// 넉백 방향 계산. (공격자 위치 → 타격 지점 → 자기 뒤쪽 순)
 FVector UCBHitReactAbility::ComputeKnockbackDirection() const
 {
 	const AActor* Avatar = GetAvatarActorFromActorInfo();
@@ -208,31 +208,29 @@ FVector UCBHitReactAbility::ComputeKnockbackDirection() const
 	const FVector SelfLocation = Avatar->GetActorLocation();
 	FVector Direction = FVector::ZeroVector;
 
-	// 1순위: 무기 트레이스가 컨텍스트에 남긴 타격 지점. (옆구리를 맞으면 옆으로 밀림)
-	if (const FHitResult* HitResult = CurrentEventData.ContextHandle.GetHitResult())
+	// 1순위: 공격자 폰 → 피격자. 거리에 흔들리지 않는 기준.
+	// Instigator 는 ASC 소유 액터라 폰으로 변환.
+	if (const AActor* InstigatorPawn = UCBAbilitySystemLibrary::ResolveOwningPawn(CurrentEventData.Instigator.Get()))
 	{
-		Direction = SelfLocation - HitResult->ImpactPoint;
+		Direction = (SelfLocation - InstigatorPawn->GetActorLocation()).GetSafeNormal2D();
 	}
 
-	// 2순위: 공격자 폰 위치. Instigator 는 ASC 소유 액터라 폰으로 변환.
+	// 2순위: 무기 트레이스가 컨텍스트에 남긴 타격 지점.
+	// 공격자를 못 구하는 경우(환경 데미지·폭발 등)에만 씀. 근접 공격에서는 여기까지 오지 않음.
 	if (Direction.IsNearlyZero())
 	{
-		if (const AActor* InstigatorPawn = UCBAbilitySystemLibrary::ResolveOwningPawn(CurrentEventData.Instigator.Get()))
+		if (const FHitResult* HitResult = CurrentEventData.ContextHandle.GetHitResult())
 		{
-			Direction = SelfLocation - InstigatorPawn->GetActorLocation();
+			Direction = (SelfLocation - HitResult->ImpactPoint).GetSafeNormal2D();
 		}
 	}
-
-	// 수평 성분만 사용 (위아래로 밀리면 안 됨)
-	Direction.Z = 0.f;
 
 	// 3순위: 자기 뒤쪽 (같은 위치에서 맞는 등 방향을 못 구한 경우)
 	if (Direction.IsNearlyZero())
 	{
-		Direction = -Avatar->GetActorForwardVector();
-		Direction.Z = 0.f;
+		Direction = (-Avatar->GetActorForwardVector()).GetSafeNormal2D();
 	}
 
-	return Direction.GetSafeNormal();
+	return Direction;
 }
 #pragma endregion

@@ -12,6 +12,7 @@
 #include "GenericTeamAgentInterface.h"
 #include "GameplayEffect.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 
 UCBCombatComponent::UCBCombatComponent()
@@ -293,6 +294,23 @@ void UCBCombatComponent::TickWeaponTrace()
 	// 디버그 드로잉 설정
 	EDrawDebugTrace::Type DebugTraceType = bShowDebugTrace ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None;
 
+	// 트레이스의 기본 세로 범위 = 오너 캡슐의 발바닥 ~ 머리끝.
+	float BodyBottomZ = 0.0f;
+	float BodyTopZ = 0.0f;
+	bool bHasBodyBand = false;
+	if (const ACharacter* OwnerChar = Cast<ACharacter>(OwnerPawn))
+	{
+		if (const UCapsuleComponent* OwnerCapsule = OwnerChar->GetCapsuleComponent())
+		{
+			const float CapsuleCenterZ = OwnerCapsule->GetComponentLocation().Z;
+			const float CapsuleHalfHeight = OwnerCapsule->GetScaledCapsuleHalfHeight();
+
+			BodyBottomZ = CapsuleCenterZ - CapsuleHalfHeight; // 캡슐 바닥 위치 (Z축)
+			BodyTopZ = CapsuleCenterZ + CapsuleHalfHeight; // 캡슐 머리 위치 (Z축)
+			bHasBodyBand = true;
+		}
+	}
+
 	// 무기별로 트레이스 (쌍수 무기는 양손 블레이드 모두 처리, AlreadyHitActors 공유로 이중 히트 방지)
 	// PrevRootLocs[w] 및 PrevTipLocs[w] 로 무기별 이전 프레임 위치를 저장하기 때문에 인덱스 for문 사용
 	const int32 WeaponCount = EquippedWeapons.Num();
@@ -315,15 +333,35 @@ void UCBCombatComponent::TickWeaponTrace()
 			FVector PrevPoint = FMath::Lerp(PrevRootLocs[w], PrevTipLocs[w], Alpha);
 			FVector CurrPoint = FMath::Lerp(CurrRootLoc, CurrTipLoc, Alpha);
 
+			// 트레이스 세로 범위는 오너 캐릭터의 캡슐 바닥과 머리 끝이지만,
+			// 소켓이 캡슐 밖으로 벗어나가면 그만큼 소켓 위치를 따라 세로 범위도 늘어나도록 설정.
+			float BandBottom = FMath::Min(PrevPoint.Z, CurrPoint.Z);
+			float BandTop = FMath::Max(PrevPoint.Z, CurrPoint.Z);
+			if (bHasBodyBand)
+			{
+				BandBottom = FMath::Min(BandBottom, BodyBottomZ);
+				BandTop = FMath::Max(BandTop, BodyTopZ);
+			}
+
+			// 바닥과 머리 끝 사이의 중심 위치 구하기
+			const float BandCenterZ = (BandTop + BandBottom) * 0.5f;
+			// 트레이스 세로 반높이 구하기
+			const float BandHalfHeight = FMath::Max((BandTop - BandBottom) * 0.5f, TraceRadius);
+
+			// 트레이스의 수평 경로(XY)는 소켓 위치를 그대로 따라감.
+			const FVector TraceStart(PrevPoint.X, PrevPoint.Y, BandCenterZ);
+			const FVector TraceEnd(CurrPoint.X, CurrPoint.Y, BandCenterZ);
+
 			// 트레이스 결과 배열 초기화
 			HitResults.Reset();
 
-			// 구형 트레이스 발사. (오버랩 결과는 HitResults 에 그대로 담김)
-			UKismetSystemLibrary::SphereTraceMulti(
+			// 캡슐 트레이스 발사. (오버랩 결과는 HitResults 에 그대로 담김)
+			UKismetSystemLibrary::CapsuleTraceMulti(
 				this,
-				PrevPoint,			// 시작 위치
-				CurrPoint,			// 끝 위치
-				TraceRadius,		// 트레이스 두께
+				TraceStart,			// 시작 위치
+				TraceEnd,			// 끝 위치
+				TraceRadius,		// 가로 반지름
+				BandHalfHeight,		// 세로 반높이
 				WeaponTraceChannel,	// 트레이스 채널
 				false,				// 복잡한 콜리전 검사 여부
 				ActorsToIgnore,		// 무시할 액터들
@@ -369,9 +407,6 @@ void UCBCombatComponent::StopWeaponTrace()
 	if (!OwnerPawn || !OwnerPawn->IsLocallyControlled()) return;
 
 	// 마지막 Tick ~ NotifyEnd(트레이스 종료 시점) 사이의 누락 구간을 한 번 더 보정 트레이스.
-	// 트레이스가 프레임(Tick) 단위로 샘플링되어, 마지막 Tick 이후 NotifyEnd 까지의 휘두름 구간이 누락된다.
-	// 재생 속도가 빠를수록 이 누락 구간(호)이 커지므로 종료 직전에 마지막 위치까지 한 번 더 트레이스한다.
-	// bIsTracing 가드: EndAbility 의 안전장치 호출 등으로 이미 종료된 뒤 재호출 시 stale 한 PrevLoc 으로 중복 트레이스되는 것을 방지.
 	if (bIsTracing)
 	{
 		TickWeaponTrace();
@@ -624,8 +659,7 @@ void UCBCombatComponent::Server_NotifyAttackHit_Implementation(const FGameplayAb
 	UCBAbilitySystemComponent* ASC = GetCachedOwnerASC();
 	if (!ASC || !HasValidWeapon()) return;
 
-	// 허용 거리 = 공격자 위치 ~ WeaponTip 거리 + 트레이스 반지름 + 레이턴시 보정값
-	// WeaponTip 이 가장 멀리 히트 판정이 가능한 지점이므로 기준으로 사용
+	// 캐릭터와 무기의 tip 소켓 사이의 길이 계산 (공격 범위)
 	// 쌍수 무기는 무기 중 가장 먼 tip 거리를 기준으로 삼아, 어느 손 무기로든 유효한 히트를 허용
 	const FVector AttackerLocation = GetOwner()->GetActorLocation();
 	float AttackerToTipDistance = 0.0f;
@@ -639,7 +673,20 @@ void UCBCombatComponent::Server_NotifyAttackHit_Implementation(const FGameplayAb
 			);
 		}
 	}
-	const float AllowedDistance = AttackerToTipDistance + TraceRadius + HitValidationTolerance;
+	
+	// 트레이스 반지름 가져오기 (공격 범위)
+	float TraceExtent = TraceRadius;
+	if (const ACharacter* OwnerChar = Cast<ACharacter>(GetOwner()))
+	{
+		if (const UCapsuleComponent* OwnerCapsule = OwnerChar->GetCapsuleComponent())
+		{
+			TraceExtent = FMath::Max(TraceExtent, OwnerCapsule->GetScaledCapsuleHalfHeight());
+		}
+	}
+	
+	// 허용 거리 = 공격자 위치 ~ WeaponTip 거리 + 트레이스 반지름 + 레이턴시 보정값
+	// WeaponTip 이 가장 멀리 히트 판정이 가능한 지점이므로 기준으로 사용
+	const float AllowedDistance = AttackerToTipDistance + TraceExtent + HitValidationTolerance;
 
 	// 유효한 히트만 담을 핸들
 	FGameplayAbilityTargetDataHandle ValidatedHandle;

@@ -222,7 +222,10 @@ protected:
 	 */
 	bool IsHostileTarget(const AActor* InActor) const;
 
-	/** 트레이스 범위 (구형 트레이스 반지름) */
+	/**
+	 * 트레이스 캡슐의 가로 반지름.
+	 * (세로 범위는 이 값이 아니라 오너 캡슐 높이를 따라감)
+	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Trace")
 	float TraceRadius = 20.0f;
 

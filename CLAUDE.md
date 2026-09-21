@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 절대 규칙
 
 - **코드 추가/수정 전 반드시 사용자 허락을 받아야 한다.** 변경 계획을 먼저 설명하고 승인 후 편집할 것.
+  - 승인을 요청하기 **직전에 [Docs/Tech/DesignReview.md](Docs/Tech/DesignReview.md)의 검토 절차를 거친다.** 중복·도달 불가·관측 불가 항목을 덜어내고 나서 내놓을 것.
 - **엔진 소스 및 플러그인 코드는 절대 편집하지 않는다.** 읽기 전용 참조만 허용.
   - 엔진 루트: `D:\UE_5.8\Engine`
   - 소스: `D:\UE_5.8\Engine\Source`
@@ -82,6 +83,7 @@ UnrealBuildTool(UBT) 기반 프로젝트. 평소 작업은 Rider 또는 언리�
 | [GameplayTags.md](Docs/Tech/GameplayTags.md) | 게임플레이 태그를 추가·사용할 때 |
 | [Components.md](Docs/Tech/Components.md) | 캐릭터 컴포넌트의 역할을 확인할 때 |
 | [CodingConventions.md](Docs/Tech/CodingConventions.md) | **코드를 작성할 때** — 주석 스타일, `#pragma region`, 디폴트 매개변수 주석, 클래스 주석 동기화, 컴포넌트 결합 최소화 |
+| [DesignReview.md](Docs/Tech/DesignReview.md) | **설계를 마치고 승인을 요청하기 직전** — 중복·도달 불가·관측 불가 항목을 덜어내는 마지막 점검 |
 
 ---
 

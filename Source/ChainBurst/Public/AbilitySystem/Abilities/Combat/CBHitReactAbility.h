@@ -12,7 +12,7 @@
  * - 경직 중 재피격 시 재발동(bRetriggerInstancedAbility) → 연속으로 맞으면 그만큼 경직이 이어짐
  * - 단, 연쇄 경직이 MaxChainStaggerTime을 넘으면 ChainStaggerCooldown 동안 발동을 차단 (무한 경직 방지)
  * - 시전자가 Status.Combat.SuperArmor를 들고 있으면 발동 자체가 차단됨 (ActivationBlockedTags) → 스킬이 피격에 끊기지 않음
- * - 타격 반대 방향으로 밀려나는 넉백을 GAS 루트모션 소스로 적용 (기본은 AI 전용)
+ * - 공격자 반대 방향으로 밀려나는 넉백을 GAS 루트모션 소스로 적용 (기본은 AI 전용)
  */
 UCLASS()
 class CHAINBURST_API UCBHitReactAbility : public UCBEventActionAbility
@@ -75,7 +75,7 @@ private:
 
 #pragma region Knockback
 	/**
-	 * 피격 넉백. 타격 반대 방향으로 밀려나는 연출을 GAS 루트모션 소스로 적용.
+	 * 피격 넉백. 공격자 반대 방향으로 밀려나는 연출을 GAS 루트모션 소스로 적용.
 	 * 충돌은 CMC 가 매 프레임 처리함 (막히면 미끄러지고, 캐릭터끼리는 밀지 않음).
 	 */
 protected:
@@ -107,7 +107,7 @@ private:
 	void ApplyKnockback();
 
 	/**
-	 * 넉백 방향 계산 (타격 지점 → 공격자 위치 → 자기 뒤쪽 순으로 계산).
+	 * 넉백 방향 계산 (공격자 위치 → 타격 지점 → 자기 뒤쪽 순으로 계산).
 	 * @return 수평 단위 벡터. 영벡터면 넉백 없음.
 	 */
 	FVector ComputeKnockbackDirection() const;

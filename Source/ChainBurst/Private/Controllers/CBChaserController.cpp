@@ -16,6 +16,7 @@
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/World.h"
+#include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 
 // [클라이언트] PlayerState 참조가 도착한 시점.
@@ -430,4 +431,32 @@ void ACBChaserController::Local_FadeInFromBlack()
 	if (!PlayerCameraManager) return;
 
 	PlayerCameraManager->StartCameraFade(1.0f, 0.0f, ScreenFadeInDuration, FLinearColor::Black);
+}
+
+// 폰이 바뀌는 모든 경로를 덮는 지점. 서버는 빙의에서, 클라이언트는 폰 복제(OnRep_Pawn)에서 여기로 들어옴
+void ACBChaserController::SetPawn(APawn* InPawn)
+{
+	Super::SetPawn(InPawn);
+
+	// 사망 리스폰·무기 변경으로 폰이 새로 스폰되므로, 한 번만 걸면 그 뒤로 기준점이 사라짐
+	Local_UpdateAudioListenerAttenuation();
+}
+
+// [로컬] 소리의 거리를 재는 기준점을 카메라 대신 내 폰으로 고정
+void ACBChaserController::Local_UpdateAudioListenerAttenuation()
+{
+	// 듣는 주체는 로컬 플레이어뿐임. 서버가 남의 몫까지 들고 있을 이유가 없음
+	if (!IsLocalController()) return;
+
+	APawn* CurrentPawn = GetPawn();
+
+	// 폰이 없는 구간(사망 후 리스폰 대기 등)에는 해제할 것.
+	if (!CurrentPawn)
+	{
+		ClearAudioListenerAttenuationOverride();
+		return;
+	}
+
+	// 거리만 폰 기준으로 재고 방향·좌우 패닝은 카메라에 남김.
+	SetAudioListenerAttenuationOverride(CurrentPawn->GetRootComponent(), FVector::ZeroVector);
 }

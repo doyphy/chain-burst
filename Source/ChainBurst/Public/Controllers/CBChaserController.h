@@ -13,7 +13,7 @@ class ACBLobbyCamera;
 
 /**
  * 플레이어의 컨트롤러.
- * 로컬 플레이어의 입력을 처리하고, 서버와 통신하며, 뷰 타겟을 관리함.
+ * 로컬 플레이어의 입력을 처리하고, 서버와 통신하며, 뷰 타겟과 오디오 감쇠 기준점을 관리함.
  */
 UCLASS()
 class CHAINBURST_API ACBChaserController : public APlayerController
@@ -207,5 +207,24 @@ private:
 	/** [커스터마이징 뷰] 뷰 전환에 걸리는 시간(초). 진입·복귀 공용. */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Camera|CosmeticView")
 	float CosmeticViewBlendTime = 0.4f;
+#pragma endregion
+
+#pragma region Audio
+protected:
+	//~ Begin AController Interface.
+	/**
+	 * 빙의·빙의 해제로 폰이 바뀔 때 호출됨. 서버는 빙의 시점, 클라이언트는 폰 복제(OnRep_Pawn) 시점.
+	 * 새 폰에 오디오 감쇠 기준점을 다시 걸기 위해 재정의함.
+	 */
+	virtual void SetPawn(APawn* InPawn) override;
+	//~ End AController Interface.
+
+private:
+	/**
+	 * [로컬] 소리의 거리 감쇠를 재는 기준점을 내 폰으로 고정함. 폰이 없으면 해제함.
+	 * 엔진 기본 기준점은 카메라라서, 3인칭 줌 인/아웃만으로 모든 소리의 볼륨이 함께 변함.
+	 * 방향·좌우 패닝은 카메라에 그대로 두므로 화면에 보이는 위치와 소리 나는 방향은 계속 일치함.
+	 */
+	void Local_UpdateAudioListenerAttenuation();
 #pragma endregion
 };

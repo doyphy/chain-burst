@@ -210,6 +210,13 @@ void UCBChaserAttackAbility::OnAttackHit(FGameplayEventData Payload)
 	// GE 클래스 유효성 검사
 	if (!DamageEffectClass) return;
 
+	// 피격 연출 태그는 무기에 달려 있어 히트마다 바뀌지 않음. (루프 밖에서 한 번만 조회)
+	FGameplayTag HitCueTag;
+	if (const UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
+	{
+		HitCueTag = CombatComp->GetWeaponHitCueTag();
+	}
+
 	// 타겟 데이터 순회
 	for (int32 i = 0; i < Payload.TargetData.Num(); i++)
 	{
@@ -251,5 +258,8 @@ void UCBChaserAttackAbility::OnAttackHit(FGameplayEventData Payload)
 			SpecHandle,// 적용할 GE SpecHandle
 			SingleTargetHandle // 타겟 데이터 (실제 GE를 적용할 타겟 ASC, HitResult 포함)
 		);
+
+		// 피격 연출 큐.
+		UCBAbilitySystemLibrary::Auth_ExecuteHitCue(HitActor, GetAvatarActorFromActorInfo(), HitCueTag, *HitResult);
 	}
 }

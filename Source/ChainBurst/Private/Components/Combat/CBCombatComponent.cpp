@@ -67,6 +67,20 @@ bool UCBCombatComponent::HasValidWeapon() const
 	return false;
 }
 
+// 히트 시점에 공격 어빌리티가 조회하는 피격 연출 큐 태그
+FGameplayTag UCBCombatComponent::GetWeaponHitCueTag() const
+{
+	// 먼저 등록된 유효한 무기의 태그를 씀.
+	for (const FCBRegisteredWeaponData& Weapon : EquippedWeapons)
+	{
+		if (Weapon.IsValid())
+		{
+			return Weapon.HitCueTag;
+		}
+	}
+	return FGameplayTag();
+}
+
 int32 UCBCombatComponent::AdvanceCombo(const FGameplayTag& InActionTag, int32 MaxComboCount, int32 InPredictionKey)
 {
 	// 되돌리기용 스냅샷. 아래 리셋/순환 분기가 상태를 건드리기 전에 저장.

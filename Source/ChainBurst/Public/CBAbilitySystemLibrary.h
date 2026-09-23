@@ -125,4 +125,16 @@ public:
 	 * @return 대응하는 폰. 환원할 수 없으면 입력 그대로 반환.
 	 */
 	static const AActor* ResolveOwningPawn(const AActor* InActor);
+
+	/**
+	 * [서버] 피격 연출 GameplayCue 를 피격자에게 실행하는 함수. (C++ 전용)
+	 * 큐의 대상이 피격자여야 연출이 맞은 쪽에 붙으므로 시전자가 아니라 타겟 ASC 로 실행함.
+	 * 타격 지점을 큐 파라미터에 실어, 큐가 액터 원점이 아니라 실제 맞은 자리에서 연출하게 함
+	 * (GE 가 쏘는 큐는 이 값이 비어 있어 대상 메시 원점으로 떨어진다).
+	 * @param InTargetActor 피격자
+	 * @param InInstigator 때린 액터. 큐의 "시전자가 로컬인가" 스폰 조건에 쓰임
+	 * @param InCueTag 실행할 큐 태그. 비어 있으면 아무것도 하지 않음
+	 * @param InHitResult 타격 지점·법선·표면 재질의 출처
+	 */
+	static void Auth_ExecuteHitCue(AActor* InTargetActor, AActor* InInstigator, const FGameplayTag& InCueTag, const FHitResult& InHitResult);
 };

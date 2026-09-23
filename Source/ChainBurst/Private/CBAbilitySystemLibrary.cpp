@@ -219,3 +219,29 @@ bool UCBAbilitySystemLibrary::IsCombatMode(const AActor* InActor)
 {
 	return HasGameplayTag(InActor, CBGameplayTags::Status_Combat_InCombat);
 }
+
+
+// [서버] 피격 연출 큐를 피격자에게 실행
+void UCBAbilitySystemLibrary::Auth_ExecuteHitCue(AActor* InTargetActor, AActor* InInstigator, const FGameplayTag& InCueTag, const FHitResult& InHitResult)
+{
+	// 태그를 안 채운 무기는 연출이 없는 것으로 보고 조용히 통과.
+	if (!InCueTag.IsValid()) return;
+
+	// 타겟의 ASC 가져오기.
+	UAbilitySystemComponent* TargetASC = GetASC(InTargetActor);
+	if (!TargetASC) return;
+
+	// 타격 지점을 실어 보냄. 큐가 이 값을 우선 보고 스폰 위치를 잡음
+	FGameplayCueParameters CueParams;
+	CueParams.Location = InHitResult.ImpactPoint;
+	CueParams.Normal = InHitResult.ImpactNormal;
+
+	// 표면 재질. 큐의 Allowed Surface Types 조건이 이 값으로 갈라짐 (살/금속별 연출)
+	CueParams.PhysicalMaterial = InHitResult.PhysMaterial;
+
+	// 큐의 스폰 조건이 이 필드를 직접 읽음. ("시전자가 로컬인가" 조건 검사)
+	CueParams.Instigator = InInstigator;
+
+	// 서버에서 실행하면 전 클라이언트로 멀티캐스트됨
+	TargetASC->ExecuteGameplayCue(InCueTag, CueParams);
+}

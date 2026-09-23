@@ -34,6 +34,13 @@ struct FCBRegisteredWeaponData
 	UPROPERTY()
 	float WeaponDamage = 0.0f;
 
+	/**
+	 * 이 무기에 맞았을 때 재생할 피격 연출 큐 태그.
+	 * 큐를 쏘는 주체가 서버(공격 어빌리티)뿐이라 복제하지 않음 — 다수 AI 의 무기 목록이 매번 실어 나를 이유가 없음.
+	 */
+	UPROPERTY(NotReplicated)
+	FGameplayTag HitCueTag;
+
 	/** 유효성 검사 함수 (인스턴스가 등록의 본질, 소켓 타입은 None 이 정상 값일 수 있어 제외) */
 	bool IsValid() const { return WeaponInstance != nullptr; };
 
@@ -42,7 +49,8 @@ struct FCBRegisteredWeaponData
 	FCBRegisteredWeaponData(TObjectPtr<UCBWeaponData> InWeaponData, TObjectPtr<ACBBaseWeapon> InWeaponInstance)
 		: WeaponSocketType(InWeaponData->WeaponSocketType)
 		, WeaponInstance(InWeaponInstance)
-		, WeaponDamage(InWeaponData->WeaponDamage) {}
+		, WeaponDamage(InWeaponData->WeaponDamage)
+		, HitCueTag(InWeaponData->HitCueTag) {}
 };
 
 /**
@@ -106,6 +114,13 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
 	bool HasValidWeapon() const;
+
+	/**
+	 * 피격 연출 큐 태그를 반환하는 함수. (공격 어빌리티가 히트 시점에 조회함)
+	 * 먼저 등록된 무기의 태그를 씀.
+	 * @return 등록된 무기의 피격 큐 태그. 무기가 없거나 태그가 비었으면 빈 태그.
+	 */
+	FGameplayTag GetWeaponHitCueTag() const;
 
 protected:
 	/**

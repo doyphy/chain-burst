@@ -10,7 +10,7 @@
   - 무기 장착/해제(`Action.Combat.EquipWeapon`/`UnequipWeapon`)는 개이트로 인덱스 분기 — 인덱스 0 = Idle, 1 = Walk, 2 = Run/Sprint 공용 (`UCBAbilitySystemLibrary::GetGaitMontageIndex` 공용 헬퍼 — `Status.Movement.Idle` 파생 상태 태그 + `Gait.*` 태그 순수 조회).
   - 에디터 배열(`MontageEntries`) → 런타임 `TMap`(`MontageMap`) 변환(`UpdateRuntimeMap`).
   - 조회 API: `FindMontage(Tag, Index)`(인덱스 검사 내부 포함), `GetMontageCount(Tag)`.
-- `UCBActionComponent` (컴포넌트): **순수 몽타주 재생·정지기.** `RequestPlayMontage(Tag, Index)`로 받은 몽타주를 애님 인스턴스에 재생하고, `StopMontage(BlendOutTime)`로 정지한다. **재생과 정지 모두 GameplayCue가 호출한다**(아래 "정지도 큐를 경유한다"). **콤보 상태·단계 관리는 하지 않는다**(콤보 소유는 `UCBCombatComponent` — [Combat.md](Combat.md)). 데이터 에셋 접근을 캡슐화(`GetMontageCount`)하므로 외부는 데이터 에셋을 직접 참조하지 않는다.
+- `UCBActionComponent` (컴포넌트): **순수 몽타주 재생·정지기.** `RequestPlayMontage(Tag, Index)`로 받은 몽타주를 애님 인스턴스에 재생하고, `StopMontage(BlendOutTime)`로 정지한다. **재생과 정지 모두 GameplayCue가 호출한다**(아래 "정지도 큐를 경유한다"). **콤보 상태·단계 관리는 하지 않는다**(콤보 소유는 `UCBCombatComponent` — [Combat.md](Combat.md)). 데이터 에셋 접근을 캡슐화(`GetMontageCount`)하므로 외부는 데이터 에셋을 직접 참조하지 않는다. **방금 재생한 몽타주 인스턴스 ID**(`GetLastMontageInstanceID`)를 기록해 두고, 어빌리티는 이 ID로 자기 몽타주의 블렌드 아웃을 기다린다(아래 "어빌리티는 자기 몽타주의 블렌드 아웃 시작에 끝난다"). 이 ID는 각 머신이 재생할 때 직접 기록하는 로컬 값이라 복제하지 않는다.
 
 **재생 흐름 (인덱스 기반):**
 1. 어빌리티(`UCBActionAbility`)가 재생 **인덱스 결정**: 콤보면 `UCBCombatComponent::AdvanceCombo(Tag, MaxCount)`로 다음 인덱스를 받고(MaxCount=`ActionComp->GetMontageCount(Tag)`), 아니면 `SelectActionMontageIndex()` 훅(기본 0 — 자식이 상태 분기로 재정의 가능, 예: 대시의 전투 상태 0/1 분기).
@@ -53,7 +53,13 @@
 
 ### 지켜야 할 규칙 넷
 
-**① 블렌드 아웃은 0으로 정지한다.** `Montage_Stop(BlendOutTime)`의 가중 블렌드 아웃 구간은 **실제 시간 기준**으로 루트 모션이 감쇠 추출되는데, 이 구간은 엔진의 몽타주 위치 동기화 밖이라 머신마다 독립 적분된다. 포즈 전환은 ABP의 **관성화**가 담당한다(→ [Locomotion.md](Locomotion.md)).
+**① 정지 시점을 맞춘다 — 블렌드 아웃 시간은 루트 모션과 무관하다.** 루트 모션 오차를 가르는 것은 **어느 몽타주 위치에서 멈추느냐**이지 블렌드 아웃 길이가 아니다. 현재 정지 큐는 0.1초로 블렌드 아웃한다(`UCBGCN_StopAction` → `RequestStopMontage(0.1f)`).
+
+- **정지하는 순간 그 인스턴스는 루트 모션 몽타주에서 빠진다.** `FAnimMontageInstance::Stop` → `UAnimInstance::OnMontageInstanceStopped` → `ClearMontageInstanceReferences`가 `RootMotionMontageInstance`를 비우고, `Montage_Advance`는 `RootMotionFromMontagesOnly` 모드에서 **`GetRootMotionMontageInstance()`와 같은 인스턴스에서만** 루트 모션을 추출한다(`AnimInstance.cpp` `Montage_Advance`). 그래서 블렌드 아웃 중인 몽타주는 포즈만 섞일 뿐 이동량은 0이다.
+- 따라서 블렌드 아웃 시간은 **포즈 연출만** 결정한다. 짧으면 전환이 딱딱하고 길면 부드럽다 — 게임플레이·네트워크 관점의 제약은 없다.
+- 모든 ABP가 엔진 기본값 `RootMotionFromMontagesOnly`를 쓴다(2026-09-25 에셋 확인, `RootMotionMode`를 바꾼 ABP 없음). ⚠️ **`RootMotionFromEverything`으로 바꾸면 이 전제가 깨진다** — 그 모드는 블렌드 가중치를 곱한 루트 모션을 모든 인스턴스에서 추출하므로(`bBlendRootMotion`), 블렌드 아웃 구간의 이동량이 실제 시간 기준 가중치로 머신마다 따로 적분된다. 그때는 블렌드 아웃을 0에 가깝게 줄여야 한다.
+
+> 예전 문서는 "블렌드 아웃은 0으로 정지한다"였고 근거가 "블렌드 아웃 구간에서 루트 모션이 감쇠 추출된다"였다. 위 엔진 동작상 현재 모드에서는 성립하지 않아 2026-09-25에 정정했다. 코드는 처음부터 0.1초였다.
 
 **② `EndAbility`는 복제하지 않는다 (`bReplicateEndAbility = false`).** 클라가 `true`로 종료하면 `ServerEndAbility` RPC가 나가서 서버 어빌리티를 죽이는데, **그 RPC가 노티파이 이벤트 RPC보다 먼저 발신된다.**
 
@@ -70,7 +76,7 @@ if (!Owner->HasAuthority())
 
 > 정지 로직을 GameplayCue로 옮겼으니 이제 `true`여도 되지 않나 — **아니다.** 큐를 쏘는 주체가 여전히 어빌리티이고, 프록시에 멀티캐스트할 수 있는 건 서버 인스턴스뿐이다. 서버 어빌리티가 살아서 자기 `OnActionEnded`에 도달해야 한다.
 
-폴백 경로(`OnDelayFinished`)도 같은 이유로 `false`다. 여기는 정지 큐가 없지만, 클라 폴백이 먼저 터져 서버 어빌리티를 죽이면 **서버의 `TryResetComboOnEnd()`가 실행되지 않아** 콤보 인덱스가 서버에서만 리셋되지 않은 채 남는다.
+블렌드 아웃 종료 경로(`OnActionMontageBlendingOut`)도 같은 이유로 `false`다. 여기는 정지 큐가 없지만, 클라가 먼저 끝나 서버 어빌리티를 죽이면 **서버의 `CleanupActionState()`(콤보 리셋)가 실행되지 않아** 콤보 인덱스가 서버에서만 리셋되지 않은 채 남는다. 각 머신은 자기 몽타주의 블렌드 아웃으로 스스로 끝난다.
 
 `true`를 굳이 쓰려면 노티파이의 두 줄 순서를 뒤집어(서버 RPC 먼저, 로컬 이벤트 나중) 서버가 이벤트를 먼저 처리하게 만들어야 한다. 다만 서버는 자기 `OnActionEnded`에서 스스로 종료하므로 **`true`가 얻는 것이 없다** — 액션마다 RPC만 하나 늘어난다.
 
@@ -80,11 +86,7 @@ if (!Owner->HasAuthority())
 
 > ④는 에셋 작성 규칙에 의존하는 방어라 콤보 블렌드 시간을 조정하면 다시 겹칠 수 있다. 재발하면 가드를 **"가장 최근 몽타주인가"가 아니라 "이 노티파이를 낸 몽타주가 중단되지 않았는가"**(`Montage_GetIsStopped`)로 바꾼다.
 
-### 폴백
-
-노티파이가 없거나 삼켜진 경우를 위해 `UCBActionAbility`가 몽타주 길이만큼의 `WaitDelay`를 안전망으로 건다. **단 이 폴백은 어빌리티에 붙어 있어 Simulated Proxy에는 없다** — 정지 큐가 유실되면(`ExecuteGameplayCue` 멀티캐스트는 unreliable) 그 화면에서만 몽타주가 끝까지 재생된다. 위치는 복제로 오므로 시각적 문제에 그친다.
-
-> 폴백 딜레이는 `UAnimMontage::GetPlayLength()`를 쓰는데 이 값은 **배속 미반영**이다. `AttackSpeed`로 재생 속도가 바뀌면 실제 재생 시간과 어긋난다(현재는 항상 길게 잡히는 쪽이라 안전). 폴백이 실질 안전망으로 쓰이게 되면 `/ PlayRate`로 맞출 것.
+> ④가 깨져 한쪽 머신에서 노티파이가 삼켜져도 그 머신의 어빌리티는 아래 블렌드 아웃 경로로 끝나므로 **멈춰 서지는 않는다.** 다만 그 머신만 정지 큐 없이 끝까지 재생되므로 루트 모션 오차는 그대로 남는다 — ④는 여전히 지켜야 한다.
 
 ### 캔슬도 몽타주를 정지시킨다 — 단 서버에서만
 
@@ -107,11 +109,76 @@ if (!Owner->HasAuthority())
 
 두 번째는 엔진 동작이다 — `UAnimMontage::bEnableAutoBlendOut`의 주석대로 *"끝에 도달하면 자동으로 블렌드 아웃하고, false면 블렌드 아웃하지 않고 명시적으로 정지될 때까지 마지막 포즈를 유지"* 한다. 기본값이 `true`라 코드만 고치면 여전히 풀린다.
 
-현재 이 예외를 쓰는 건 `UCBDeathAbility` 하나다 (→ [Abilities.md](Abilities.md)).
+현재 이 예외를 쓰는 건 `UCBDeathAbility` 하나다 (→ [Abilities.md](Abilities.md)). 에셋은 사망 몽타주 전부(Chaser 무기별 8개 + `AM_Rogue_Dog_Death`)가 Auto Blend Out을 끈 상태다(2026-09-25 확인).
 
-> **폴백 경로(`OnDelayFinished`)에는 원래 정지 큐가 없다.** 그래서 사망 몽타주에 종료 노티파이를 안 붙이면 훅 없이도 우연히 동작하지만, 나중에 누가 노티파이를 붙이는 순간 조용히 깨진다. 의도를 훅으로 명시해 둔 이유다.
+**어빌리티는 재생 직후 끝난다.** Auto Blend Out이 꺼진 몽타주는 블렌드 아웃도 완전 종료도 일어나지 않으므로, 이벤트를 기다리면 어빌리티가 영영 끝나지 않는다. 플레이어는 ASC가 PlayerState 소유라 어빌리티 인스턴스가 리스폰을 넘어 살아남아, **두 번째 사망 때 사망 어빌리티가 "이미 활성"이라 발동하지 않게 된다.** 그래서 `PlayActionMontage()`가 재생한 인스턴스의 `bEnableAutoBlendOut`을 보고 꺼져 있으면 곧바로 정상 종료한다. 몽타주는 큐로 재생되어 어빌리티와 무관하게 마지막 포즈를 유지한다.
+
+- 판정 기준을 `ShouldStopActionOnEnd()`가 아니라 **에셋 플래그**로 둔 이유: 이벤트가 안 오는 원인이 에셋 플래그이기 때문이다. 훅만 켜고 에셋을 빠뜨린 경우는 몽타주가 블렌드 아웃되어 정상 경로로 끝나고, 에셋만 끈 경우도 어빌리티가 멈춰 서지 않는다.
+- 정상 종료라 정지 큐는 원래 나가지 않는다. 훅(`ShouldStopActionOnEnd() == false`)은 **나중에 누가 종료 노티파이를 붙여도** 시체 포즈가 풀리지 않게 의도를 명시해 둔 것이다.
 
 > **한계 — 늦게 합류한 클라이언트.** 몽타주는 재생 큐를 받은 머신에서만 재생되므로, 죽은 뒤에 관련성을 얻은(멀리서 접근·늦게 접속) 클라이언트는 **서 있는 시체**를 본다. 해결은 `GameplayCue.Death` 노티파이의 `WhileActive`에서 포즈를 잡거나, ABP가 `Status.Dead`를 보고 사망 상태로 전이하는 것이다. 둘 다 미구현.
+
+## 어빌리티는 자기 몽타주의 블렌드 아웃 시작에 끝난다
+
+노티파이가 없는 액션, 노티파이가 삼켜진 경우, 다른 몽타주에 끊긴 경우를 모두 **몽타주 인스턴스의 블렌드 아웃 시작**으로 처리한다. 예전에는 몽타주 길이만큼의 `WaitDelay`를 폴백으로 걸었는데, `GetPlayLength()`가 배속(`AttackSpeed`)과 에셋 `RateScale`을 반영하지 않아 **공격속도가 빠를수록 몽타주가 끝난 뒤에도 어빌리티가 남아 다음 행동을 막았다.** 딜레이를 계산하는 대신 실제 재생을 따라가도록 바꿨다.
+
+| 종료 경로 | 계기 | 정지 큐 | `EndAbility` |
+|---|---|---|---|
+| 종료 노티파이 | `Event.Action.EndAbility` | O (예측 윈도우) | 정상 |
+| **자연 블렌드 아웃** | 자기 인스턴스 블렌드 아웃 시작, `bInterrupted = false` | **X** | 정상 |
+| **끊김** | 자기 인스턴스 블렌드 아웃 시작, `bInterrupted = true` | **X** | 캔슬 |
+| 캔슬 | 외부 캔슬 | 서버·자기 몽타주 생존 시 | 캔슬 |
+| 재생 실패 | 인스턴스 ID 없음 (경고 로그) | X | 정상 |
+| 마지막 프레임 유지 | 인스턴스의 `bEnableAutoBlendOut == false` | X | 재생 직후 정상 |
+
+### 왜 "완전 종료"가 아니라 "블렌드 아웃 시작"인가
+
+- **블렌드 아웃은 다음 동작이 섞여 들어오는 구간이다.** 어빌리티가 살아 있으면 `BlockAbilitiesWithTag`·재발동 불가로 그 구간 내내 다음 행동이 막혀 입력이 먹히지 않는 시간이 된다. 완전 종료를 기다리면 A → 로코모션 → B 로 한 번 원래 포즈로 돌아갔다가 이어진다.
+- **끊긴 경우** 완전 종료(`OnMontageEnded`)는 새 몽타주의 블렌드 인이 끝난 뒤에야 오므로 두 어빌리티의 태그가 겹친다. 블렌드 아웃 이벤트는 끊기는 즉시 온다.
+- 엔진 `PlayMontageAndWait`도 블렌드 아웃 시작에 ASC의 "애니메이션 중인 어빌리티"를 해제한다(`ClearAnimatingAbility`).
+
+### 자기 몽타주만 구분하는 방법 — 인스턴스 ID + 태스크 수명
+
+- **전역 델리게이트(`UAnimInstance::OnMontageBlendingOut`)는 쓰지 않는다.** 몽타주 에셋 포인터만 넘어와서 같은 몽타주를 연속 재생하면(피격 재발동, 콤보 없는 연타, AI 무작위 변형의 같은 인덱스) 구분이 안 된다. 종료 이벤트는 큐에 쌓였다 나중에 발송되므로(`AnimMontage.cpp` `QueueMontageBlendingOutEvent`) **새 재생이 시작된 뒤에 이전 재생의 이벤트가 도착**해 새 활성화가 곧바로 끝난다.
+- **인스턴스별 델리게이트**(`FAnimMontageInstance::OnMontageBlendingOutStarted`)를 쓴다. 재생마다 새 인스턴스와 고유 ID가 생기므로(`Montage_PlayInternal`) 재생 1회에만 묶인다. `UCBActionComponent`가 기록한 ID로 `GetMontageInstanceForID()` 해서 바인딩한다.
+- **바인딩은 어빌리티가 아니라 태스크(`UCBAbilityTask_WaitMontageBlendOut`)에 둔다.** 어빌리티는 `InstancedPerActor`라 콤보 다음 타가 같은 객체를 재사용하므로, 어빌리티에 바인딩하면 이전 인스턴스의 끊김 이벤트가 새 활성화로 들어온다. 태스크는 활성화마다 새로 생기고, 끝날 때 인스턴스에서 해제하며, 파괴되면 가비지로 표시되어(`UGameplayTask::OnDestroy`) 큐에 복사된 델리게이트도 호출되지 않는다. 엔진 `PlayMontageAndWait`와 같은 방식이다.
+- **어빌리티가 재생 직후 ID를 읽을 수 있는 이유**: 어빌리티 활성화는 큐 전송 컨텍스트(`FScopedGameplayCueSendContext`) 밖이라 `ExecuteGameplayCue`가 그 자리에서 flush된다(`GameplayCueManager.cpp` `AddPendingCueExecuteInternal`). 서버는 멀티캐스트가 자기 머신에서도 즉시 실행되고, 소유 클라는 예측 실행된다.
+
+### 지켜야 할 것
+
+- **자기가 몽타주를 멈추기 전에 대기부터 끊는다.** 애님 업데이트 밖에서 몽타주가 정지되면 블렌드 아웃 이벤트가 큐를 거치지 않고 **즉시(동기) 호출된다**(`UAnimInstance::QueueMontageBlendingOutEvent`). 대기가 살아 있으면 노티파이 종료·캔슬 경로의 자기 정지가 "끊김"으로 되돌아와 정상 종료가 캔슬로 바뀐다. `StopActionMontage()`가 맨 앞에서 `BlendOutTask`를 끝낸다.
+- **끊겼을 때는 정지 큐를 쏘지 않는다.** 끊김 이벤트는 **새 몽타주의 재생 호출 안에서** 들어온다. 이때 캔슬 경로가 정지 큐를 쏘면 `Montage_Stop`이 방금 시작된 새 몽타주를 끈다. 그래서 `bActionMontageStarted`를 먼저 내리고 캔슬로 끝낸다.
+- **루프 섹션 몽타주는 블렌드 아웃이 오지 않는다.** 마지막 섹션에 도달하지 않으므로 어빌리티가 끝나지 않는다. 현재 액션 몽타주에는 루프 섹션이 없다(2026-09-25 에셋 확인). 루프 액션을 만들면 노티파이나 입력으로 끝내야 한다.
+- **서버 애니메이션 틱에 의존한다.** 서버에서 몽타주가 진행돼야 이벤트가 온다. `ACharacter` 메시는 기본 `AlwaysTickPoseAndRefreshBones`이고 모듈러 메시도 리더 메시에 같은 설정을 준다(`UCBModularMeshComponent`). 트레이스·종료 노티파이도 같은 전제라 새 의존은 아니다. 이 설정을 바꾸면 어빌리티가 끝나지 않는다.
+
+> **Simulated Proxy에는 어빌리티가 없다** — 정지 큐가 유실되면(`ExecuteGameplayCue` 멀티캐스트는 unreliable) 그 화면에서만 몽타주가 끝까지 재생된다. 위치는 복제로 오므로 시각적 문제에 그친다.
+
+## 블렌드 시간은 재생 속도로 보정한다
+
+몽타주 블렌드 가중치는 **실제 시간(초) 기준**으로 움직인다. 재생 속도(`AttackSpeed` → `PlayRate`)가 빨라져도 블렌드 시간은 그대로라, 배속이 높을수록 **몽타주 내용 중 더 많은 부분이 블렌드 구간에 잠식된다.**
+
+1초 몽타주, BlendOut 0.25초, 보정 없음:
+
+| PlayRate | 실제 재생 | 블렌드 아웃 시작 (몽타주 위치) | 흐려지는 비율 |
+|---|---|---|---|
+| 1.0 | 1.0초 | 0.75 | 25% |
+| 2.0 | 0.5초 | **0.50** | 50% |
+| 4.0 | 0.25초 | **0.0** (첫 프레임부터) | 100% |
+
+엔진은 남은 재생 시간을 `(구간 끝 − 위치) / PlayRate`(실제 초)로 계산해 `BlendOut × DefaultBlendTimeMultiplier` 이하가 되면 블렌드 아웃을 시작한다(`AnimMontage.cpp` `FAnimMontageInstance::Advance`). 보정이 없으면 **어빌리티 종료(= 블렌드 아웃 시작)가 몽타주 앞쪽으로 당겨져 뒤쪽 트레이스·입력 윈도우·노티파이가 잘리고**, 몽타주 길이 / BlendOut 이상의 배속에서는 재생 직후 어빌리티가 끝난다.
+
+`UCBCharacterAnimInstance::PlayMontage`가 양쪽을 `÷ PlayRate`로 보정한다.
+
+| 블렌드 | 방법 |
+|---|---|
+| 블렌드 인 | 재생 전에 `BlendInArgs.BlendTime /= PlayRate` |
+| 자동 블렌드 아웃 | 재생 직후 새 인스턴스의 `DefaultBlendTimeMultiplier = 1 / PlayRate` — 엔진이 블렌드 아웃 시작 조건과 길이 양쪽에 곱한다 |
+
+- 결과적으로 블렌드 아웃은 배속과 무관하게 **항상 몽타주의 `길이 − BlendOut` 지점**에서 시작한다. **트레이스 구간·입력 윈도우(`CheckInput`)·종료 노티파이는 이 지점보다 앞에 둔다.**
+- 블렌드 인은 인스턴스 생성 시 이미 계산되어 `DefaultBlendTimeMultiplier`의 영향을 받지 않으므로 따로 나눈다.
+- 에셋에 **커스텀 `BlendOutTriggerTime`**을 지정하면 시작 조건이 그 값을 그대로 써서 보정되지 않는다. 현재 쓰는 에셋은 없다(2026-09-25 확인).
+- 다른 몽타주가 끊고 들어오는 전환은 **새 몽타주의 블렌드 인 설정**으로 이전 몽타주를 멈추므로(`StopAllMontagesByGroupName`) 이미 보정된 블렌드 인 값을 따른다.
+- PlayRate는 모든 머신에서 같은 어트리뷰트로 계산되므로 머신마다 블렌드 아웃 시점이 같다.
 
 ## 검증 기록 — `PlayMontageAndWait` 재평가 (2026-09-02)
 
@@ -132,7 +199,7 @@ if (!Owner->HasAuthority())
 
 | 근거 | 내용 |
 |---|---|
-| **정지 설계가 이미 검증됨** | 위 "지켜야 할 규칙 넷"은 실제 버그를 밟아가며 확정한 것이라 전환 시 전부 재검증 대상이다. 특히 `UAbilityTask_PlayMontageAndWait::StopPlayingMontage()`는 `ASC->CurrentMontageStop()`을 **인자 없이** 호출해 몽타주 기본 블렌드 아웃 시간을 쓴다 — **규칙 ①(블렌드 아웃 0) 위반.** |
+| **정지 설계가 이미 검증됨** | 위 "지켜야 할 규칙 넷"은 실제 버그를 밟아가며 확정한 것이라 전환 시 전부 재검증 대상이다. (예전에는 "`PlayMontageAndWait`는 기본 블렌드 아웃 시간으로 정지해 규칙 ①(블렌드 아웃 0)을 어긴다"도 근거로 들었으나, 규칙 ①이 정정되어 더는 근거가 아니다 — 블렌드 아웃 길이는 루트 모션에 영향이 없다.) |
 | **다수 AI 대역폭** | 서버 ASC는 몽타주 재생 중 `GetShouldTick()`이 참이라 **매 틱** `AnimMontage_UpdateReplicatedData()`로 위치를 더티 마킹한다. 재생 중인 캐릭터마다 NetUpdateFrequency만큼 계속 구조체가 나간다. 큐는 **액션당 1회**다. |
 | **AI는 전환 이득이 없다** | `UCBAIAttackAbility`는 `ServerOnly`라 예측 자체가 없다 → 예측 거부 롤백 이득 0. |
 

@@ -24,6 +24,10 @@ enum class ECBAbilityActivationPolicy : uint8
 	OnGiven UMETA(DisplayName = "On Given"),
 };
 
+/**
+ * 모든 어빌리티의 루트. 전 어빌리티 공용 로직만 둠.
+ * - 활성화 정책(OnTrigger / OnGiven), 사망 차단 게이트, 차단 무시 옵션을 일괄 처리
+ */
 UCLASS()
 class CHAINBURST_API UCBGameplayAbility : public UGameplayAbility
 {
@@ -73,7 +77,7 @@ protected:
 	 * 다른 어빌리티가 걸어둔 차단(BlockAbilitiesWithTag)을 무시하고 활성화할지 여부 (기본값 : false).
 	 * 반드시 발동해야 하는 어빌리티(사망)만 true로 설정.
 	 *
-	 * 주의: 켜면 태그 요구·차단 검사를 통째로 건너뛴다. 즉 이 어빌리티의 ActivationRequiredTags /
+	 * 주의: 켜면 태그 요구·차단 검사를 통째로 건너뜀. 즉 이 어빌리티의 ActivationRequiredTags /
 	 * ActivationBlockedTags / SourceBlockedTags 등도 함께 무시되므로, BP에서 설정해도 걸리지 않음.
 	 * (엔진이 요구·차단을 한 함수에서 한꺼번에 판정하므로 차단만 골라 빼낼 수 없음)
 	 */

@@ -4,9 +4,12 @@
 #include "AbilitySystem/Abilities/CBActionAbility.h"
 #include "CBAIAttackAbility.generated.h"
 
+class UCBFragment_WeaponTrace;
+
 /**
  * [AI 전용] 공격 어빌리티 베이스.
  * BT 태스크가 어빌리티 태그로 직접 활성화(입력 없음).
+ * 무기 검사·트레이스·데미지 GE 는 무기 트레이스 기능(WeaponTrace)을 가져와 씀.
  *
  * 플레이어 공격(UCBChaserAttackAbility)과 다른 점:
  *  - AI 컨트롤러가 서버 전용이라 NetExecutionPolicy = ServerOnly (몽타주는 GameplayCue 로 전 클라 동기화)
@@ -42,6 +45,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")
 	bool bRandomizeMontage = false;
 
+	/** 무기 트레이스 기능 (무기 검사 · 트레이스 · 데미지 GE). 데미지 GE·계수는 BP 에서 지정 */
+	UPROPERTY(EditDefaultsOnly, Instanced, NoClear, Category = "Combat")
+	TObjectPtr<UCBFragment_WeaponTrace> WeaponTrace;
+
 #pragma region MotionWarp
 	/** 몽타주 재생 중 타겟 쪽으로 접근·정렬시키는 모션 워핑 설정 */
 protected:
@@ -57,22 +64,4 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|MotionWarp", meta = (EditCondition = "bWarpToTarget", ClampMin = "0.0"))
 	float WarpStopDistance = 100.f;
 #pragma endregion
-
-	/** 타겟에게 적용할 데미지 GE 클래스 */
-	UPROPERTY(EditDefaultsOnly, Category = "Combat|Damage")
-	TSubclassOf<UGameplayEffect> DamageEffectClass;
-
-	/** 데미지 계수 (FinalDamage = AttackPower * DamageCoefficient - DefensePower) */
-	UPROPERTY(EditDefaultsOnly, Category = "Combat|Damage", meta = (ClampMin = "0.0"))
-	float DamageCoefficient = 1.f;
-
-private:
-	UFUNCTION()
-	void OnTraceStart(FGameplayEventData Payload);
-
-	UFUNCTION()
-	void OnTraceEnd(FGameplayEventData Payload);
-
-	UFUNCTION()
-	void OnAttackHit(FGameplayEventData Payload);
 };

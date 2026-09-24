@@ -6,16 +6,11 @@
 #include "Characters/CBBaseCharacter.h"
 #include "AbilitySystem/CBAttributeSet.h"
 
-// engine
-#include "Net/UnrealNetwork.h"
-
-UCBActionComponent::UCBActionComponent()
-{
-	SetIsReplicatedByDefault(true);
-}
-
 bool UCBActionComponent::RequestPlayMontage(const FGameplayTag& InActionTag, int32 InIndex /* = 0 */)
 {
+	// 이전 재생의 몽티즈 ID 초기화
+	LastMontageInstanceID = INDEX_NONE;
+
 	// 태그 유효성 검사
 	if (!InActionTag.IsValid()) return false;
 
@@ -30,9 +25,6 @@ bool UCBActionComponent::RequestPlayMontage(const FGameplayTag& InActionTag, int
 	bool bAffectedByAttackSpeed = false;
 	UAnimMontage* Montage = MontageData->FindMontage(InActionTag, InIndex, bAffectedByAttackSpeed);
 	if (!Montage) return false;
-
-	// 현재 액션 정보 업데이트 (폴백 딜레이용 지속 시간)
-	CurrentActionDuration = Montage->GetPlayLength();
 
 	// [디버그] 어떤 액션 태그의 몇 번 인덱스 몽타주를 재생하는지 로그
 	UE_LOG(LogTemp, Log, TEXT("[ActionComp][%s] 몽타주 재생: 태그 '%s' / 인덱스 %d / 몽타주 '%s'"),
@@ -57,10 +49,9 @@ int32 UCBActionComponent::GetMontageCount(const FGameplayTag& InActionTag) const
 	return MontageData ? MontageData->GetMontageCount(InActionTag) : 0;
 }
 
-void UCBActionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+UCBCharacterAnimInstance* UCBActionComponent::GetAnimInstance()
 {
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(UCBActionComponent, CurrentActionDuration);
+	return GetCachedAnimInstance(CachedAnimInstance) ? CachedAnimInstance.Get() : nullptr;
 }
 
 FGameplayTag UCBActionComponent::SelectBestActionTag(const FGameplayTagContainer& InTags)
@@ -132,8 +123,9 @@ bool UCBActionComponent::PlayMontage(UAnimMontage* InMontage, bool bAffectedByAt
 		}
 	}
 
-	CachedAnimInstance.Get()->PlayMontage(InMontage, PlayRate);
-	return true;
+	// 재생한 인스턴스 ID 기록 (어빌리티가 자기 몽타주의 블렌드 아웃을 기다리는 데 사용)
+	LastMontageInstanceID = CachedAnimInstance.Get()->PlayMontage(InMontage, PlayRate);
+	return LastMontageInstanceID != INDEX_NONE;
 }
 
 bool UCBActionComponent::GetCachedAnimInstance(TWeakObjectPtr<UCBCharacterAnimInstance>& OutAnimInstance)

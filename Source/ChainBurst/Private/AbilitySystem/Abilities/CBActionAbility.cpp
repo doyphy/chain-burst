@@ -1,24 +1,27 @@
 // project
 #include "AbilitySystem/Abilities/CBActionAbility.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
+#include "AbilitySystem/Tasks/CBAbilityTask_WaitMontageBlendOut.h"
+#include "AnimInstances/CBCharacterAnimInstance.h"
 #include "Components/Animation/CBActionComponent.h"
 #include "CBGameplayTags.h"
 
 // engine
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
-#include "Abilities/Tasks/AbilityTask_WaitDelay.h"
+#include "Animation/AnimMontage.h"
 
 void UCBActionAbility::PlayActionMontage()
 {
 	UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo();
+	UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo();
 
 	// 액션 태그 유효성 검사
-	if (!CBASC || !BoundActionTag.IsValid())
+	if (!CBASC || !ActionComp || !BoundActionTag.IsValid())
 	{
 		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
 		return;
 	}
-	
+
 	// 재생 인덱스 결정 (자식 훅. 기본 0, 콤보 액션은 자식이 콤보 인덱스를 전진시켜 반환)
 	const int32 MontageIndex = SelectActionMontageIndex();
 
@@ -31,21 +34,47 @@ void UCBActionAbility::PlayActionMontage()
 	BuildActionCueParameters(CueParams);
 
 	// 게임플레이 큐 실행 (몽타주 재생, 전 클라 동기화)
+	// 어빌리티 활성화는 큐 전송 컨텍스트 밖이라 이 머신에서는 여기서 바로 재생됨 → 직후에 재생 결과를 읽을 수 있음
 	CBASC->ExecuteGameplayCue(CBGameplayTags::GameplayCue_PlayAction, CueParams);
+
+	// 이 머신에서 방금 재생된 몽타주 인스턴스
+	const int32 MontageInstanceID = ActionComp->GetLastMontageInstanceID();
+	UCBCharacterAnimInstance* AnimInstance = ActionComp->GetAnimInstance();
+	const FAnimMontageInstance* MontageInstance = AnimInstance ? AnimInstance->GetMontageInstanceForID(MontageInstanceID) : nullptr;
+	if (!MontageInstance)
+	{
+		// 재생 실패 (몽타주 미등록 등) - 기다릴 대상이 없으므로 바로 종료
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 액션 몽타주 재생 실패 — 즉시 종료: %s"), *GetName(), *BoundActionTag.ToString());
+		CleanupActionState();
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
+		return;
+	}
 
 	// 캔슬로 끝났을 때 정지시킬 대상이 있음을 표시
 	bActionMontageStarted = true;
-	
+
+	// 마지막 프레임을 유지하는 몽타주(Auto Blend Out 꺼짐, 예: 사망)는 블렌드 아웃이 오지 않음 → 재생 직후 종료.
+	// 몽타주는 큐로 재생되어 어빌리티와 무관하게 마지막 포즈를 유지함.
+	if (!MontageInstance->bEnableAutoBlendOut)
+	{
+		CleanupActionState();
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
+		return;
+	}
+
 	// 몽타주 종료 이벤트 대기 (애님노티파이 수신 시 어빌리티 종료)
 	EndActionTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
 		this, CBGameplayTags::Event_Action_EndAbility, nullptr, true);
 	EndActionTask->EventReceived.AddDynamic(this, &ThisClass::OnActionEnded);
 	EndActionTask->ReadyForActivation();
 
-	// 폴백 타임아웃 (애님노티파이가 없는 경우, 몽타주 길이만큼 대기 후 종료)
-	DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, CurrentActionDuration());
-	DelayTask->OnFinish.AddDynamic(this, &ThisClass::OnDelayFinished);
-	DelayTask->ReadyForActivation();
+	// 몽타주 인스턴스의 블렌드 아웃 대기 (노티파이가 없거나 삼켜진 경우의 종료, 다른 몽타주에 끊긴 경우의 캔슬)
+	BlendOutTask = UCBAbilityTask_WaitMontageBlendOut::WaitMontageBlendOut(this, AnimInstance, MontageInstanceID);
+	BlendOutTask->OnBlendOut.AddDynamic(this, &ThisClass::OnActionMontageBlendingOut);
+	BlendOutTask->ReadyForActivation();
+
+	// 대기 등록 중에 종료됐으면 후처리하지 않음 (기다릴 인스턴스가 이미 사라진 경우)
+	if (!IsActive()) return;
 
 	// 자식 후처리 훅 (예: 입력 대기 태스크 등록)
 	OnActionMontageStarted();
@@ -57,36 +86,44 @@ void UCBActionAbility::OnActionEnded(FGameplayEventData Payload)
 	// 몽타주 정지 요청
 	StopActionMontage();
 
-	// 자식 상태 정리 (몽타주가 끝까지 재생됨 → 체인 종료)
+	// 자식 상태 정리 (노티파이 지점까지 재생됨 → 체인 종료)
 	CleanupActionState();
 
-	// 어빌리티 정상 종료 — 복제하지 않음.(bReplicateEndAbility = false).
+	// 어빌리티 정상 종료 - 복제하지 않음.(bReplicateEndAbility = false).
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
 }
 
-// 폴백 타임아웃 콜백 함수 (애님노티파이가 없는 경우, 몽타주 길이만큼 대기 후 종료)
-void UCBActionAbility::OnDelayFinished()
+// 자기 몽타주 인스턴스의 블렌드 아웃 시작 콜백
+void UCBActionAbility::OnActionMontageBlendingOut(bool bInterrupted)
 {
-	// 자식 상태 정리 (몽타주 길이만큼 지남 = 몽타주 끝까지 재생됨 → 체인 종료)
-	CleanupActionState();
-
-	// 어빌리티 정상 종료 — 복제하지 않음.(bReplicateEndAbility = false).
-	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
-}
-
-float UCBActionAbility::CurrentActionDuration() const
-{
-	if (UCBActionComponent* ActionComp = GetCBActionComponentFromActorInfo())
+	// 다른 몽타주·정지 요청에 끊김
+	// 이미 현재 몽타주 정지하고 다른 몽타주로 넘어갔으므로 정지 큐를 쏘지 않음.
+	if (bInterrupted)
 	{
-		// 현재 재생 중인 액션(몽타주)의 길이 반환
-		return ActionComp->GetCurrentActionDuration();
+		// true 면 Montage_Stop 이 방금 시작된 새 몽타주를 끔
+		bActionMontageStarted = false;
+
+		// 캔슬로 종료해 호출자(BT 대기 태스크 등)가 실패로 식별하게 함. 자식 상태 정리는 캔슬 경로가 수행.
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, true);
+		return;
 	}
-	return 5.f;
+
+	// 자식 상태 정리
+	CleanupActionState();
+
+	// 어빌리티 정상 종료 - 복제하지 않음.(bReplicateEndAbility = false).
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
 }
 
 // 몽타주 정지 요청 (게임플레이 큐, 전 클라 동기화).
 void UCBActionAbility::StopActionMontage()
 {
+	// 블렌드 아웃 대기부터 끊음.
+	if (BlendOutTask)
+	{
+		BlendOutTask->EndTask();
+	}
+
 	// 사망처럼 마지막 프레임을 유지해야 하는 액션은 정지 요청을 건너뜀 (몽타주가 그대로 남아 시체 포즈가 됨)
 	if (!ShouldStopActionOnEnd()) return;
 
@@ -106,7 +143,7 @@ void UCBActionAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
 	bool bReplicateEndAbility, bool bWasCancelled)
 {
-	// 캔슬로 끊긴 경우 자식 상태 정리 (정상 종료 정리는 OnActionEnded/OnDelayFinished가 담당)
+	// 캔슬로 끊긴 경우 자식 상태 정리 (정상 종료 정리는 OnActionEnded / OnActionMontageBlendingOut 이 담당)
 	if (bWasCancelled)
 	{
 		// 몽타주가 재생 중이면 정지 요청
@@ -117,11 +154,13 @@ void UCBActionAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 			StopActionMontage();
 		}
 
+		// 자식 상태 정리
 		CleanupActionState();
 	}
 
 	// 다음 활성화를 위해 되돌림 (어빌리티는 InstancedPerActor 라 인스턴스가 재사용됨)
 	bActionMontageStarted = false;
+	BlendOutTask = nullptr;
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

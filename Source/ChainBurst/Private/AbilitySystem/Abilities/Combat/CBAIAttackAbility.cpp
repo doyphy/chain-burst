@@ -1,15 +1,10 @@
 // project
 #include "AbilitySystem/Abilities/Combat/CBAIAttackAbility.h"
-#include "CBGameplayTags.h"
-#include "Components/Combat/CBCombatComponent.h"
+#include "AbilitySystem/Abilities/Fragments/CBFragment_WeaponTrace.h"
 #include "Components/Animation/CBActionComponent.h"
-#include "CBAbilitySystemLibrary.h"
 #include "Controllers/CBAIController.h"
 
 // engine
-#include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
-#include "Abilities/GameplayAbilityTargetTypes.h"
-#include "AbilitySystemComponent.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "GameFramework/Pawn.h"
@@ -19,12 +14,15 @@ UCBAIAttackAbility::UCBAIAttackAbility()
 	// AI 컨트롤러(두뇌)가 서버에만 존재하므로 서버에서만 실행한다.
 	// 몽타주는 UCBActionAbility 가 GameplayCue 로 전 클라이언트에 동기화하므로 복제 실행이 필요 없음.
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
+
+	// 무기 트레이스 기능 (무기 검사 · 트레이스 · 데미지 GE)
+	WeaponTrace = CreateDefaultSubobject<UCBFragment_WeaponTrace>(TEXT("WeaponTrace"));
 }
 
 // 발동 전제 조건 (무기가 없으면 활성화 단계에서 막음)
 bool UCBAIAttackAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle,
-	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags,
-	const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags /* = nullptr */,
+	const FGameplayTagContainer* TargetTags /* = nullptr */, FGameplayTagContainer* OptionalRelevantTags /* = nullptr */) const
 {
 	// 공통 검사(쿨다운·비용·차단 태그 등)를 먼저 통과해야 함.
 	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
@@ -32,14 +30,8 @@ bool UCBAIAttackAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Han
 		return false;
 	}
 
-	// 무기가 없으면 공격할 수 없음. (컴뱃 컴포넌트가 없는 AI 포함)
-	const UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo();
-	if (!CombatComp || !CombatComp->HasValidWeapon())
-	{
-		return false;
-	}
-
-	return true;
+	// 무기 검사 (컴뱃 컴포넌트가 없는 AI 포함)
+	return WeaponTrace->CanActivate(ActorInfo);
 }
 
 void UCBAIAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
@@ -49,8 +41,7 @@ void UCBAIAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
 	// 전제 조건은 CanActivateAbility 가 이미 검사했지만, 그 사이 상태가 바뀔 수 있으니 재검사
-	const UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo();
-	if (!CombatComp || !CombatComp->HasValidWeapon())
+	if (!WeaponTrace->CanActivate(ActorInfo))
 	{
 		// 여기서 끝나면 bWasCancelled = true (취소 처리)
 		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
@@ -67,20 +58,8 @@ void UCBAIAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle
 	// 몽타주 재생
 	PlayActionMontage();
 
-	UAbilityTask_WaitGameplayEvent* WaitTraceStart = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
-		this, CBGameplayTags::Event_Combat_TraceStart, nullptr, false);
-	WaitTraceStart->EventReceived.AddDynamic(this, &ThisClass::OnTraceStart);
-	WaitTraceStart->ReadyForActivation();
-
-	UAbilityTask_WaitGameplayEvent* WaitTraceEnd = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
-		this, CBGameplayTags::Event_Combat_TraceEnd, nullptr, false);
-	WaitTraceEnd->EventReceived.AddDynamic(this, &ThisClass::OnTraceEnd);
-	WaitTraceEnd->ReadyForActivation();
- 
-	UAbilityTask_WaitGameplayEvent* WaitAttackHit = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
-		this, CBGameplayTags::Event_Combat_Attack_Hit, nullptr, false);
-	WaitAttackHit->EventReceived.AddDynamic(this, &ThisClass::OnAttackHit);
-	WaitAttackHit->ReadyForActivation();
+	// 무기 트레이스 시작 (서버의 AI 폰은 로컬·서버 모두 참이라 트레이스 구간·히트 대기가 전부 걸림)
+	WeaponTrace->Start();
 }
 
 void UCBAIAttackAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
@@ -90,10 +69,7 @@ void UCBAIAttackAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 
 	// 캔슬 등으로 트레이스 종료 노티파이를 못 받았을 수 있으므로 강제 종료
-	if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
-	{
-		CombatComp->StopWeaponTrace();
-	}
+	WeaponTrace->Stop();
 }
 
 // 이 액션 태그에 등록된 변형 몽타주 중 하나를 무작위 선택 (서버에서 1회 결정 → 큐로 전파)
@@ -132,80 +108,4 @@ void UCBAIAttackAbility::BuildActionCueParameters(FGameplayCueParameters& CuePar
 	// 큐 파라미터로 타겟 컴포넌트와 접근 거리 전달.
 	CueParams.TargetAttachComponent = TargetActor->GetRootComponent();
 	CueParams.NormalizedMagnitude = WarpStopDistance;
-}
-
-void UCBAIAttackAbility::OnTraceStart(FGameplayEventData Payload)
-{
-	if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
-	{
-		CombatComp->StartWeaponTrace();
-	}
-}
-
-void UCBAIAttackAbility::OnTraceEnd(FGameplayEventData Payload)
-{
-	if (UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
-	{
-		CombatComp->StopWeaponTrace();
-	}
-}
-
-// 히트 이벤트 수신 → 타겟마다 데미지 GE 적용
-void UCBAIAttackAbility::OnAttackHit(FGameplayEventData Payload)
-{
-	// GE 클래스 유효성 검사
-	if (!DamageEffectClass) return;
-
-	// 피격 연출 태그는 무기에 달려 있어 히트마다 바뀌지 않음. 루프 밖에서 한 번만 조회
-	FGameplayTag HitCueTag;
-	if (const UCBCombatComponent* CombatComp = GetCBCombatComponentFromActorInfo())
-	{
-		HitCueTag = CombatComp->GetWeaponHitCueTag();
-	}
-
-	// 타겟 데이터 순회
-	for (int32 i = 0; i < Payload.TargetData.Num(); i++)
-	{
-		// 타겟 데이터 하나씩 가져오기
-		const FGameplayAbilityTargetData* TargetData = Payload.TargetData.Get(i);
-		if (!TargetData) continue;
-
-		// HitResult 가져오기
-		const FHitResult* HitResult = TargetData->GetHitResult();
-		if (!HitResult) continue;
-
-		// 타겟 Actor 가져오기
-		AActor* HitActor = HitResult->GetActor();
-		if (!HitActor) continue;
-
-		// 타겟 Actor 의 ASC 가져오기 (ASC 가 없는 액터는 데미지 대상이 아님)
-		UAbilitySystemComponent* TargetASC = UCBAbilitySystemLibrary::GetASC(HitActor);
-		if (!TargetASC) continue;
-
-		// Spec 만들기 (소스는 시전자 ASC 로 자동 세팅됨)
-		FGameplayEffectSpecHandle SpecHandle = MakeOutgoingGameplayEffectSpec(DamageEffectClass, GetAbilityLevel());
-		if (!SpecHandle.IsValid()) continue;
-
-		// 히트 정보를 스펙 컨텍스트에 실음 (피격 방향 등 소비자용).
-		SpecHandle.Data->GetContext().AddHitResult(*HitResult);
-
-		// 데미지 계수 설정 (SetByCaller 등록)
-		SpecHandle.Data->SetSetByCallerMagnitude(CBGameplayTags::Data_Damage_Coefficient, DamageCoefficient);
-
-		// 이번 반복에서 가져온 타겟 하나만 담은 핸들.
-		FGameplayAbilityTargetDataHandle SingleTargetHandle;
-		SingleTargetHandle.Add(new FGameplayAbilityTargetData_SingleTargetHit(*HitResult));
-
-		// 타겟에게 GE 적용
-		ApplyGameplayEffectSpecToTarget(
-			CurrentSpecHandle, // 현재 어빌리티의 SpecHandle (출처 검사용)
-			CurrentActorInfo, // 현재 어빌리티의 ActorInfo (권한, 예측키 검사용 - 중복 적용 방지)
-			CurrentActivationInfo, // 현재 어빌리티의 ActivationInfo (권한, 예측키 검사용 - 중복 적용 방지)
-			SpecHandle,// 적용할 GE SpecHandle
-			SingleTargetHandle // 타겟 데이터 (실제 GE를 적용할 타겟 ASC, HitResult 포함)
-		);
-
-		// 피격 연출 큐.
-		UCBAbilitySystemLibrary::Auth_ExecuteHitCue(HitActor, GetAvatarActorFromActorInfo(), HitCueTag, *HitResult);
-	}
 }

@@ -207,9 +207,11 @@ protected:
 public:
 	/**
 	 * 몽타주 재생하는 함수.
+	 * 블렌드 인·자동 블렌드 아웃 시간을 재생 속도로 나눠, 배속과 무관하게 몽타주의 같은 구간만 블렌드되게 함.
 	 * @param InMontage 재생할 몽타주. 액션 컴포넌트에서 태그로 몽타주 검색 후 전달.
 	 * @param PlayRate 재생 속도 배율 (1.0 = 기본). 공격 속도 어트리뷰트를 반영해 UCBActionComponent에서 계산 후 전달.
+	 * @return 새로 재생한 몽타주 인스턴스 ID. 재생 실패 시 INDEX_NONE.
 	 */
-	void PlayMontage(UAnimMontage* InMontage, float PlayRate = 1.f);
+	int32 PlayMontage(UAnimMontage* InMontage, float PlayRate = 1.f);
 #pragma endregion
 };

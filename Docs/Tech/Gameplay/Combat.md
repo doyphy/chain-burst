@@ -38,7 +38,7 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
 - **진영 판정 기준은 한 곳**: `FGenericTeamId::GetAttitude(공격자, 대상) == Hostile`. `ACBAIController::IsValidTarget()`·퍼셉션 소속 필터와 같은 전역 attitude solver를 탄다 → [Teams.md](../Foundation/Teams.md)
   - ⚠️ **중립은 때릴 수 없다.** solver는 한쪽이라도 Neutral이면 Neutral을 반환한다. `ACBBaseCharacter`의 팀 기본값이 Neutral이므로, **팀 지정이 빠진 캐릭터는 조용히 무적이 된다**
   - ⚠️ **`IGenericTeamAgentInterface`를 구현하지 않은 액터도 걸러진다**(엔진 구현상 Neutral). 파괴 가능한 오브젝트를 무기로 때리려면 그때 별도 경로가 필요하다 — 오브젝트가 `Weapon` 채널에 응답하게 만드는 것만으로는 진영 필터에서 걸린다
-- **데미지 적용은 히트마다 타겟 하나씩.** 히트가 배칭되어 한 이벤트에 여러 피격자가 실려 오므로(`FGameplayAbilityTargetDataHandle`), 어빌리티(`UCBChaserAttackAbility`/`UCBAIAttackAbility`의 `OnAttackHit`)는 **그 회차의 HitResult 하나만 담은 핸들**을 만들어 적용한다.
+- **데미지 적용은 히트마다 타겟 하나씩.** 히트가 배칭되어 한 이벤트에 여러 피격자가 실려 오므로(`FGameplayAbilityTargetDataHandle`), 무기 트레이스 기능(`UCBFragment_WeaponTrace::OnAttackHit`)은 타겟을 하나씩 돌며 **그 회차의 HitResult 하나만 담은 타겟 데이터**(`FGameplayAbilityTargetData_SingleTargetHit`)로 적용한다. 공격 어빌리티(`UCBChaserAttackAbility`/`UCBAIAttackAbility`)는 이 기능을 소유해 호출만 한다 → [Abilities.md](Abilities.md) "기능 조각"
   - ⚠️ **핸들 전체를 넘기면 안 된다.** `ApplyGameplayEffectSpecToTarget`은 넘긴 핸들의 *모든* 타겟에 적용하므로, 타겟 수만큼 도는 루프에서 전체 핸들을 넘기면 N² 번 적용되어 **각자 N 배 데미지**를 받는다(한 명만 때리면 1×1이라 증상이 안 보인다).
   - **타겟은 오직 `TargetData`가 정한다.** 앞의 `CurrentSpecHandle`/`CurrentActorInfo`/`CurrentActivationInfo`는 `HasAuthorityOrPredictionKey()` 게이트(권한·예측키 검사)에만 쓰이며 적용 대상과 무관하다. 실제 대상은 `FGameplayAbilityTargetData_SingleTargetHit::GetActors()` = HitResult의 액터이고, 소스는 스펙 컨텍스트의 시전자 ASC다.
   - **HitResult는 스펙을 만든 뒤 컨텍스트에 붙인다** (`SpecHandle.Data->GetContext().AddHitResult()`). `MakeOutgoingGameplayEffectSpec()`이 컨텍스트를 자체 생성하므로, 미리 만든 `FGameplayEffectContextHandle`을 넘길 자리가 없다 — 따로 만들어두면 조용히 버려진다.
@@ -47,7 +47,7 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
   - **전투 상태 태그도 `EndPlay`에서 정리한다.** 루스 태그는 GE와 달리 **넣은 쪽이 빼야만** 사라지는데, 플레이어 ASC는 PlayerState 소유라 폰보다 오래 산다. 정리하지 않으면 사망 리스폰·무기 변경으로 새로 스폰된 폰이 **무기를 칼집에 둔 채 전투 상태로 시작**하고, 장착 어빌리티는 `SetCombatMode(true)`의 idempotent 가드에 걸려 조기 반환하므로 **무기가 영영 손에 붙지 않는다.** 그런데도 공격 어빌리티의 `ActivationRequiredTags(Status.Combat.InCombat)`는 통과한다.
   - 정리 주체는 **직접 붙인 인스턴스뿐**이다(`bCombatTagApplied` 플래그). 시뮬레이티드 프록시는 `TagOnly` 복제로 태그를 받았을 뿐이라 제거 주체가 아니다. `UCBLocomotionProcessor`가 미러링 태그(`Idle`/`InAir`/`Run`)를 같은 방식(적용 플래그 + `EndPlay` 정리)으로 처리한다 (→ [Locomotion.md](Locomotion.md))
 - 콤보 상태 보관: `AdvanceCombo(Tag, MaxCount)`(재생 인덱스 반환 + 내부 전진) / `ResetCombo()`. 컴포넌트는 **상태만 소유**하고 타이머도 판단도 갖지 않는다.
-  - **호출 주체는 `UCBChaserAttackAbility` 하나다.** 전진은 `SelectActionMontageIndex()`에서, 리셋은 `CleanupActionState()`(정상 종료·폴백·캔슬 세 경로)에서 호출한다. 콤보 여부를 정하는 `IsCombo`도 이 어빌리티의 프로퍼티다 — **액션 어빌리티 베이스(`UCBActionAbility`)는 콤보를 알지 못한다.**
+  - **호출 주체는 `UCBChaserAttackAbility` 하나다.** 전진은 `SelectActionMontageIndex()`에서, 리셋은 `CleanupActionState()`(노티파이 종료·블렌드 아웃 종료·캔슬 모든 경로 — 몽타주가 다른 몽타주에 끊긴 경우도 캔슬 경로로 리셋)에서 호출한다. 입력 윈도우로 다음 타를 이어갈 때는 `EndAbility`만 부르고 이 훅을 거치지 않으므로 콤보가 유지된다. 콤보 여부를 정하는 `IsCombo`도 이 어빌리티의 프로퍼티다 — **액션 어빌리티 베이스(`UCBActionAbility`)는 콤보를 알지 못한다.**
   - 콤보 인덱스는 **비복제**다. 서버·소유 클라가 각자 예측 전진하고, sim proxy는 자기 값을 쓰지 않고 큐 파라미터로 받은 서버 인덱스로 재생한다.
   - **복제하지 않는 이유**: 예측하는 값에 복제를 얹으면 지연되어 도착한 서버 값이 이미 앞서 나간 클라 값을 덮어써 **정상 연타에서도 콤보가 뒤로 밀린다**(GAS가 어트리뷰트를 절대값이 아니라 델타로 예측하는 것과 같은 Override 문제).
   - **거부 시 롤백이 예측의 짝이다.** 서버가 활성화를 거부하면 클라만 인덱스가 앞선 채 남는다 — 거부는 `bWasCancelled = false`로 종료되므로 `CleanupActionState()` 경로에도 걸리지 않는다. 그대로 두면 **체인이 정상 종료될 때까지 소유 클라와 나머지 화면이 서로 다른 콤보 단계를 재생**하고, 클립 길이가 달라 루트 모션 이동량까지 어긋난다.

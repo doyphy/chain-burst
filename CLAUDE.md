@@ -81,7 +81,8 @@ UnrealBuildTool(UBT) 기반 프로젝트. 평소 작업은 Rider 또는 언리�
 ### `Gameplay/` — 전투·이동·AI
 | 문서 | 언제 읽나 |
 |---|---|
-| [Abilities.md](Docs/Tech/Gameplay/Abilities.md) | 새 어빌리티를 만들 때 — 몽타주 액션은 `UCBInputActionAbility`(입력)/`UCBEventActionAbility`(이벤트) 중 상속, 엣지에서 `NetExecutionPolicy` 명시 |
+| [Abilities.md](Docs/Tech/Gameplay/Abilities.md) | 새 어빌리티를 만들 때 — 몽타주 액션은 `UCBInputActionAbility`(입력)/`UCBEventActionAbility`(이벤트) 중 상속, 엣지에서 `NetExecutionPolicy` 명시. 여러 어빌리티가 쓰는 기능은 기능 조각(예: `UCBFragment_WeaponTrace`)을 소유해 호출 |
+| [ActionFragment.md](Docs/Tech/Gameplay/ActionFragment.md) | **어빌리티 구조를 바꾸거나 여러 어빌리티가 쓸 기능을 만들 때** — 베이스(`UCBGameplayAbility`)에는 공용 로직만, 기능은 새 베이스 클래스 대신 조각으로 빼서 필요한 어빌리티가 멤버로 소유·호출. 조각 크기는 "늘 함께 쓰이는 기능 묶음" 단위 |
 | [Combat.md](Docs/Tech/Gameplay/Combat.md) | 무기 스폰/트레이스/히트 검증, 콤보 상태를 다룰 때 |
 | [Montage.md](Docs/Tech/Gameplay/Montage.md) | 액션 몽타주 조회·재생·동기화 — GameplayCue(`GameplayCue.PlayAction`)로 전 클라 동기화, 콤보 인덱스는 큐 파라미터로 전달 |
 | [Locomotion.md](Docs/Tech/Gameplay/Locomotion.md) | 이동 기능을 다룰 때 — 개이트=ASC 태그(`Status.Movement.Gait.*`), 출발/정지=속도 비율 판정, 피벗=입력 잠금, Sprint는 전방 대시에 종속, 점프=GAS 어빌리티, 전이 블렌드=관성화 |

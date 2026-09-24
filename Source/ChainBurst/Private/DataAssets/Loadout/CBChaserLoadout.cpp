@@ -1,6 +1,6 @@
 // project
 #include "DataAssets/Loadout/CBChaserLoadout.h"
-#include "AbilitySystem/Abilities/CBChaserGameplayAbility.h"
+#include "AbilitySystem/Abilities/CBGameplayAbility.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
 #include "Characters/CBChaserCharacter.h"
 #include "Components/UI/CBUIComponent.h"

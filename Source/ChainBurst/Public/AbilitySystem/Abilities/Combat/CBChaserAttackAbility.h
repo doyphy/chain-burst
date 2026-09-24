@@ -4,9 +4,11 @@
 #include "AbilitySystem/Abilities/CBInputActionAbility.h"
 #include "CBChaserAttackAbility.generated.h"
 
+class UCBFragment_WeaponTrace;
+
 /**
  * 추격자 공격 어빌리티.
- * 콤보 여부 및 공격력 계수를 설정할 수 있으며, 공격 시 타겟에게 데미지 GE를 적용함.
+ * 콤보 여부를 설정할 수 있음. 무기 검사·트레이스·데미지 GE 는 무기 트레이스 기능(WeaponTrace)을 가져와 씀.
  * bAlignToAimOnActivate - 발동 시 캐릭터를 조준 방향으로 정렬해 몽타주가 카메라가 보는 쪽으로 재생.
  */
 UCLASS()
@@ -19,6 +21,8 @@ public:
 
 protected:
 	//~ Begin UGameplayAbility Interface
+		/** 발동 전제 조건 검사 (무기가 없으면 활성화 자체를 막음) */
+	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr, FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 	//~ End UGameplayAbility Interface
@@ -42,21 +46,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")
 	bool bAlignToAimOnActivate = true;
 
-	/** 타겟에게 적용할 데미지 GE 클래스 */
-	UPROPERTY(EditDefaultsOnly, Category = "Combat|Damage")
-	TSubclassOf<UGameplayEffect> DamageEffectClass;
-
-	/** 데미지 계수 (FinalDamage = AttackPower * DamageCoefficient - DefensePower) */
-	UPROPERTY(EditDefaultsOnly, Category = "Combat|Damage", meta = (ClampMin = "0.0"))
-	float DamageCoefficient = 1.f;
-
-private:
-	UFUNCTION()
-	void OnTraceStart(FGameplayEventData Payload);
-
-	UFUNCTION()
-	void OnTraceEnd(FGameplayEventData Payload);
-
-	UFUNCTION()
-	void OnAttackHit(FGameplayEventData Payload);
+	/** 무기 트레이스 기능 (무기 검사 · 트레이스 · 데미지 GE). 데미지 GE·계수는 BP 에서 지정 */
+	UPROPERTY(EditDefaultsOnly, Instanced, NoClear, Category = "Combat")
+	TObjectPtr<UCBFragment_WeaponTrace> WeaponTrace;
 };

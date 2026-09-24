@@ -159,21 +159,42 @@ void UCBCharacterAnimInstance::LockCurrentGait(const FAnimUpdateContext& UpdateC
 	LockedLocomotionGait = CurrentLocomotionGait;
 }
 
-void UCBCharacterAnimInstance::PlayMontage(UAnimMontage* InMontage, float PlayRate)
+int32 UCBCharacterAnimInstance::PlayMontage(UAnimMontage* InMontage, float PlayRate /* = 1.f */)
 {
-	if (!InMontage) return;
+	if (!InMontage) return INDEX_NONE;
 
 	// 블렌드 인 시간을 재생 속도로 스케일(BlendIn ÷ PlayRate).
 	// 블렌드 웨이트는 실제 시간(초) 기준이라, 재생 속도가 빠르면 같은 실시간 블렌드가 몽타주 구간을
-	// 더 많이 잠식해 초반 포즈가 뭉개진다(공격 속도가 높을수록 스윙 초반 트레이스 누락 등 문제 발생).
-	// 재생 속도로 나눠 몽타주 시간 축에 맞추면 배속과 무관하게 항상 같은 비율만 블렌드한다. (PlayRate=1이면 원래 값 유지)
+	// 더 많이 잠식해 초반 포즈가 뭉개짐(공격 속도가 높을수록 스윙 초반 트레이스 누락 등 문제 발생).
+	// 재생 속도로 나눠 몽타주 시간 축에 맞추면 배속과 무관하게 항상 같은 비율만 블렌드. (PlayRate=1이면 원래 값 유지)
 	FAlphaBlendArgs BlendInArgs = InMontage->GetBlendInArgs();
 	if (PlayRate > 0.f)
 	{
 		BlendInArgs.BlendTime /= PlayRate;
 	}
 
-	Montage_PlayWithBlendIn(InMontage, BlendInArgs, PlayRate);
+	// 몽타주 재생 (재생 실패 시 -1 반환)
+	if (Montage_PlayWithBlendIn(InMontage, BlendInArgs, PlayRate) <= 0.f)
+	{
+		return INDEX_NONE;
+	}
+
+	// 방금 만들어진 인스턴스 (같은 몽타주의 이전 인스턴스는 재생 시 정지되어 활성 목록에서 빠짐)
+	FAnimMontageInstance* NewInstance = GetActiveInstanceForMontage(InMontage);
+	if (!NewInstance)
+	{
+		return INDEX_NONE;
+	}
+
+	// 자동 블렌드 아웃 시간도 재생 속도로 스케일 (BlendOut ÷ PlayRate).
+	// 블렌드 인과 같은 이유
+	if (PlayRate > 0.f)
+	{
+		NewInstance->DefaultBlendTimeMultiplier = 1.f / PlayRate;
+	}
+
+	// 몽타주 인스턴스 ID 반환
+	return NewInstance->GetInstanceID();
 }
 
 void UCBCharacterAnimInstance::OnCombatTagChanged(const FGameplayTag InTag, int32 InCount)

@@ -5,12 +5,15 @@
 #include "CBActionAbility.generated.h"
 
 class UAbilityTask_WaitGameplayEvent;
-class UAbilityTask_WaitDelay;
+class UCBAbilityTask_WaitMontageBlendOut;
 
 /**
  * 액션(몽타주) 어빌리티의 공용 베이스 (추상 클래스)
  * - GameplayCue.PlayAction을 통해 몽타주를 재생 (전 클라 동기화)
- * - 애님노티파이 종료 이벤트(Event.Action.EndAbility) 또는 폴백 딜레이로 어빌리티 종료
+ * - 종료 경로:
+ *     애님노티파이 종료 이벤트(Event.Action.EndAbility) → 몽타주 정지 후 정상 종료
+ *     자기 몽타주 인스턴스의 블렌드 아웃 시작 → 정상 종료 (끊긴 경우는 캔슬)
+ *     마지막 프레임을 유지하는 몽타주(Auto Blend Out 꺼짐) → 블렌드 아웃이 오지 않으므로 재생 직후 정상 종료
  * - 트리거 방식(입력 / 이벤트)은 자식 클래스에서 결정
  *
  * 자식 확장 지점:
@@ -47,7 +50,7 @@ protected:
 
 	/**
 	 * 액션이 끝났을 때 자식이 자기 상태를 정리하는 훅.
-	 * 정상 종료(노티파이)·폴백 타임아웃·캔슬 세 경로 모두에서 호출된다.
+	 * 노티파이 종료·블렌드 아웃 종료·캔슬(몽타주가 끊긴 경우 포함)·재생 실패 모든 경로에서 호출된다.
 	 */
 	virtual void CleanupActionState() {}
 
@@ -58,12 +61,10 @@ protected:
 	 */
 	virtual bool ShouldStopActionOnEnd() const { return true; }
 
-	/** 현재 재생 중인 액션의 길이 반환 (폴백 딜레이용) */
-	float CurrentActionDuration() const;
-
 	/**
 	 * 몽타주 정지 요청 (GameplayCue.StopAction, 전 클라 동기화).
 	 * ShouldStopActionOnEnd()가 false면 아무것도 하지 않음.
+	 * 정지 전에 블렌드 아웃 대기부터 끊음 (자기 정지로 인한 블렌드 아웃 이벤트가 즉시 되돌아오지 않게).
 	 */
 	void StopActionMontage();
 
@@ -71,9 +72,13 @@ protected:
 	UFUNCTION()
 	virtual void OnActionEnded(FGameplayEventData Payload);
 
-	/** 폴백 타임아웃 시 호출 (애님노티파이가 없는 경우) */
+	/**
+	 * 자기 몽타주 인스턴스의 블렌드 아웃 시작 시 호출.
+	 * 자연 블렌드 아웃이면 정상 종료(블렌드 아웃은 다음 동작과의 크로스페이드라 정지하지 않음),
+	 * 끊긴 경우면 캔슬 종료(이미 다른 몽타주로 넘어갔으므로 정지하지 않음).
+	 */
 	UFUNCTION()
-	virtual void OnDelayFinished();
+	void OnActionMontageBlendingOut(bool bInterrupted);
 
 protected:
 	/** 이 어빌리티와 연결된 액션(몽타주) 태그 */
@@ -84,11 +89,11 @@ protected:
 	TObjectPtr<UAbilityTask_WaitGameplayEvent> EndActionTask;
 
 	UPROPERTY()
-	TObjectPtr<UAbilityTask_WaitDelay> DelayTask;
+	TObjectPtr<UCBAbilityTask_WaitMontageBlendOut> BlendOutTask;
 
 	/**
-	 * 이 어빌리티가 액션 몽타주 재생을 시작했는지 여부.
-	 * 캔슬로 끝날 때 자기 몽타주만 정지시키기 위한 표식.
+	 * 이 어빌리티가 재생한 몽타주가 아직 살아 있는지 여부.
+	 * 캔슬로 끝날 때 자기 몽타주만 정지시키기 위한 표식 (다른 몽타주에 끊기면 해제).
 	 */
 	bool bActionMontageStarted = false;
 };

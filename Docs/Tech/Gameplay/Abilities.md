@@ -7,6 +7,7 @@
 ```
 UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 │   • AbilityActivationPolicy: OnTrigger / OnGiven
+│   • 전 어빌리티 공용 로직만 둔다 — 특정 기능은 필요한 어빌리티가 기능 객체로 소유 (아래 "기능 조각")
 │
 ├── UCBGAChangeSpeed ← 속도 변경 베이스 (BP 확장 전제 — GA_Walk / GA_Sprint 등 BP 자식이 SpeedDataTag를 지정)
 │       • 옵션: bEndWhenNoAcceleration — 가속도(이동 입력)가 유예 시간 이상 0이면 자동 종료 (GA_Sprint용)
@@ -16,7 +17,8 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 └── UCBActionAbility (Abstract) ← 몽타주 액션 공통 베이스
     │   • PlayActionMontage() → GameplayCue.PlayAction 경유 (전 클라 동기화)
     │   • BoundActionTag / 재생 인덱스는 SelectActionMontageIndex() 훅이 단독 결정(기본 0) → 인덱스를 큐로 전달
-    │   • 종료: Event.Action.EndAbility (애님노티파이) 또는 폴백 딜레이
+    │   • 종료: Event.Action.EndAbility (애님노티파이) 또는 자기 몽타주 인스턴스의 블렌드 아웃 시작 (끊기면 캔슬)
+    │     — 마지막 프레임 유지 몽타주(Auto Blend Out 꺼짐)는 재생 직후 종료 → [Montage.md](Montage.md)
     │   • 확장 훅: SelectActionMontageIndex / BuildActionCueParameters / OnActionMontageStarted / CleanupActionState
     │
     ├── UCBInputActionAbility (Abstract) ← 입력으로 발동되는 액션 베이스
@@ -25,6 +27,7 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
     │   │
     │   ├── UCBChaserAttackAbility ← 공격 베이스 (BP 확장 전제 — 기본/특수/약/강 공격 등 BP 자식으로 다양화, GAS 표준 쿨다운(CommitAbility) 적용 — CooldownGameplayEffectClass는 BP 자식이 지정)
     │   │      • 발동 시 조준(컨트롤 회전) 방향으로 즉시 정렬 후 몽타주 재생 (bAlignToAimOnActivate) → [Locomotion.md](Locomotion.md)
+    │   │      • 무기 검사·트레이스·데미지 GE 는 무기 트레이스 기능(WeaponTrace)을 가져와 씀
     │   ├── UCBGAChaserEquipWeapon (무기 장착 — 개이트로 몽타주 인덱스 분기: Idle 0/Walk 1/Run·Sprint 2)
     │   ├── UCBGAChaserUnequipWeapon (무기 해제 — 개이트로 몽타주 인덱스 분기: Idle 0/Walk 1/Run·Sprint 2)
     │   └── UCBGADash (전방 대시 — C++ 최종 엣지. Sprint 진입 연출 겸용, GAS 표준 쿨다운, 활성 중 Status.Movement.Dashing 부여, 전투 상태로 몽타주 인덱스 분기: 비전투 0/전투 1)
@@ -40,6 +43,7 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
             • 트리거는 입력도 이벤트도 아닌 **BT 태스크의 태그 직접 활성화**
             • NetExecutionPolicy: ServerOnly (AI 컨트롤러가 서버 전용)
             • 콤보 없음. bRandomizeMontage 로 변형 몽타주 무작위 선택
+            • 무기 검사·트레이스·데미지 GE 는 Chaser 공격과 같은 무기 트레이스 기능을 씀 (코드 공유)
 ```
 
 > C++ 클래스가 곧 최종 구현인 것(**C++ 최종 엣지**, 예: `UCBGADash`)과, **BP 자식으로 다양화되는 C++ 베이스**(예: `UCBChaserAttackAbility`, `UCBGAChangeSpeed`)를 구분한다. 후자는 BP 자식(GA_Sprint, GA_Walk, 각종 공격 BP)이 실제 엣지다.
@@ -49,6 +53,26 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 - 입력으로 발동되는 몽타주 액션 (예: 공격, 무기 장착/해제): `UCBInputActionAbility`
 - 게임플레이 이벤트로 발동되는 몽타주 액션 (예: 피격 반응, 사망): `UCBEventActionAbility`
 - **AI 두뇌(BT)가 발동하는 공격**: `UCBAIAttackAbility` — 아래 "AI 공격" 참조
+
+> **여러 어빌리티가 같은 기능을 써야 하면 새 베이스 클래스를 만들지 말고 기능 조각으로 뺀다.** `UCBGameplayAbility`에는 전 어빌리티 공용 로직만 둔다 → [ActionFragment.md](ActionFragment.md)
+
+## 기능 조각 — 무기 트레이스 (`UCBFragment_WeaponTrace`)
+
+기능 조각은 **필요한 어빌리티가 멤버로 소유하고 수명 시점마다 직접 호출하는 기능 객체**다. 베이스가 조각을 순회하거나 훅을 대신 불러주지 않는다. 설계 근거는 [ActionFragment.md](ActionFragment.md).
+
+현재 조각은 하나다. 무기 공격에 필요한 세 가지가 늘 함께 쓰이므로 한 기능으로 묶었다.
+
+| 함수 | 하는 일 | 호스트 호출 위치 |
+|---|---|---|
+| `CanActivate(ActorInfo)` | 무기 검사 — 유효한 무기가 없으면 발동 거부 | `CanActivateAbility` (Super 통과 후) |
+| `Start()` | [로컬] 트레이스 구간 이벤트(`Event.Combat.TraceStart/End`)로 컴뱃 컴포넌트 트레이스 on/off, [서버] 히트 이벤트(`Event.Combat.Attack.Hit`) 수신 → 타겟마다 데미지 GE + 무기 피격 큐 | `ActivateAbility`의 `PlayActionMontage()` 직후 |
+| `Stop()` | 트레이스 강제 정지 (캔슬로 종료 노티파이를 못 받은 경우) | `EndAbility` (Super 뒤) |
+
+- **사용하는 어빌리티**: `UCBChaserAttackAbility`, `UCBAIAttackAbility`. 새 어빌리티가 무기 공격을 하려면 생성자에서 `CreateDefaultSubobject<UCBFragment_WeaponTrace>()`로 만들고 위 세 곳에서 호출한다.
+- **BP에서 데미지 값을 지정한다.** 공격 BP의 `Combat > Weapon Trace` 항목 안의 `DamageEffectClass`·`DamageCoefficient`. 프로퍼티가 `Instanced, NoClear`라 값은 편집되지만 기능 자체를 None으로 비울 수는 없으므로 호스트는 null 검사를 하지 않는다.
+- **Outer가 곧 호스트 어빌리티다**(`GetOwningAbility()`). 기본 서브오브젝트라 어빌리티 인스턴스가 만들어질 때 함께 만들어지고(`InstancedPerActor` → ASC당 하나), BP에서 지정한 값은 아키타입에서 복사된다.
+- **`CanActivate`는 인자 `ActorInfo`를 쓴다.** CDO에서도 불릴 수 있어 호스트의 `CurrentActorInfo`를 믿을 수 없다. 컴뱃 컴포넌트는 `ICBCombatInterface`로 찾는다.
+- **GE 적용은 엔진 경로를 직접 밟는다.** 엔진 `UGameplayAbility::ApplyGameplayEffectSpecToTarget`이 protected라 조각에서 부를 수 없어서, 그 내부(권한·예측키 검사 → 타겟 리스트 잠금 → 타겟 데이터의 `ApplyGameplayEffectSpec`)를 그대로 수행한다. 전부 public API다. 베이스에 래퍼를 두지 않는 이유는 베이스가 "히트"라는 특정 기능을 알게 되기 때문이다.
 
 ## 피격 반응 (`UCBHitReactAbility`)
 
@@ -245,9 +269,9 @@ AssetTag(`Ability.Combat.Death`)는 예외적으로 **C++ 생성자에서** 지�
 | 전투 상태 검사 | 필요 (`IsCombatMode`) | 하지 않음 (아래 참조) |
 
 - **`ServerOnly`인 이유**: AI 컨트롤러는 서버에만 존재하므로 예측할 클라이언트가 없다. 몽타주는 `UCBActionAbility`가 `GameplayCue.PlayAction`으로 전 클라이언트에 동기화하므로 복제 실행이 불필요하다. → [Montage.md](Montage.md)
-- **로컬/서버 분기가 없다**: AI 폰은 서버에서 AI 컨트롤러에 빙의되어 있어 서버가 곧 권위이자 로컬 컨트롤러다(`IsLocallyControlled()`·`IsNetAuthority()` 둘 다 참). 그래서 트레이스·히트 이벤트 대기를 Chaser처럼 두 갈래로 나누지 않고 한 곳에서 등록한다. 무기 트레이스 파이프라인 자체는 [Combat.md](Combat.md) 그대로 재사용된다.
+- **무기 트레이스 기능 한 벌로 플레이어·AI를 함께 처리한다**: AI 폰은 서버에서 AI 컨트롤러에 빙의되어 있어 서버가 곧 권위이자 로컬 컨트롤러다(`IsLocallyControlled()`·`IsNetAuthority()` 둘 다 참 — `FGameplayAbilityActorInfo::IsLocallyControlled`가 폰의 컨트롤러로 판정하고, 서버의 AI 컨트롤러는 `IsLocalController()`가 참). 그래서 `UCBFragment_WeaponTrace::Start()`의 로컬/서버 분기가 AI에서는 둘 다 걸려, 예전 AI 전용 코드가 분기 없이 세 대기를 모두 걸던 것과 결과가 같다. 무기 트레이스 파이프라인 자체는 [Combat.md](Combat.md) 그대로 재사용된다.
 - **쿨다운은 GAS 표준**(`CooldownGameplayEffectClass` + `CommitAbility`). 쿨다운 중이면 활성화가 실패하고 **BT 태스크가 Failed를 받아** 다른 분기로 흐르므로, BT 쪽에 쿨다운 데코레이터를 둘 필요가 없다.
-- **전투 상태를 요구하지 않는다**: `SetCombatMode()`를 호출하는 것은 Chaser의 무기 장착/해제 어빌리티뿐이라, AI는 현재 전투 상태에 진입하지 않는다. 여기서 `IsCombatMode()`를 검사하면 AI 공격이 영영 발동하지 않으므로 무기 유효성만 검사한다.
+- **전투 상태를 요구하지 않는다**: `SetCombatMode()`를 호출하는 것은 Chaser의 무기 장착/해제 어빌리티뿐이라, AI는 현재 전투 상태에 진입하지 않는다. 여기서 `IsCombatMode()`를 검사하면 AI 공격이 영영 발동하지 않으므로 무기 유효성만 검사한다(`UCBFragment_WeaponTrace::CanActivate`).
   - ⚠️ 그 결과 **AI 무기는 칼집(Sheath) 소켓에 붙은 채로 공격 모션이 재생되고, 애님도 비전투 상태머신을 쓴다.** 몬스터가 무장 상태로 보이게 하려면 AI 캐릭터가 준비 완료 시점에 `SetCombatMode(true)`를 한 번 호출해야 한다(미구현).
 
 **같은 입력 태그에 복수 어빌리티 바인딩 가능:** `UCBAbilitySystemComponent::OnAbilityInputPressed`는 입력 태그가 일치하는 어빌리티를 **전부** 순회 활성화한다. 활성화에 실패해도 `InputPressed` 플래그는 세팅되므로, 나중에 다른 경로로 활성화된 어빌리티도 홀드/릴리즈 입력을 정상 수신한다. 어빌리티별 쿨다운은 GAS 표준(`CooldownGameplayEffectClass` + `CommitAbility`)을 쓴다.
@@ -257,7 +281,7 @@ AssetTag(`Ability.Combat.Death`)는 예외적으로 **C++ 생성자에서** 지�
 2. `UCBGADash`가 대시 성공 시 `TryActivateAbilitiesByTag(Ability.Movement.Sprint)`로 **Sprint를 직접 활성화** — 입력 순회 순서(로드아웃 부여 순서)에 의존하지 않는다. 순회 쪽에서 오는 직접 활성화는 1의 RequiredTags가 막는다(순서와 무관하게 안전).
 3. Sprint 종료: 입력 릴리즈(기존) + **가속도 소실 자동 종료**(`UCBGAChangeSpeed::bEndWhenNoAcceleration`, GA_Sprint만 켬) — 이동 입력이 `NoAccelerationGraceTime`(기본 0.2초) 이상 끊기면(정지, 피벗 입력 잠금 등) 자동으로 EndAbility → 속도 GE·`Status.Movement.Gait.Sprint` 태그 제거. 다시 질주하려면 Sprint 키 재입력(=대시)이 필요하다.
 
-**발동 전제 조건은 `CanActivateAbility` 에 둔다 (`ActivateAbility` 안에서 튕기지 않는다):** 무기 보유·자원 등 "지금 발동할 수 있는가"는 `CanActivateAbility` 오버라이드에서 검사한다. `ActivateAbility` 안에서 `EndAbility` 로 튕기면 **"활성화는 성공했는데 즉시 끝난"** 상태가 되어, 호출자가 그것을 정상적으로 즉시 완료된 어빌리티와 구분하지 못한다(BT 대기형 태스크가 대표적인 피해자 — [AI.md](AI.md)).
+**발동 전제 조건은 `CanActivateAbility` 에 둔다 (`ActivateAbility` 안에서 튕기지 않는다):** 무기 보유·자원 등 "지금 발동할 수 있는가"는 `CanActivateAbility` 오버라이드에서 검사한다. 여러 어빌리티가 같은 조건을 쓰면 기능 조각에 두고 호스트의 `CanActivateAbility`에서 호출한다(예: `UCBFragment_WeaponTrace::CanActivate`). `ActivateAbility` 안에서 `EndAbility` 로 튕기면 **"활성화는 성공했는데 즉시 끝난"** 상태가 되어, 호출자가 그것을 정상적으로 즉시 완료된 어빌리티와 구분하지 못한다(BT 대기형 태스크가 대표적인 피해자 — [AI.md](AI.md)).
 - `ActivateAbility` 에 남기는 검사는 **안전망**이다(Can~ 과 Activate~ 사이에 상태가 바뀔 수 있음). 이때는 반드시 `EndAbility(..., bWasCancelled = true)` 로 끝내 호출자가 실패로 식별할 수 있게 한다.
 - 쿨다운·비용·차단 태그는 GAS 가 `CanActivateAbility` 에서 이미 검사하므로 따로 넣지 않는다. `CommitAbility` 실패는 레이스일 때만 발생하며 역시 캔슬로 끝낸다.
 

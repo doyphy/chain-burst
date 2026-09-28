@@ -41,20 +41,18 @@ void UCBHealthBarWidget::BindToASC()
 	// 재호출·재구성 대비: 기존 구독이 있으면 먼저 해제
 	UnbindFromASC();
 
+	// 슬레이트가 아직 없으면 구독도 초기값 반영도 미룸 - 슬레이트가 생기면 NativeConstruct 가 다시 부름.
+	// 슬레이트 생성 전에 프로그레스 바에 값을 넣으면 머터리얼에 반영되지 않고, 생성 후 같은 값은 무시되어 머터리얼이 기본값으로 굳음.
+	// 슬레이트 없이 구독하면 그사이 변경이 같은 이유로 머터리얼 값 굳음.
+	// UCBPlayerListWidget::HandlePlayerListChanged(), UCBUIComponent::CreateOverheadWidget() 이 슬레이트 생성 전에 초기화함.
+	if (!GetCachedWidget().IsValid()) return;
+
 	// 체력 어트리뷰트 변경 델리게이트 구독 (복제 값 도착 시 클라이언트에서도 발화됨)
 	CurrentHealthChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(UCBAttributeSet::GetCurrentHealthAttribute())
 		.AddUObject(this, &UCBHealthBarWidget::HandleHealthAttributeChanged);
 	MaxHealthChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(UCBAttributeSet::GetMaxHealthAttribute())
 		.AddUObject(this, &UCBHealthBarWidget::HandleHealthAttributeChanged);
-	
-	// 슬레이트가 아직 없으면 초기값 반영을 미룸.
-	// 위젯 생성 전에(슬레이드 생성 전) 프로그레스 바를 초기화하면 안됨.
-	// 생성 전에 프로그레스 바 값을 초기화하면 프로그레스 바의 머터리얼에 반영이 안됨.
-	// 프로그레스 바는 같은 값은 무시하므로 생성 전에 초기화하고 생성 후에도 초기화 하면 값이 무시되므로 머터리얼은 초기 상태 그대로 표시.
-	// UCBPlayerListWidget::HandlePlayerListChanged() 함수에서 초기화 하고 슬레이드 생성함.
-	// UCBUIComponent::CreateOverheadWidget 함수에서 초기화 하고 슬레이드 생성함.
-	if (!GetCachedWidget().IsValid()) return;
-	
+
 	// 구독 전에 이미 확정된 값 반영
 	BroadcastHealthChanged();
 }

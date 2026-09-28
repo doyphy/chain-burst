@@ -10,7 +10,7 @@
 | `UCBLocomotionProcessor` | 매 Tick CMC 가속·감속 적용 (개이트 태그 판별 + 대시 전용 감속) |
 | `UCBCharacterRotationComponent` | 캐릭터 회전 (Walk/Run=aim-facing, Sprint=orient-to-movement) |
 | `UCBInputManagerComponent` | 이동 입력 적용 + **피벗 감지·입력 잠금** |
-| GAS 어빌리티 | `GA_Walk`/`GA_Sprint`(속도 GE+개이트 태그), `UCBGADash`(전방 대시), `UCBGAJump`(점프) |
+| GAS 어빌리티 | `GA_Walk`/`GA_Sprint`(속도 GE+개이트 태그), `UCBGADash`(대시 — 카메라 기준 입력 방향), `UCBGAJump`(점프) |
 | ABP 상태 머신 | 전투/비전투 각 1개, 지상 4-스테이트 + 공중 3-스테이트 (아래 배선 표) |
 
 ## 개이트 (Walk / Run / Sprint)
@@ -99,15 +99,24 @@
 ## 피벗 — ABP 스테이트가 아니라 입력 잠금 방식
 
 - 급반전 시 전용 스테이트/애니메이션 없이, `UCBInputManagerComponent::TryDetectPivot`이 **이동 입력 방향 vs 속도 방향 각도**가 개이트별 임계값 이상이면 이동 입력을 개이트별 시간만큼 잠근다 → 무입력이 되며 기존 Stop→Start 흐름이 비주얼 담당. **ABP 변경 없음.**
-- 게이트: 최소 속도 비율(`PivotMinSpeedRatio`) + **지상 전용**(공중 스킵). 잠금은 이동 입력만 차단(Look/줌/어빌리티 유지), 시스템 준비 잠금과 별개 플래그. 로컬 전용 — 감속은 CMC 복제로 전 클라 반영.
+- 게이트: 최소 속도 비율(`PivotMinSpeedRatio`) + **지상 전용**(공중 스킵) + **루트모션 재생 중 스킵**. 잠금은 이동 입력만 차단(Look/줌/어빌리티 유지), 시스템 준비 잠금과 별개 플래그. 로컬 전용 — 감속은 CMC 복제로 전 클라 반영.
 - 개이트별 임계값·잠금 시간은 `FCBGaitMovementData` (예: Sprint 90도/길게, Walk 180도 반전만/짧게).
+- **루트모션 재생 중 스킵 이유**: 그 동안의 `Velocity`는 입력이 아니라 몽타주(공격 전진 등)가 만든 값이라 입력 방향과 비교하는 게 의미가 없다. 루트모션 중엔 입력이 속도에 영향을 주지 못하므로 잠가서 얻는 것도 없고, 오히려 `AddMovementInput`이 끊겨 CMC 가속도(ABP `bHasAcceleration`, Sprint 자동 해제 판정의 입력)만 0이 된다. 몽타주가 끝난 뒤의 잔여 속도에 대한 역입력은 기존대로 피벗된다.
+  - 발견 경위: 대시가 CMC 가속도로 방향을 읽던 시절, 공격 전진 중 역방향 대시가 이 잠금 때문에 전방으로 폴백했다. 지금 대시는 IA_Move 원시값을 읽어 이 잠금과 무관하다([대시](#대시--sprint-sprint는-대시에-종속)).
 
 ## 대시 & Sprint (Sprint는 대시에 종속)
 
 - **Sprint 키 = 전방 대시 트리거.** `UCBGADash`가 전방 대시 몽타주(루트모션, `Action.Movement.Dash`)를 기존 GameplayCue 경로로 재생. 재생 인덱스는 전투 상태(`Status.Combat.InCombat`)로 분기 — 비전투 인덱스 0, 전투 인덱스 1 (`SelectActionMontageIndex()` 재정의). 8방향은 Sprint 루프가 전방뿐이라 폐기.
-- **방향/거리는 몽타주의 baked 이동량이 아니라 모션 워핑으로 결정.** `UCBGADash::BuildActionCueParameters()`가 재생 직전 CMC `GetCurrentAcceleration()`(입력 없으면 전방 폴백)으로 방향을 구하고, 그 방향으로 `DashDistance`(에디터에서 무기별 조정 가능, 기본 700)만큼 떨어진 지점을 `FGameplayCueParameters`의 `Location`/`Normal`에 실어 큐로 보낸다.
+- **방향/거리는 몽타주의 baked 이동량이 아니라 모션 워핑으로 결정.** 방향은 **누른 순간의 카메라 기준 이동 입력**(입력 없으면 액터 정면)이다 — 카메라가 캐릭터 오른쪽에서 보고 있을 때 D를 누르면 캐릭터 기준 정면으로 나간다. `UCBGADash::BuildActionCueParameters()`가 확정된 방향으로 `DashDistance`(에디터에서 무기별 조정 가능, 기본 700)만큼 떨어진 지점을 `FGameplayCueParameters`의 `Location`/`Normal`에 실어 큐로 보낸다.
+  - **방향 출처 = `UCBInputManagerComponent::Local_GetCameraRelativeMoveInput()`.** `UEnhancedPlayerInput::GetActionValue(IA_Move)`로 이번 프레임 원시 입력을 읽어 컨트롤 회전 Yaw 기준으로 변환한다(변환은 `Input_Move`와 같은 헬퍼 `CalculateCameraRelativeDirection`). 액션 값은 델리게이트 발화 전에 전부 평가되므로(`PrepareInputDelegatesForEvaluation`) 대시 입력 콜백 안에서 읽어도 이번 프레임 값이다 — 방향키와 대시를 같은 프레임에 눌러도 반영된다.
+  - **서버로는 TargetData로 보낸다.** 카메라 기준 입력은 소유 클라만 안다. 원격 클라는 `ActivateAbility` 안에서 `ServerSetReplicatedTargetData`로 방향을 보내고(`FGameplayAbilityTargetData_LocationInfo`의 목표 트랜스폼 회전에 방향만 담음 — 새 USTRUCT 없음), 서버 인스턴스는 `AbilityTargetDataSetDelegate` + `CallReplicatedTargetDataDelegatesIfSet`으로 받은 뒤 몽타주를 재생한다. 호스트는 서버 자신이라 전송 없이 바로 재생한다.
+    - 활성화 RPC와 같은 ASC 채널의 Reliable RPC라 순서가 보장되고 보통 같은 패킷으로 도착해, 서버 쪽 대기는 사실상 0이다.
+    - 전송 시 활성화 예측 키가 함께 가고, 서버는 그 키의 예측 창 안에서 수신 콜백을 부른다. 그래서 콜백에서 실행한 몽타주 큐가 소유 클라에서 중복 재생되지 않는다.
+    - **서버는 방향만 받는다.** 워프 목표 위치는 각 머신이 자기 액터 위치 + 방향 × `DashDistance`로 계산한다 — 클라 좌표를 믿으면 위치 조작이 가능해진다. 방향 자체는 입력 의도라 검증 기준이 없어 받은 그대로(수평 정규화만) 쓴다.
+    - 콜백은 데이터를 먼저 읽고 `ConsumeClientReplicatedTargetData`를 부른다(소비가 원본 캐시를 비움). 방향이 오기 전에 어빌리티가 끝나면 `EndAbility`가 구독을 해제한다.
+  - **CMC 가속도를 쓰지 않는 이유**: ① `Input_Move`는 이동 입력을 **액터 facing 기준**으로 분해하므로(코너 관성 설계) 가속도는 카메라 기준이 아니다 — 제자리에서 카메라만 돌렸거나 공격 중(회전 잠금)이면 어긋나고, Sprint 중엔 항상 facing 정면이다. ② 서버 가속도는 클라가 보낸 무브 RPC(Unreliable, 합치거나 잠시 보류됨)에서 오고 대시 활성화 RPC(Reliable)와 순서가 묶이지 않아, 방향을 막 바꾸며 대시하면 소유 클라와 서버 값이 달라 보정이 생길 수 있다. ③ 가속도에서 카메라 기준을 역산하려면 클라의 액터 Yaw가 필요한데 서버 쪽 회전은 보간 중이라 일치하지 않는다.
+  - **`CachedMoveInputDir`(회전 컴포넌트)을 쓰지 않는 이유**: 키를 떼도 지워지지 않고 피벗 잠금 중엔 갱신되지 않아 지난 방향이 남는다. IA_Move 원시값은 상태가 없어 이 문제가 없다.
   - **워프 타겟 등록은 액션 전용이 아니라 `UCBActionAbility` 공용 경로다.** `UCBGCN_PlayAction`이 몽타주 재생 **직전**(같은 프레임)에, `Parameters.Location`이 0이 아니면 대상의 `UMotionWarpingComponent`에 `ActionTag.GetTagName()`(예: `Action.Movement.Dash`)을 워프 타겟 이름으로 등록한다 — 몽타주 인덱스와 같은 큐 경로라 서버·소유 클라·Simulated Proxy가 전부 동일한 워프 타겟을 받는다. 대시 전용 상수가 아니라 **액션 태그를 그대로 재사용**하므로, 앞으로 다른 액션(공격 등)이 모션 워핑을 쓰고 싶으면 해당 어빌리티가 `BuildActionCueParameters()`에서 `Location`/`Normal`만 채우면 되고 `UCBGCN_PlayAction`은 손댈 필요 없다. `Location`을 안 채우는 액션은 그냥 스킵된다(무해).
-  - 방향 소스로 `CBCharacterRotationComponent`의 `CachedMoveInputDir`(로컬 InputManager 전용) 대신 **CMC 가속도**를 쓰는 이유: 가속도는 이동 입력 리플리케이션/예측으로 서버 인스턴스에서도 항상 정확하지만, `CachedMoveInputDir`은 로컬 컨트롤 폰에서만 채워져 서버 쪽 리모트 클라 폰에서는 비어있을 수 있다.
   - **대시 몽타주(`AM_Chaser_*_Dash`/`*_Combat_Dash`)에는 이동 구간 전체를 덮는 Motion Warping AnimNotifyState가 배치되어 있어야 한다** (Root Motion Modifier: Skew Warp, Translation+Rotation 워프 켜짐, Warp Target Name = **`"Action.Movement.Dash"`** — 액션 태그 문자열과 정확히 일치해야 함). 이 노티파이가 없으면 워프 타겟만 등록되고 아무 효과가 없다(무해하게 무시됨). 다른 액션에 워프를 추가할 때는 그 액션의 태그 문자열을 그대로 Warp Target Name에 쓰면 된다.
   - [루트모션 재생 중 회전 잠금](#루트모션-재생-중-회전-잠금)과 공존한다 — 회전 잠금은 액터 회전을 안 건드리는 쪽으로 막을 뿐이고, 모션 워핑은 루트모션 델타 자체를 보정하는 별개 파이프라인(`ProcessRootMotionPreConvertToWorld`)이라 서로 간섭하지 않는다.
 - **종속 체인**: ① `GA_Sprint`는 `ActivationRequiredTags = Status.Movement.Dashing`으로 대시 없인 활성화 불가 (대시 쿨다운이면 Sprint도 발동 불가) ② 대시 성공 시 `UCBGADash`가 `TryActivateAbilitiesByTag(Ability.Movement.Sprint)`로 Sprint를 직접 활성화(부여 순서 무관) ③ Sprint는 릴리즈 또는 **가속 소실 자동 종료**(`bEndWhenNoAcceleration`, 유예 0.2초 — 정지·피벗 잠금 포함)로 해제.

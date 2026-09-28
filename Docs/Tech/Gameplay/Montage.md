@@ -6,7 +6,7 @@
 
 - `UCBActionMontageData` (데이터 에셋): 재생 가능한 모든 몽타주를 관리하는 **순수 조회 테이블**. **모든 몽타주는 액션 태그(`Action.*`)에 바인딩**되며, 태그 + 인덱스로 조회한다.
   - 싱글/콤보 구분 없이 **엔트리 하나(`FCBActionMontageEntry`)** 로 통합 — 태그당 몽타주 **배열(`Montages`)** 을 가진다. 1개면 단일 액션, 여러 개면 콤보(순서) 또는 랜덤(변형 풀)이며, **인덱스의 의미(콤보 단계/랜덤)는 데이터가 아니라 호출자가 결정**한다.
-  - 대시(`Action.Movement.Dash`)는 전투 상태로 인덱스 분기 — 인덱스 0 = 비전투 대시, 인덱스 1 = 전투 대시 (`UCBGADash::SelectActionMontageIndex`). 방향은 전방 1방향만 사용 — Sprint 루프가 전방 질주뿐이라 대시도 전방으로 통일 (`UCBGADash` 주석 참고).
+  - 대시(`Action.Movement.Dash`)는 전투 상태로 인덱스 분기 — 인덱스 0 = 비전투 대시, 인덱스 1 = 전투 대시 (`UCBGADash::SelectActionMontageIndex`). 몽타주는 전방 1방향만 사용 — Sprint 루프가 전방 질주뿐이라 대시도 전방으로 통일하고, 실제 이동 방향은 모션 워핑이 카메라 기준 입력 방향으로 돌린다 (→ [Locomotion.md](Locomotion.md)).
   - 무기 장착/해제(`Action.Combat.EquipWeapon`/`UnequipWeapon`)는 개이트로 인덱스 분기 — 인덱스 0 = Idle, 1 = Walk, 2 = Run/Sprint 공용 (`UCBAbilitySystemLibrary::GetGaitMontageIndex` 공용 헬퍼 — `Status.Movement.Idle` 파생 상태 태그 + `Gait.*` 태그 순수 조회).
   - 에디터 배열(`MontageEntries`) → 런타임 `TMap`(`MontageMap`) 변환(`UpdateRuntimeMap`).
   - 조회 API: `FindMontage(Tag, Index)`(인덱스 검사 내부 포함), `GetMontageCount(Tag)`.

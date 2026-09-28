@@ -12,6 +12,7 @@
 
 // engine
 #include "EnhancedInputSubsystems.h"
+#include "EnhancedPlayerInput.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/LocalPlayer.h"
@@ -148,19 +149,12 @@ void UCBInputManagerComponent::Input_Move(const FInputActionValue& InputActionVa
 
 	// 카메라 기준 이동 방향(플레이어 의도)을 계산해 피벗 감지와 회전 컴포넌트에 사용.
 	// 회전에서는 Sprint가 이동 방향으로 몸을 돌리는데 사용, Walk/Run은 무시(카메라 방향을 봄).
-	if (AController* Controller = Character->GetController())
+	if (Character->GetController())
 	{
-		// 카메라 회전 Yaw 값 (좌우 회전각) 가져오기
-		const FRotator CameraYaw(0, Controller->GetControlRotation().Yaw, 0);
+		// 카메라 기준 입력 방향 계산
+		const FVector DesiredDir = CalculateCameraRelativeDirection(MovementVector);
 
-		// 카메라의 전방/우측 방향 벡터 가져오기
-		const FVector CameraForward = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::X);
-		const FVector CameraRight = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::Y);
-
-		// 카메라의 전방 방향 벡터와 우측 방향 벡터에 입력 값을 곱한 후 더함 (월드 공간에서의 이동 방향)
-		const FVector DesiredDir = CameraForward * ForwardInput + CameraRight * RightInput;
-
-		// 피벗 감지 — 입력 방향이 현재 속도 방향과 크게 어긋나면 이동 입력을 잠그고 이번 입력은 무시.
+		// 피벗 감지 - 입력 방향이 현재 속도 방향과 크게 어긋나면 이동 입력을 잠그고 이번 입력은 무시.
 		// (잠금 동안 자연 감속 → Stop 재생 → 해제 후 유지 중인 입력으로 Start 재출발)
 		if (TryDetectPivot(DesiredDir))
 		{
@@ -200,6 +194,41 @@ void UCBInputManagerComponent::Input_Move(const FInputActionValue& InputActionVa
 	}
 }
 
+FVector UCBInputManagerComponent::Local_GetCameraRelativeMoveInput() const
+{
+	// 이동 입력 액션 조회 (입력 설정은 로컬 조작 캐릭터에만 주입됨)
+	const FCBInputActionConfig* MoveConfig = InputConfig ? InputConfig->FindNativeInputConfigByTag(CBGameplayTags::Input_Action_Move) : nullptr;
+	if (!MoveConfig) return FVector::ZeroVector;
+
+	// 플레이어 입력 가져오기
+	const APlayerController* PC = GetOwningController<APlayerController>();
+	const UEnhancedPlayerInput* PlayerInput = PC ? Cast<UEnhancedPlayerInput>(PC->PlayerInput) : nullptr;
+	if (!PlayerInput) return FVector::ZeroVector;
+
+	// 현재 이동 입력값. 
+	const FVector2D MoveInput = PlayerInput->GetActionValue(MoveConfig->InputAction).Get<FVector2D>();
+
+	// 카메라 기준 입력 방향 값 반환
+	return CalculateCameraRelativeDirection(MoveInput);
+}
+
+FVector UCBInputManagerComponent::CalculateCameraRelativeDirection(const FVector2D& InMoveInput) const
+{
+	const AController* Controller = GetOwningController<AController>();
+	if (!Controller) return FVector::ZeroVector;
+
+	// 카메라 회전 Yaw 값 (좌우 회전각) 가져오기
+	const FRotator CameraYaw(0, Controller->GetControlRotation().Yaw, 0);
+
+	// 카메라의 전방/우측 방향 벡터 가져오기
+	const FVector CameraForward = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::X);
+	const FVector CameraRight = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::Y);
+
+	// 입력 축 규약(IMC의 Swizzle 매핑 기준): Y = 전/후(W/S), X = 좌/우(A/D).
+	// 카메라의 전방 방향 벡터와 우측 방향 벡터에 입력 값을 곱한 후 더함 (월드 공간에서의 이동 방향)
+	return CameraForward * InMoveInput.Y + CameraRight * InMoveInput.X;
+}
+
 void UCBInputManagerComponent::Input_Look(const FInputActionValue& InputActionValue)
 {
 	const FVector2D LookAxisVector = InputActionValue.Get<FVector2D>();
@@ -228,6 +257,10 @@ bool UCBInputManagerComponent::TryDetectPivot(const FVector& InDesiredDir)
 	// 공중에서는 피벗 없음 (피벗은 지상 급반전 개념 — 공중 방향 전환에 입력 잠금이 걸리면 오동작)
 	const UCharacterMovementComponent* CMC = Character->GetCharacterMovement();
 	if (!CMC || CMC->IsFalling()) return false;
+
+	// 루트모션 재생 중에는 피벗 없음 (속도가 입력이 아니라 애니메이션에서 나오므로 입력 방향과 비교할 의미가 없음)
+	// 여기서 잠그면 가속도가 0이 되어 가속도를 읽는 쪽(대시 방향 등)이 입력을 잃음
+	if (Character->IsPlayingRootMotion()) return false;
 
 	// 개이트별 피벗 파라미터 조회 — 이동 데이터가 없으면 피벗 비활성
 	UCBCharacterMovementData* MovementData = Character->GetMovementDataAsset();

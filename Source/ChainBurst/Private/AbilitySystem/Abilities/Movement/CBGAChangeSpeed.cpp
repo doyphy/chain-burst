@@ -83,16 +83,17 @@ void UCBGAChangeSpeed::EndAbility(const FGameplayAbilitySpecHandle Handle, const
 		}
 	}
 
-	// 어빌리티 종료 시 적용했던 GE를 제거 (자동으로 기본 속도인 Run으로 복구됨)
-	if (ActiveGEHandle.IsValid())
+	// 어빌리티 종료 시 적용했던 GE를 제거 (자동으로 기본 속도인 Run으로 복구됨).
+	// GE 제거는 예측되지 않으므로 서버만 제거함 - 제거 결과가 클라로 복제됨.
+	if (ActiveGEHandle.IsValid() && HasAuthority(&ActivationInfo))
 	{
 		if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
 		{
 			ASC->RemoveActiveGameplayEffect(ActiveGEHandle);
 		}
-		// 핸들 무효화 (안전하게)
-		ActiveGEHandle.Invalidate();
 	}
+	// 다음 활성화를 위해 핸들 무효화 (클라 포함)
+	ActiveGEHandle.Invalidate();
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

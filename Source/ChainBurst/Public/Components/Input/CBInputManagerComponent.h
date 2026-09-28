@@ -90,7 +90,16 @@ private:
 #pragma endregion
 
 #pragma region InputHandlers
-	/** 실제 입력이 들어왔을 때의 처리 — 바인딩된 콜백들과 그 공용 헬퍼. */
+	/** 실제 입력이 들어왔을 때의 처리 - 바인딩된 콜백들과 그 공용 헬퍼. */
+public:
+	/**
+	 * [로컬 전용] 지금 누르고 있는 이동 입력(IA_Move)을 카메라 기준 월드 방향으로 반환.
+	 * 이동 적용과 무관한 원시 입력값을 읽으므로 피벗 잠금·루트모션 중에도 실제 입력 방향이 나옴.
+	 * 입력 처리 중(어빌리티 입력 콜백 등)에 불려도 이번 프레임 값.
+	 * @return 카메라 기준 월드 방향 (크기 = 입력 크기). 입력이 없거나 조회 불가면 ZeroVector
+	 */
+	FVector Local_GetCameraRelativeMoveInput() const;
+
 protected:
 	void Input_Move(const FInputActionValue& InputActionValue);
 	void Input_Look(const FInputActionValue& InputActionValue);
@@ -101,6 +110,13 @@ protected:
 
 	/** 소유 Chaser 캐릭터를 지연 캐싱해서 반환 (핸들러·피벗 공용) */
 	ACBChaserCharacter* GetOwningChaser();
+
+	/**
+	 * 이동 입력을 컨트롤 회전 Yaw 기준 월드 방향으로 변환 (Input_Move·Local_GetCameraRelativeMoveInput 공용).
+	 * @param InMoveInput IA_Move 값 (IMC Swizzle 규약: Y = 전/후, X = 좌/우)
+	 * @return 카메라 기준 월드 방향. 컨트롤러가 없으면 ZeroVector
+	 */
+	FVector CalculateCameraRelativeDirection(const FVector2D& InMoveInput) const;
 
 	/** 소유 Chaser 캐릭터 (지연 캐싱) */
 	UPROPERTY(Transient)

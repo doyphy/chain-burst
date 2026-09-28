@@ -73,7 +73,7 @@
 
 | 클래스 | 역할 |
 |---|---|
-| `UCBHealthBarWidget` | 체력 위젯 공용 베이스(UUserWidget). `InitializeWithASC()`(`BlueprintCallable`)로 대상 ASC를 캐싱하고 구독 + 초기값 반영. **구독 수명은 슬레이트 수명이 아니라 대상 수명을 따른다** — `NativeDestruct`는 구독만 끊고 대상 캐시는 남기며, `NativeConstruct`에서 스스로 재구독한다(아래 함정 참조). 비주얼은 `OnHealthChanged(Current, Max)` BP 이벤트로 WBP에 위임. 머리 위 바 WBP가 직접 상속하고, HUD에서는 이 위젯을 **자식으로 담는** HUD 컨테이너 WBP가 뜬다 |
+| `UCBHealthBarWidget` | 체력 위젯 공용 베이스(UUserWidget). `InitializeWithASC()`(`BlueprintCallable`)로 대상 ASC를 캐싱하고 구독 + 초기값 반영. **구독은 슬레이트가 있는 동안만, 대상 캐시는 대상 수명을 따른다** — 슬레이트 없이 초기화되면 캐시만 하고, `NativeDestruct`는 구독만 끊고 대상 캐시는 남기며, `NativeConstruct`에서 스스로 (재)구독한다(아래 함정 둘 참조). 비주얼은 `OnHealthChanged(Current, Max)` BP 이벤트로 WBP에 위임. 머리 위 바 WBP가 직접 상속하고, HUD에서는 이 위젯을 **자식으로 담는** HUD 컨테이너 WBP가 뜬다 |
 | `UCBSkillSlotWidget` | HUD 스킬 슬롯 하나의 공용 베이스(UUserWidget). `EditDefaultsOnly` 쿨다운 태그 하나를 대상으로 카운트 변화를 구독해 쿨다운 시작·종료를 감지하고, 쿨다운 중에는 매 틱 활성 GE에서 남은 시간·전체 길이를 조회해 진행률을 계산. 비주얼은 `OnCooldownStarted` / `OnCooldownProgress(Progress, RemainingTime)` / `OnCooldownEnded` BP 이벤트로 WBP에 위임하므로 C++는 위젯 구성(서드파티 프로그레스바 등)을 알지 않는다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
 | `UCBBurstGaugeWidget` | HUD **버스트 게이지**의 공용 베이스(UUserWidget). 한 바가 두 모드로 동작 — 충전 중에는 `BurstGauge` 어트리뷰트를 구독해 `OnBurstGaugeChanged(Current, Max)`, 버스트 중에는 `Status.Combat.Burst` 태그로 시작·종료를 감지하고 매 틱 버스트 GE 남은 시간으로 `OnBurstProgress(RemainingRatio, RemainingTime)`. 두 모드의 이벤트는 섞이지 않는다(아래 "버스트 게이지 표시"). 발동 가능 여부가 바뀌면 `OnBurstReadyChanged(bIsReady)`(BlueprintAssignable)를 방송해 HUD 등 외부 위젯이 구독한다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
 | `UCBNamePlateWidget` | **로비 발밑 이름표**의 공용 베이스(UUserWidget). `InitializeWithPlayerState()`(`BlueprintCallable`)로 대상 PlayerState를 캐싱하고 `OnPlayerNicknameChanged` 구독 + 현재 이름 반영. 비주얼은 `OnNicknameChanged(Nickname)` BP 이벤트로 WBP에 위임. `IsLocalPlayerTarget()`로 자기 이름표만 다르게 꾸밀 수 있다. **구독 수명 계약은 `UCBHealthBarWidget`과 동일** |
@@ -132,6 +132,24 @@
 그래서 `UCBHealthBarWidget`은 `NativeDestruct`에서 **핸들만 해제**하고 `CachedASC`는 남긴 뒤, `NativeConstruct`에서 `BindToASC()`로 재구독 + 현재 값 반영을 한다.
 
 숨김 경로마다 호출자가 `InitializeWithASC()`를 다시 불러주는 방식으로도 되지만, 그러면 `SetOwnerPlayer` 변경이나 게임 레이어 재구성처럼 **우리가 부르지 않은 제거 경로**에서 그대로 죽는다. 위젯이 자기 계약을 지키게 두는 편이 낫다.
+
+### 첫 표시의 함정 — 슬레이트 없이 구독하면 1타가 삼켜진다
+
+증상: 평소 숨김인 머리 위 바가 **첫 피격에 가득 찬 채로** 뜨고, 2타부터 정상 반영된다.
+
+서드파티 프로그레스 바는 **슬레이트 생성 전에 받은 값을 머티리얼 없이 저장만 하고, 생성 후 같은 값이 오면 무시한다.** 그래서 슬레이트보다 먼저 값이 한 번이라도 들어가면 머티리얼이 기본값으로 굳는다.
+
+머리 위 바는 숨긴 채 생성되므로(위 "생성 순서의 함정") `InitializeWithASC()` 시점에 슬레이트가 없다. 이때 구독까지 걸어 두면 첫 피격에서:
+
+1. 위젯의 체력 구독이 발화 → 슬레이트 없는 바에 새 체력이 들어감 (머티리얼 미반영)
+2. UI 컴포넌트가 `SetVisibility(true)` — 하지만 화면에 올리는 건 **다음 틱**(`TickComponent` → `UpdateWidget` → `AddWidgetToScreen`)
+3. 다음 틱 슬레이트 생성 → `NativeConstruct`가 같은 값을 다시 보냄 → 무시됨
+
+화면 추가가 항상 다음 틱이라 두 구독의 발화 순서와 무관하게 매번 재현된다. 한 번 숨겨진 뒤에는 `NativeDestruct`가 구독을 끊어 두므로 **첫 표시에서만** 생긴다.
+
+그래서 `BindToASC()`는 슬레이트가 없으면 **초기값 반영뿐 아니라 구독도 미룬다.** 구독은 `NativeConstruct`에서 걸리고, 그때 최신 값을 한 번 보낸다. 결과적으로 구독은 슬레이트가 있는 동안만 존재해 `NativeDestruct` 쪽과 짝이 맞는다. HUD 플레이어 목록처럼 초기화 후 슬레이트를 만드는 경로의 같은 틈도 함께 막힌다.
+
+> 버스트 게이지·스킬 슬롯은 구조상 같은 틈이 있지만 HUD `Event Construct`에서 초기화되어(항상 슬레이트 있음) 도달하지 않으므로 그대로 두었다. 슬레이트 생성 전에 초기화하는 경로가 생기면 같은 방식으로 옮길 것.
 
 ### 생성 순서의 함정 — `SetWidget()`은 그 자리에서 화면에 올린다
 

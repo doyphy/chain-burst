@@ -34,7 +34,8 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
     │   │      • 무기 검사·트레이스·데미지 GE 는 무기 트레이스 기능(WeaponTrace)을 가져와 씀
     │   ├── UCBGAChaserEquipWeapon (무기 장착 — 개이트로 몽타주 인덱스 분기: Idle 0/Walk 1/Run·Sprint 2)
     │   ├── UCBGAChaserUnequipWeapon (무기 해제 — 개이트로 몽타주 인덱스 분기: Idle 0/Walk 1/Run·Sprint 2)
-    │   ├── UCBGADash (전방 대시 — C++ 최종 엣지. Sprint 진입 연출 겸용, GAS 표준 쿨다운, 활성 중 Status.Movement.Dashing 부여, 전투 상태로 몽타주 인덱스 분기: 비전투 0/전투 1)
+    │   ├── UCBGADash (대시 — C++ 최종 엣지. Sprint 진입 연출 겸용, GAS 표준 쿨다운, 활성 중 Status.Movement.Dashing 부여, 전투 상태로 몽타주 인덱스 분기: 비전투 0/전투 1)
+    │   │      • 방향 = 카메라 기준 이동 입력(모션 워핑). 원격 클라는 TargetData로 서버에 방향 전달 → [Locomotion.md](Locomotion.md)
     │   └── UCBBurstAbility (버스트 발동 — 게이지 가득 참일 때만. 버스트 GE 예측 적용 → [서버] 게이지 소모 → 발동 몽타주. BP 자식은 GE 지정용 → [Burst.md](Burst.md))
     │
     ├── UCBEventActionAbility (Abstract) ← 게임플레이 이벤트로 발동되는 액션 베이스
@@ -325,6 +326,8 @@ AssetTag(`Ability.Combat.Death`)는 예외적으로 **C++ 생성자에서** 지�
 1. `GA_Sprint`는 `ActivationRequiredTags = Status.Movement.Dashing` — 대시 중이 아니면 활성화가 차단된다. 대시가 쿨다운이면 대시 실패 → 태그 없음 → **Sprint도 발동 불가**.
 2. `UCBGADash`가 대시 성공 시 `TryActivateAbilitiesByTag(Ability.Movement.Sprint)`로 **Sprint를 직접 활성화** — 입력 순회 순서(로드아웃 부여 순서)에 의존하지 않는다. 순회 쪽에서 오는 직접 활성화는 1의 RequiredTags가 막는다(순서와 무관하게 안전).
 3. Sprint 종료: 입력 릴리즈(기존) + **가속도 소실 자동 종료**(`UCBGAChangeSpeed::bEndWhenNoAcceleration`, GA_Sprint만 켬) — 이동 입력이 `NoAccelerationGraceTime`(기본 0.2초) 이상 끊기면(정지, 피벗 입력 잠금 등) 자동으로 EndAbility → 속도 GE·`Status.Movement.Gait.Sprint` 태그 제거. 다시 질주하려면 Sprint 키 재입력(=대시)이 필요하다.
+   - **속도 GE 제거는 서버에서만** 한다(`UCBGAChangeSpeed::EndAbility`의 `HasAuthority` 게이트). GAS에서 GE 적용은 예측되지만 **제거는 예측되지 않는다.** 클라의 `ActiveGEHandle`은 예측 사본을 가리키는데, 서버 GE가 복제되어 예측 키가 확인되면 GAS가 그 사본을 스스로 지운다(`NewRejectOrCaughtUpDelegate` → `RemoveActiveGameplayEffect_AllowClientRemoval`). 그래서 클라에서 그 핸들로 제거하면 대상이 없고, UE 5.x의 `RemoveActiveGameplayEffect`는 비권한 호출을 거부하며 `called without Authority when attempting to remove None` 경고를 남긴다.
+   - 대가: 클라는 종료 후 서버의 제거가 복제될 때까지(왕복 지연) Sprint 속도·태그를 유지한다. 종료 순간의 미세한 위치 보정이 보이면 이것이 원인이며, 해결하려면 CMC 수준의 속도 예측이 필요하다.
 
 **발동 전제 조건은 `CanActivateAbility` 에 둔다 (`ActivateAbility` 안에서 튕기지 않는다):** 무기 보유·자원 등 "지금 발동할 수 있는가"는 `CanActivateAbility` 오버라이드에서 검사한다. 여러 어빌리티가 같은 조건을 쓰면 기능 조각에 두고 호스트의 `CanActivateAbility`에서 호출한다(예: `UCBFragment_WeaponTrace::CanActivate`). `ActivateAbility` 안에서 `EndAbility` 로 튕기면 **"활성화는 성공했는데 즉시 끝난"** 상태가 되어, 호출자가 그것을 정상적으로 즉시 완료된 어빌리티와 구분하지 못한다(BT 대기형 태스크가 대표적인 피해자 — [AI.md](AI.md)).
 - `ActivateAbility` 에 남기는 검사는 **안전망**이다(Can~ 과 Activate~ 사이에 상태가 바뀔 수 있음). 이때는 반드시 `EndAbility(..., bWasCancelled = true)` 로 끝내 호출자가 실패로 식별할 수 있게 한다.

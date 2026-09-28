@@ -75,6 +75,7 @@
 |---|---|
 | `UCBHealthBarWidget` | 체력 위젯 공용 베이스(UUserWidget). `InitializeWithASC()`(`BlueprintCallable`)로 대상 ASC를 캐싱하고 구독 + 초기값 반영. **구독 수명은 슬레이트 수명이 아니라 대상 수명을 따른다** — `NativeDestruct`는 구독만 끊고 대상 캐시는 남기며, `NativeConstruct`에서 스스로 재구독한다(아래 함정 참조). 비주얼은 `OnHealthChanged(Current, Max)` BP 이벤트로 WBP에 위임. 머리 위 바 WBP가 직접 상속하고, HUD에서는 이 위젯을 **자식으로 담는** HUD 컨테이너 WBP가 뜬다 |
 | `UCBSkillSlotWidget` | HUD 스킬 슬롯 하나의 공용 베이스(UUserWidget). `EditDefaultsOnly` 쿨다운 태그 하나를 대상으로 카운트 변화를 구독해 쿨다운 시작·종료를 감지하고, 쿨다운 중에는 매 틱 활성 GE에서 남은 시간·전체 길이를 조회해 진행률을 계산. 비주얼은 `OnCooldownStarted` / `OnCooldownProgress(Progress, RemainingTime)` / `OnCooldownEnded` BP 이벤트로 WBP에 위임하므로 C++는 위젯 구성(서드파티 프로그레스바 등)을 알지 않는다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
+| `UCBBurstGaugeWidget` | HUD **버스트 게이지**의 공용 베이스(UUserWidget). 한 바가 두 모드로 동작 — 충전 중에는 `BurstGauge` 어트리뷰트를 구독해 `OnBurstGaugeChanged(Current, Max)`, 버스트 중에는 `Status.Combat.Burst` 태그로 시작·종료를 감지하고 매 틱 버스트 GE 남은 시간으로 `OnBurstProgress(RemainingRatio, RemainingTime)`. 두 모드의 이벤트는 섞이지 않는다(아래 "버스트 게이지 표시"). 발동 가능 여부가 바뀌면 `OnBurstReadyChanged(bIsReady)`(BlueprintAssignable)를 방송해 HUD 등 외부 위젯이 구독한다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
 | `UCBNamePlateWidget` | **로비 발밑 이름표**의 공용 베이스(UUserWidget). `InitializeWithPlayerState()`(`BlueprintCallable`)로 대상 PlayerState를 캐싱하고 `OnPlayerNicknameChanged` 구독 + 현재 이름 반영. 비주얼은 `OnNicknameChanged(Nickname)` BP 이벤트로 WBP에 위임. `IsLocalPlayerTarget()`로 자기 이름표만 다르게 꾸밀 수 있다. **구독 수명 계약은 `UCBHealthBarWidget`과 동일** |
 | `UCBPlayerListWidget` | **HUD 플레이어 목록**의 공용 베이스(UUserWidget). `ACBGameStateBase::OnPlayerListChanged`를 구독해 행을 다시 만들고, 자기 자신과 봇은 제외한다. 행을 담을 패널은 WBP에서 `EntryContainer` 이름으로 배치(`BindWidget`). 게임 스테이트 복제가 위젯보다 늦으면 `UWorld::GameStateSetEvent`로 기다렸다 다시 구독하고, 로컬 PlayerState 확정은 `ACBChaserController::OnLocalPlayerStateSet`으로 기다린다(아래 "자기 자신 제외") |
 | `UCBPlayerListEntryWidget` | 목록의 **행 하나**. `InitializeWithPlayerState()` 하나로 이름표·체력바 자식을 배선한다. 자식은 `BindWidgetOptional`이라 WBP에 같은 이름으로 두면 자동 연결되고 없으면 그 부분만 생략 |
@@ -319,6 +320,57 @@ HUD 스킬 아이콘 위에 검은 오버레이가 12시부터 시계방향으�
 ### ASC 바인딩
 
 체력바와 같은 경로다. `WBP_CB_HUD`의 `Event Construct`에서 `Get Owning Player Pawn` → `Get Ability System Component` → `Cast To CBAbilitySystemComponent` 를 한 번 하고, 각 슬롯의 `Initialize With ASC`를 호출한다. 슬롯 위젯은 `Is Variable`을 직접 켜야 한다.
+
+## 버스트 게이지 표시
+
+HUD에서 버스트 게이지(→ [Burst.md](../Gameplay/Burst.md))를 **바 하나로** 보여준다. 충전 중에는 게이지만큼 차고, 버스트 중에는 남은 시간만큼 줄어든다. 새 네트워크 코드는 없다.
+
+### 두 모드 — 이벤트가 섞이지 않는다
+
+| 모드 | 신호 | BP 이벤트 |
+|---|---|---|
+| 충전 | `BurstGauge` 어트리뷰트 변경 | `OnBurstGaugeChanged(CurrentGauge, MaxGauge)` — 가득 참은 BP에서 `Current >= Max` |
+| 충전 → 버스트 | `Status.Combat.Burst` 카운트 0 → 1 (`NewOrRemoved`) | `OnBurstStarted()` + 남은 시간 1회 |
+| 버스트 | 매 틱, 활성 GE 재조회 | `OnBurstProgress(RemainingRatio, RemainingTime)` — 1(방금 발동) → 0(종료) |
+| 버스트 → 충전 | 카운트 1 → 0 | `OnBurstEnded()` + **현재 게이지로 `OnBurstGaugeChanged` 1회** |
+
+C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기만 하면 된다.
+
+- **버스트 중에는 게이지 변경을 보내지 않는다.** 게이지는 서버가 소모하므로 소유 클라에는 발동보다 왕복 지연만큼 늦게 0이 도착한다. 반면 `Status.Combat.Burst`는 예측 적용된 GE가 즉시 붙인다. 모드를 태그로 전환하고 버스트 중의 게이지 변경을 무시하면, **늦게 온 0이 남은 시간 표시를 덮어쓰지 않고** 발동 직후 게이지가 가득 찬 채 머무는 구간도 보이지 않는다.
+- **종료 직후 현재 게이지를 다시 보낸다.** 버스트 동안 무시한 변경(→ 0)을 여기서 한 번에 따라잡는다. 서버가 발동을 거부해 예측 태그가 빠진 경우에도 같은 경로로 **가득 찬 게이지로 되돌아간다.**
+- **남은 시간은 매 틱 재조회한다** — 스킬 쿨다운 표시와 같은 방식(`GetActiveEffectsTimeRemainingAndDuration`, 태그로 GE 쿼리). 여러 개가 잡히면 가장 늦게 끝나는 것을 쓴다. 서버 승인 직후 예측 사본과 복제 사본이 잠깐 함께 있을 수 있기 때문이다. 태그는 붙었는데 GE가 아직 조회되지 않는 프레임은 건너뛴다.
+- `NativeTick` 첫 줄에서 버스트 중이 아니면 조기 반환한다. 평소 비용은 bool 검사 하나다.
+
+### 발동 가능 알림 — `OnBurstReadyChanged`
+
+게이지 위젯 **밖**(HUD의 발동 안내 버튼 등)이 "지금 버스트를 쓸 수 있는가"를 알아야 할 때 구독하는 델리게이트다(`FCBOnBurstReadyChanged`, `Types/CBDelegates.h`). **값이 바뀔 때만** 방송한다.
+
+**발동 가능 = 게이지 ≥ `MaxBurstGauge` && 버스트 중이 아님.** 게이지 값만으로 판정하지 않는 이유는 게이지 소모가 서버에서 일어나 소유 클라에 늦게 도착하기 때문이다. 게이지만 보면 발동 입력 후에도 왕복 지연만큼 "가능"이 남는다.
+
+| 상황 | 결과 | 경로 |
+|---|---|---|
+| 게이지가 100에 도달 | true | 게이지 변경 → `BroadcastBurstGaugeChanged()` → `UpdateBurstReady()` |
+| 발동 입력 | **즉시** false | 예측 적용된 `GE_Burst`가 태그를 붙임 → `SetBurstActive(true)` → `UpdateBurstReady()` |
+| 서버가 발동 거부 | true 복귀 | 예측 태그가 빠짐 → 종료 후 게이지(100 그대로) 재전송 → `UpdateBurstReady()` |
+| 버스트 종료 | false 유지 | 게이지는 이미 0 |
+| 가득 찬 채 사망 | false | 패시브 종료가 게이지를 0으로 |
+
+- **구독은 `InitializeWithASC` 호출 전에 한다.** 초기화 중의 첫 판정이 방송되기 때문이다. 지금은 HUD가 생길 때마다(스폰·리스폰·캐릭터 변경) 게이지가 0이라 순서가 뒤바뀌어도 놓칠 방송이 없지만, 그 전제에 기대지 않는다.
+- 현재 값을 읽는 getter는 두지 않았다. 위와 같은 이유로 HUD 생성 시점의 초기 상태는 언제나 false다.
+- 발동 안내가 **클릭해서 발동하는 버튼**이 되면 UI 입력을 어빌리티 발동으로 잇는 경로가 별도로 필요하다(현재는 키 입력 `Input.Action.Combat.Burst`만 발동한다).
+
+### 구독 수명과 초기값
+
+체력바와 같은 계약이다. `NativeDestruct`는 구독만 끊고 `CachedASC`는 남기며, `NativeConstruct`의 `BindToASC()`가 재구독하면서 **현재 태그로 모드를 맞추고**(숨어 있던 동안 시작·종료된 버스트도 반영) 모드가 그대로면 현재 값만 다시 보낸다.
+
+슬레이트가 없을 때는 현재 상태 반영을 미룬다(`BindToASC()`의 `GetCachedWidget()` 가드). 서드파티 프로그레스 바가 슬레이트 생성 전에 받은 값을 머티리얼 없이 삼키고, 생성 후 같은 값을 무시해 기본값으로 굳는 문제 때문이다 — 체력바가 HUD 플레이어 목록에서 겪은 것과 같다. 지금 배치(HUD `Event Construct`에서 초기화)에서는 항상 슬레이트가 있지만, `InitializeWithASC`는 BP에서 부를 수 있으므로 호출 순서에 기대지 않고 위젯이 지킨다.
+
+### 에디터 작업
+
+- `WBP_CB_BurstGauge` — `UCBBurstGaugeWidget` 자식. 프로그레스 바 하나에 `OnBurstGaugeChanged`(Current / Max), `OnBurstProgress`(RemainingRatio)를 연결하고, `OnBurstStarted` / `OnBurstEnded`에서 색·연출을 전환한다.
+  - 서드파티 바(`BP_ExtendedProgressBar`)를 쓰면 **증가·감소 애니메이션을 끈다.** 켜 두면 남은 시간 눈금이 GAS 시간과 어긋나고, 모드 전환(가득 참 → 남은 시간 1.0 → 빈 게이지)이 보간으로 뭉개진다.
+- `WBP_CB_HUD`에 배치하고 `Is Variable`을 켠다. `Event Construct`의 기존 ASC 캐스트 결과로 `Initialize With ASC`를 호출한다(체력바·스킬 슬롯과 같은 자리).
+- 발동 안내 버튼: 같은 `Event Construct`에서 **`Initialize With ASC`보다 먼저** 게이지 위젯의 `OnBurstReadyChanged`에 바인딩하고, `bIsReady`로 버튼 Visibility를 전환한다. 버튼의 기본 Visibility는 숨김으로 둔다.
 
 ## 위젯 클래스 등록 — 로드아웃
 

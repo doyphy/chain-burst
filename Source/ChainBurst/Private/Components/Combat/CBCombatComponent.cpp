@@ -81,6 +81,23 @@ FGameplayTag UCBCombatComponent::GetWeaponHitCueTag() const
 	return FGameplayTag();
 }
 
+// 장착된 무기 인스턴스 목록 (게임플레이 큐 등 연출에서 무기 메시를 찾을 때 사용)
+TArray<ACBBaseWeapon*> UCBCombatComponent::GetEquippedWeaponInstances() const
+{
+	TArray<ACBBaseWeapon*> WeaponInstances;
+	WeaponInstances.Reserve(EquippedWeapons.Num());
+
+	for (const FCBRegisteredWeaponData& Weapon : EquippedWeapons)
+	{
+		// 클라에서는 목록이 무기 액터보다 먼저 도착해 인스턴스 참조가 아직 비어 있을 수 있음
+		if (Weapon.IsValid())
+		{
+			WeaponInstances.Add(Weapon.WeaponInstance);
+		}
+	}
+	return WeaponInstances;
+}
+
 int32 UCBCombatComponent::AdvanceCombo(const FGameplayTag& InActionTag, int32 MaxComboCount, int32 InPredictionKey)
 {
 	// 되돌리기용 스냅샷. 아래 리셋/순환 분기가 상태를 건드리기 전에 저장.

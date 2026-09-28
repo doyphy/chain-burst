@@ -98,7 +98,7 @@ protected:
 #pragma endregion
 
 #pragma region Weapon
-	/** 무기 등록 / 스폰·파괴 / AttackPower GE */
+	/** 무기 등록·조회 / 스폰·파괴 / AttackPower GE */
 public:
 	/**
 	 * [서버 전용] 무기 태그와 무기 인스턴스를 맵에 등록하는 함수.
@@ -121,6 +121,14 @@ public:
 	 * @return 등록된 무기의 피격 큐 태그. 무기가 없거나 태그가 비었으면 빈 태그.
 	 */
 	FGameplayTag GetWeaponHitCueTag() const;
+
+	/**
+	 * 장착된 무기 인스턴스 목록을 반환하는 함수. (단일 무기는 1개, 쌍수 무기는 2개)
+	 * 목록이 복제되므로 서버·클라 모두에서 쓸 수 있음. 무기 액터가 아직 복제되지 않은 항목은 제외함.
+	 * @return 유효한 무기 인스턴스 배열
+	 */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Combat")
+	TArray<ACBBaseWeapon*> GetEquippedWeaponInstances() const;
 
 protected:
 	/**

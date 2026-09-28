@@ -38,6 +38,13 @@ public:
 
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, AttackSpeed)
 
+	ATTRIBUTE_ACCESSORS(UCBAttributeSet, BurstGauge)
+
+	ATTRIBUTE_ACCESSORS(UCBAttributeSet, LifeOnHit)
+
+	/** 버스트 게이지 최대값. (차는 속도는 UCBBurstGaugeAbility으로 조절하므로 상수로 고정함) */
+	static constexpr float MaxBurstGauge = 100.f;
+
 	/** 캐릭터 시스템 준비 완료 시 캐릭터에서 호출되는 함수 (초기화 작업) */
 	void OnCharacterSystemReady();
 	
@@ -61,6 +68,20 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_AttackSpeed)
 	FGameplayAttributeData AttackSpeed;
 
+	/**
+	 * 버스트 게이지 (0 ~ MaxBurstGauge). 가득 차면 버스트 발동 가능.
+	 * 서버만 기록함 (적중 이벤트는 서버에서 검증 후 적용)
+	 * 적립·초기화는 UCBBurstGaugeAbility, 소모는 UCBBurstAbility.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_BurstGauge)
+	FGameplayAttributeData BurstGauge;
+
+	/**
+	 * 적 1명을 적중할 때마다 회복하는 체력 (0 이하 = 효과 없음).
+	 * 출처(버스트·아이템·버프 등)가 GE 모디파이어로 더함. 소비는 UCBLifeOnHitAbility(서버).
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_LifeOnHit)
+	FGameplayAttributeData LifeOnHit;
 
 	/** 리플리케이션 설정 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -82,6 +103,12 @@ public:
 
 	UFUNCTION()
 	virtual void OnRep_AttackSpeed(const FGameplayAttributeData& OldAttackSpeed);
+
+	UFUNCTION()
+	virtual void OnRep_BurstGauge(const FGameplayAttributeData& OldBurstGauge);
+
+	UFUNCTION()
+	virtual void OnRep_LifeOnHit(const FGameplayAttributeData& OldLifeOnHit);
 
 	void UpdateMovementSpeed(float NewValue);
 

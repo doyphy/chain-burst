@@ -5,6 +5,7 @@
 // engine
 #include "Net/UnrealNetwork.h"
 #include "Components/StaticMeshComponent.h"
+#include "NiagaraComponent.h"
 
 ACBBaseWeapon::ACBBaseWeapon()
 {
@@ -21,6 +22,11 @@ ACBBaseWeapon::ACBBaseWeapon()
 	WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh"));
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	WeaponMesh->SetupAttachment(SceneRoot);
+
+	// 오라 이펙트 (무기 BP 에서 에셋·배치를 지정, 요청이 올 때만 켬)
+	AuraComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("AuraComponent"));
+	AuraComponent->SetupAttachment(WeaponMesh);
+	AuraComponent->bAutoActivate = false;
 }
 
 void ACBBaseWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -138,6 +144,35 @@ FVector ACBBaseWeapon::GetWeaponTipLocation() const
     
 	// 만약 메시가 없으면 액터의 중심 위치를 반환 (안전장치)
 	return GetActorLocation(); 
+}
+
+// [공용] 오라 켜기 요청 (게임플레이 큐 등에서 호출)
+void ACBBaseWeapon::ActivateAura()
+{
+	// 이미 다른 출처가 켜 둔 상태면 요청 수만 늘림
+	if (AuraRequestCount++ > 0) return;
+
+	// 오라 에셋이 없는 무기는 무시 (요청 수는 세어 두어 켜기/끄기 짝을 유지함)
+	if (!AuraComponent || !AuraComponent->GetAsset()) return;
+
+	// 오라 활성화
+	AuraComponent->Activate(true);
+}
+
+// [공용] 오라 요청 하나를 거둠
+void ACBBaseWeapon::DeactivateAura()
+{
+	// 이미 꺼져있으면 무시
+	if (AuraRequestCount <= 0) return;
+
+	// 아직 다른 출처가 켜 두고 있으면 유지
+	if (--AuraRequestCount > 0) return;
+
+	// 오라 비활성화
+	if (AuraComponent)
+	{
+		AuraComponent->Deactivate();
+	}
 }
 
 #if WITH_EDITOR

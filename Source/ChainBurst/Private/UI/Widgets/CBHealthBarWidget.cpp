@@ -48,9 +48,11 @@ void UCBHealthBarWidget::BindToASC()
 		.AddUObject(this, &UCBHealthBarWidget::HandleHealthAttributeChanged);
 	
 	// 슬레이트가 아직 없으면 초기값 반영을 미룸.
-	// 이 시점에 값을 보내면 서드파티 프로그레스 바가 머티리얼 없이 값만 삼키고,
-	// NativeConstruct 의 재반영은 '같은 값'이라 무시돼 바가 기본값(꽉 참)으로 굳는 현상.
-	// 화면에 붙을 때 NativeConstruct 가 이 함수를 다시 부르므로 반영은 그때 한 번만 일어남.
+	// 위젯 생성 전에(슬레이드 생성 전) 프로그레스 바를 초기화하면 안됨.
+	// 생성 전에 프로그레스 바 값을 초기화하면 프로그레스 바의 머터리얼에 반영이 안됨.
+	// 프로그레스 바는 같은 값은 무시하므로 생성 전에 초기화하고 생성 후에도 초기화 하면 값이 무시되므로 머터리얼은 초기 상태 그대로 표시.
+	// UCBPlayerListWidget::HandlePlayerListChanged() 함수에서 초기화 하고 슬레이드 생성함.
+	// UCBUIComponent::CreateOverheadWidget 함수에서 초기화 하고 슬레이드 생성함.
 	if (!GetCachedWidget().IsValid()) return;
 	
 	// 구독 전에 이미 확정된 값 반영

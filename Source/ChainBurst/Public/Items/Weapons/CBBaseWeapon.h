@@ -6,10 +6,12 @@
 #include "CBBaseWeapon.generated.h"
 
 class UCBWeaponSocketData;
+class UNiagaraComponent;
 
 /**
  * 모든 무기의 클래스
  * 무기 부착 소켓 설정 및 부착 함수 제공
+ * 오라 이펙트(연출) 컴포넌트 및 켜기/끄기 요청 함수 제공 (에셋·배치는 무기 BP 뷰포트에서 지정)
  */
 UCLASS()
 class CHAINBURST_API ACBBaseWeapon : public AActor
@@ -33,6 +35,14 @@ protected:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Weapon|Components")
 	TObjectPtr<UStaticMeshComponent> WeaponMesh;
+
+	/**
+	 * 오라 이펙트 컴포넌트 (WeaponMesh 자식).
+	 * 무기 BP 뷰포트에서 Niagara 에셋·위치·회전·크기를 무기에 맞춰 지정함. 에셋을 비우면 오라 없음.
+	 * 평소 꺼져 있고 ActivateAura/DeactivateAura 로만 켜고 끔.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ChainBurst|Weapon|Components")
+	TObjectPtr<UNiagaraComponent> AuraComponent;
 
 	/**
 	 * 무기가 비전투 전환에 따라 부착이 필요한지 여부
@@ -70,6 +80,17 @@ protected:
 	FName WeaponTipSocketName = FName("WeaponTip");
 
 public:
+	/**
+	 * [공용] 오라 켜기 요청. 켜는 출처가 겹칠 수 있으므로 요청 수를 세고, 처음 켜질 때만 이펙트를 켬.
+	 * 복제하지 않는 로컬 연출이라 각 머신이 호출함 (게임플레이 큐 등).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Weapon|FX")
+	void ActivateAura();
+
+	/** [공용] 오라 요청 하나를 거둠. 요청이 모두 사라지면 이펙트를 끔. */
+	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Weapon|FX")
+	void DeactivateAura();
+
 	/** [Getter] 무기 소켓 타입 (등록 시 데이터 에셋과의 일치 검증에 사용) */
 	ECBWeaponSocketType GetWeaponSocketType() const { return WeaponSocketType; }
 
@@ -104,5 +125,8 @@ private:
 	 * 중복 부착 호출 방지용
 	*/
 	UPROPERTY(Replicated)
-	bool bIsEquipped = false; 
+	bool bIsEquipped = false;
+
+	/** 현재 오라 켜기 요청 수 (0 이면 꺼짐) */
+	int32 AuraRequestCount = 0;
 };

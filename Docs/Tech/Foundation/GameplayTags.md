@@ -89,12 +89,12 @@
 | `Input.*` | 식별 | InputAction과 바인딩되는 태그. `Input.Action.*`(액션 입력), `Input.UI.*`(예정) |
 | `Item.*` | 식별 | 아이템/무기 식별 (`Item.Weapon.Sword`), 의상 파츠 식별 (`Item.Cosmetic.*` — 아래 구조) |
 | ↳ `Item.Weapon.*` | 식별 | **무기 종류가 곧 캐릭터 종류**라 캐릭터 선택 키를 겸한다 (`UCBCharacterCatalog` 조회 → 스폰할 캐릭터 클래스) → [GameFlow.md](../Flow/GameFlow.md) |
-| `Data.*` | 식별 | SetByCaller 전용 키 (Damage, Speed, AttackPower 등) |
+| `Data.*` | 식별 | SetByCaller 전용 키 (Damage, Speed, AttackPower, Heal 등) |
 | `Ability.*` | 식별 | 어빌리티 식별 태그 (AssetTags) |
 | `Action.*` | 식별 | 몽타주 식별 태그 (UCBActionComponent에서 몽타주 선택) |
 | `GameplayCue.*` | 식별 | 게임플레이 큐 라우팅 |
 | `Effect.*` | 속성 | GE 동작 의도 선언 (Opt-in, 여러 GE 공유 가능) |
-| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`, `Staggered`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망) |
+| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`, `Staggered`, `Burst`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망) |
 | `Cooldown.*` | 상태 | 어빌리티 쿨다운 (쿨다운 GE의 GrantedTags — GAS가 자동 검사. 관례상 별도 루트 유지) |
 | `Event.*` | 이벤트 | 애님노티파이 등 이벤트 트리거 |
 
@@ -115,6 +115,8 @@ Status.Movement.Overridden                  ← 속도 오버라이드 GE
 **`Status.Combat.Staggered`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 `UCBHitReactAbility` 하나이고, **어빌리티 활성 구간이 곧 경직 구간**이다(= 피격 몽타주의 `Event.Action.EndAbility` 노티파이 위치가 경직 길이를 정한다). 소비자는 `ACBAIController` 로, 태그 변화를 블랙보드 bool 키로 미러링해 BT 가 경직 분기로 빠지게 한다 (→ [AI.md](../Gameplay/AI.md) "피격 경직"). 시뮬 프록시는 이 태그를 알 필요가 없다 — 프록시가 봐야 하는 경직 연출은 피격 몽타주이고 그건 GameplayCue 로 이미 동기화된다.
 
 **`Status.Combat.SuperArmor`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 "피격에 끊기지 않아야 하는" 어빌리티 자신(스킬 BP 등)이고, 소비자는 `UCBHitReactAbility`의 `ActivationBlockedTags` 하나뿐이다 (→ [Abilities.md](../Gameplay/Abilities.md) "슈퍼아머"). 서버와 오너 클라에서만 존재하면 충분하다 — 판정도 몽타주 스킵도 어빌리티 발동 단계에서 끝나므로 시뮬 프록시는 이 태그를 알 필요가 없다.
+
+**`Status.Combat.Burst`** — 복제 경로 ①(GE GrantedTags). 소유자는 `GE_Burst`이고, 부여 주체는 `UCBBurstAbility`(예측 적용), 제거는 GE 만료 또는 `UCBBurstGaugeAbility`의 종료(사망·캐릭터 변경 시 `RemoveActiveEffectsWithGrantedTags`). 소비자는 `UCBBurstGaugeAbility`(버스트 중 적립 중단)이며 이후 UI·이펙트가 붙는다. 버프 모디파이어 때문에 GE가 어차피 필요하므로 ①이 추가 비용 없이 따라온다 (→ [Burst.md](../Gameplay/Burst.md)).
 
 `Gait` 중간 계층 덕에 `HasTag(Status.Movement.Gait)` 부모 매칭으로 "개이트 태그 보유 여부"를 한 번에 검사할 수 있다. 개이트 판별은 `UCBAbilitySystemLibrary::GetCurrentGaitTag()` 공용 헬퍼 사용 (Sprint > Walk > 기본 Run).
 

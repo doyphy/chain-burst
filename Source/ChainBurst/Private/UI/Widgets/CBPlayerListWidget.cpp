@@ -151,6 +151,7 @@ void UCBPlayerListWidget::Local_RefreshEntries()
 		if (!EntryWidget) continue;
 
 		// 행 위젯 초기화
+		// 슬레이드 생성 전 초기화이므로 프로그레스 바 초기화 주의 (가드 추가하기)
 		EntryWidget->InitializeWithPlayerState(CBPlayerState);
 		
 		// 패널에 추가.

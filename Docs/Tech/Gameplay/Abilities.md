@@ -14,6 +14,10 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 │
 ├── UCBGAJump (점프 — C++ 최종 엣지. CMC Jump()/StopJumping()만 트리거, 몽타주 없음 — 공중 애니메이션은 ABP가 IsInAir()로 처리. 대시 중 차단)
 │
+├── UCBBurstGaugeAbility (버스트 게이지 적립 패시브 — OnGiven + ServerOnly. 적중마다 적립, 종료(사망·캐릭터 변경) 시 게이지·버스트 초기화 → [Burst.md](Burst.md))
+│
+├── UCBLifeOnHitAbility (적중 회복 패시브 — OnGiven + ServerOnly. 적중마다 LifeOnHit × 맞은 적 수 회복. 회복량 출처는 어트리뷰트 → 아래 "적중 회복")
+│
 └── UCBActionAbility (Abstract) ← 몽타주 액션 공통 베이스
     │   • PlayActionMontage() → GameplayCue.PlayAction 경유 (전 클라 동기화)
     │   • BoundActionTag / 재생 인덱스는 SelectActionMontageIndex() 훅이 단독 결정(기본 0) → 인덱스를 큐로 전달
@@ -30,7 +34,8 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
     │   │      • 무기 검사·트레이스·데미지 GE 는 무기 트레이스 기능(WeaponTrace)을 가져와 씀
     │   ├── UCBGAChaserEquipWeapon (무기 장착 — 개이트로 몽타주 인덱스 분기: Idle 0/Walk 1/Run·Sprint 2)
     │   ├── UCBGAChaserUnequipWeapon (무기 해제 — 개이트로 몽타주 인덱스 분기: Idle 0/Walk 1/Run·Sprint 2)
-    │   └── UCBGADash (전방 대시 — C++ 최종 엣지. Sprint 진입 연출 겸용, GAS 표준 쿨다운, 활성 중 Status.Movement.Dashing 부여, 전투 상태로 몽타주 인덱스 분기: 비전투 0/전투 1)
+    │   ├── UCBGADash (전방 대시 — C++ 최종 엣지. Sprint 진입 연출 겸용, GAS 표준 쿨다운, 활성 중 Status.Movement.Dashing 부여, 전투 상태로 몽타주 인덱스 분기: 비전투 0/전투 1)
+    │   └── UCBBurstAbility (버스트 발동 — 게이지 가득 참일 때만. 버스트 GE 예측 적용 → [서버] 게이지 소모 → 발동 몽타주. BP 자식은 GE 지정용 → [Burst.md](Burst.md))
     │
     ├── UCBEventActionAbility (Abstract) ← 게임플레이 이벤트로 발동되는 액션 베이스
     │   │   • RegisterEventTrigger(EventTag)로 트리거 등록, CancelAbilityTag로 진행 중인 어빌리티 캔슬
@@ -256,6 +261,46 @@ AssetTag(`Ability.Combat.Death`)는 예외적으로 **C++ 생성자에서** 지�
 - **공중에서 죽으면 그 자리에 멈춘다** (`DisableMovement()`). 라그돌 도입 시 함께 해소된다.
 - ~~`Status.Dead` 제거 책임(리스폰) 없음~~ → **플레이어는 해소됨.** `ACBGameplayGameMode`가 리스폰 직전에 `Status.Dead`를 부여한 GE를 제거하고 폰을 다시 스폰한다 (→ [GameFlow.md](../Flow/GameFlow.md) "사망과 리스폰"). 시체가 `DespawnDelay = 0`으로 남는 것도 그 재스폰 시점에 정리된다. **AI는 여전히 부활 없이 파괴로 끝난다.**
 - `GameplayCue.Death` 노티파이(파티클·사운드) 미작성
+
+## 적중 회복 (`UCBLifeOnHitAbility`)
+
+적을 맞힐 때마다 체력을 회복하는 **범용** 효과다. 어빌리티는 "적중 → 회복"만 하고, **얼마나 회복할지는 어트리뷰트 `LifeOnHit`(적 1명당 회복량)이 정한다.** 효과를 주는 쪽(버스트·아이템·버프 등)은 자기 GE에 `LifeOnHit` Add 모디파이어를 넣기만 하면 된다.
+
+```
+적중(Event.Combat.Attack.Hit, 서버) → LifeOnHit ≤ 0 이면 종료
+                                   → 회복량 = LifeOnHit × 맞은 적 수
+                                   → HealEffectClass(GE_Heal) + SetByCaller Data.Heal → 자신에게 1회 적용
+```
+
+| 출처 | 방법 | 수명 |
+|---|---|---|
+| 버스트 | `GE_Burst`에 `LifeOnHit` Add | 버스트 GE와 같음 (만료·사망·서버 거부) → [Burst.md](Burst.md) |
+| 아이템·버프 | 그 GE에 모디파이어 | 그 GE를 따름 |
+| 기본 능력치 | 로드아웃 `StartupEffects` | 로드아웃 부여·회수 |
+
+- **어빌리티는 항상 켜져 있다.** Chaser 로드아웃 `PassiveAbilities`에 한 번 부여되고(`OnGiven`, `ServerOnly`), `LifeOnHit`이 0이면 적중마다 어트리뷰트 하나 읽고 끝난다. AI도 로드아웃에 넣으면 그대로 동작한다.
+- **출처를 어트리뷰트로 받는 이유** — "효과가 있는 동안만 어빌리티를 GE로 부여"하는 방식도 검토했으나 범용에서 약하다:
+  - 회복량이 어빌리티 BP의 GE에 묶여 **출처마다 BP 변형**이나 GE 스펙 경유 배선이 필요하다. 어트리뷰트면 각 출처 GE가 자기 값만 정한다.
+  - 출처가 겹치면 인스턴스가 여럿 떠 각자 회복한다. 어트리뷰트는 모디파이어가 **자동 합산**되고, 상한이 필요하면 한 곳에서 클램프한다.
+  - 부여하는 쪽마다 **차단 함정**이 있다. 예: `GE_Burst`는 `GA_Burst`가 활성인 동안 적용되는데, `GA_Burst`의 `BlockAbilitiesWithTag = Ability.Combat`이 방금 부여된 `Ability.Combat.*` 어빌리티의 `OnGiven` 활성화를 막는다.
+  - 부여·제거마다 스펙 복제와 클라 원격 활성화 요청(거절)이 반복된다.
+  - [GrowthSystemDesign.md](../../GrowthSystemDesign.md)의 "모든 수치는 AttributeSet, 0이면 효과 없음" 원칙과도 같다.
+- **회복은 GE로 적용한다.** 체력 상한 클램프가 `UCBAttributeSet::PostGameplayEffectExecute`에 있어, `SetNumericAttributeBase`로 직접 쓰면 MaxHealth를 넘는다. 양수 변화라 같은 함수의 피격 반응 분기는 타지 않는다.
+- **맞은 적 수만큼 한 번에 적용한다.** 히트는 배칭되어 한 이벤트에 여러 피격자가 실려 오고, 같은 대상은 한 스윙에 한 번만 실린다(→ [Combat.md](Combat.md)).
+- `GE_Heal`은 적중 회복 전용이 아니라 **코드가 회복시키는 곳이면 어디서든 쓰는 범용 회복 GE**다(`Data.Heal` SetByCaller).
+- `HealEffectClass`를 비워 두면 `LifeOnHit > 0`인 적중에서 경고 로그를 남기고 회복하지 않는다.
+- **"적중"은 `Event.Combat.Attack.Hit`이다.** 지금은 무기 트레이스만 발행한다. 투사체 등 새 공격 경로는 같은 이벤트를 보내야 버스트 게이지 적립·적중 회복이 함께 붙는다.
+- 회복은 서버 적용이라 소유 클라 체력바에는 왕복 지연만큼 늦게 반영된다. 머리 위 바는 감소일 때만 뜨므로 회복으로는 뜨지 않는다.
+
+**미구현(확장 지점)**
+- 최대 체력 비율 회복 — 어트리뷰트 둘(`LifeOnHit` × `MaxHealth`)의 곱이라 MMC나 별도 어트리뷰트가 필요하다
+- 데미지 비례 흡혈(`LifestealPercent`, GrowthSystemDesign.md) — 데미지는 피격자 쪽 ExecCalc에서 정해지므로 공격자에게 되돌리는 경로가 따로 필요하다. 회복 적용은 같은 `GE_Heal`을 쓰면 된다
+
+| 에셋 | 설정 |
+|---|---|
+| `GE_Heal` | Instant, `CurrentHealth` Add, Magnitude = SetByCaller `Data.Heal` |
+| `GA_LifeOnHit` | `UCBLifeOnHitAbility` 자식, `HealEffectClass = GE_Heal` |
+| Chaser 로드아웃 | `PassiveAbilities += GA_LifeOnHit` |
 
 ## AI 공격 (`UCBAIAttackAbility`)
 

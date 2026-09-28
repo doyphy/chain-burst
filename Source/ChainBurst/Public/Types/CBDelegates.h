@@ -62,3 +62,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCBOnPlayerListChanged);
 /** [로컬] 온라인 로그인 상태가 바뀌었음. (새 상태 / 실패 사유 - 실패가 아니면 비어 있음) */
 UDELEGATE()
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCBOnLoginStateChanged, ECBLoginState, NewState, const FText&, FailureReason);
+
+/** [로컬] 버스트 발동 가능 여부가 바뀌었음. (게이지 가득 참 && 버스트 중 아님) */
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnBurstReadyChanged, bool, bIsReady);

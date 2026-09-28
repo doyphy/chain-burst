@@ -19,6 +19,7 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
   - 무기가 어느 소켓(주무기/부무기·전투/비전투)에 붙는지는 `ECBWeaponSocketType`(무기 카테고리·무브셋 아님, **소켓 조회 전용 키**)으로 결정. `UCBWeaponSocketData`가 타입별 소켓 이름을 보유. 쌍수는 `Dagger_L`/`Dagger_R` 두 소켓 타입을 각각 사용.
   - **등록 중복 검사 = 소켓 타입 점유 기준** ("한 소켓엔 무기 하나"). 무기 식별 태그(`WeaponTag`)는 제거됨 — `UCBWeaponData`·`FCBRegisteredWeaponData` 모두 `WeaponSocketType`을 보유. `None`은 소켓 미점유(소환형 무기)라 중복 검사에서 제외되며 `HasValidData()`/`IsValid()` 유효 조건에도 포함하지 않는다(인스턴스 존재만 검사).
   - 소켓 타입은 **무기 BP(`ACBBaseWeapon`, 소켓 오버라이드 베이킹용)와 무기 데이터(`UCBWeaponData`, 슬롯 선언용) 두 곳에 존재** — 등록 시 둘이 다르면 경고 로그로 설정 실수를 감지한다(등록은 계속 진행).
+  - **외부 조회는 `GetEquippedWeaponInstances()`**(BlueprintPure) — 유효한 무기 액터만 담아 돌려준다. 목록이 복제되므로 서버·클라 어디서나 쓸 수 있고, 클라에서 목록이 무기 액터보다 먼저 도착해 참조가 비어 있는 항목은 거른다. 게임플레이 큐 같은 연출이 캐릭터에서 `Get Component by Class(CBCombatComponent)`로 컴포넌트를 찾아 호출한다(→ [Burst.md](Burst.md) "연출").
 - 무기 트레이스: `StartWeaponTrace()` → `TickWeaponTrace()` → `StopWeaponTrace()`
   - 트레이스는 애님노티파이 `CBANS_WeaponTraceWindow`가 구간을 제어
   - **채널은 전용 `Weapon`**(`CBCollisionChannels::Weapon`, 아래 별도 절 참조). 캐릭터는 캡슐=`Ignore` / 메시=`Overlap`이라 판정이 피직스 애셋 실루엣으로 이뤄지고, 일직선의 여러 적을 관통해서 벤다
@@ -160,6 +161,72 @@ ACBBaseWeapon
 - **소켓 이름 오타는 조용히 실패한다.** 못 찾으면 캐릭터 원점이 반환되어 판정이 엉뚱한 곳에서 난다. 그래서 오너 메시를 처음 찾은 시점에 이름 존재를 1회 검증해 경고 로그를 남긴다(매 틱 로그 방지).
 - `WeaponSocketType`은 `None`(소켓 미점유)이 기본값이라 등록 시 소켓 중복 검사에서 제외된다. 데미지·공격력 GE는 일반 무기와 똑같이 `UCBWeaponData` 데이터 에셋에서 온다 — 본체 무기도 데이터 에셋이 하나 필요하다.
 - 최대 등록 수는 일반 무기와 같은 `MaxWeaponCount = 2`다(양 앞발 = 2개). 한 스윙에 같은 대상이 두 부위로 이중 히트되는 것은 기존 `AlreadyHitActors` 공유가 막는다.
+
+## 무기 오라 — 무기가 소유하는 범용 연출
+
+무기에 붙는 지속 이펙트(오라)는 **무기가 소유하고, 켜는 쪽은 요청만 한다.** 버스트는 켜는 출처 중 하나일 뿐이다(→ [Burst.md](Burst.md) "연출").
+
+```
+어떤 GE든 (GE_Burst, 이후 버프·아이템 등) ── Gameplay Cues: GameplayCue.Weapon.Aura
+  └ GCN_FX_WeaponAura (범용 큐 하나, GameplayCueNotify_Actor)
+       On Become Relevant → 장착 무기마다 ActivateAura()
+       On Cease Relevant  → 장착 무기마다 DeactivateAura()
+```
+
+| 요소 | 위치 | 역할 |
+|---|---|---|
+| `AuraComponent` | `ACBBaseWeapon` 기본 컴포넌트 (`WeaponMesh` 자식, `bAutoActivate = false`) | **무기 BP 뷰포트에서 Niagara 에셋·위치·회전·크기를 무기에 맞춰 지정**한다. 에셋을 비우면 오라 없음(AI 무기 등). 루핑 시스템이어야 켜진 동안 유지된다 |
+| `ActivateAura()` / `DeactivateAura()` | `ACBBaseWeapon` (BlueprintCallable) | 켜기 요청 / 요청 하나 거두기 |
+| `GetEquippedWeaponInstances()` | `UCBCombatComponent` | 큐가 캐릭터에서 무기를 찾는 경로 (`Get Component by Class`로 컴포넌트 조회) |
+
+- **오라는 무기 BP에 미리 붙어 있는 컴포넌트다.** 모양이 정해진 오라 이펙트는 무기마다 위치·회전·크기를 맞춰야 하는데, 컴포넌트로 두면 무기 BP 뷰포트에서 **기즈모로 보면서** 맞춘다. 켜고 끄는 것은 `Activate(true)`/`Deactivate()`뿐이고, 무기가 파괴되면 함께 사라진다. 큐 쪽은 켜고 끄는 호출만 하므로 배열 관리가 없다.
+  - 이전에는 에셋 프로퍼티(`AuraEffect`)를 두고 켤 때 메시 원점에 스폰했으나, 이펙트 자체의 회전·크기를 무기에 맞출 수 없어 바꿨다. 무기마다 오프셋·회전·크기 프로퍼티를 두는 안은 숫자로만 맞춰야 해서 택하지 않았다.
+- **요청 수를 센다.** 범용이라 켜는 출처가 겹칠 수 있다(버스트 + 버프). 한 출처가 끝나도 다른 출처가 켜 두고 있으면 유지되고, 처음 켜질 때(0→1)만 켜고 모두 거둘 때(1→0)만 끈다. 엔진이 같은 큐를 가진 GE 여럿에 대해 이벤트를 GE마다 보내든 합쳐 보내든 둘 다 맞게 동작한다. 짝 없는 끄기는 0에서 무시한다.
+- **복제하지 않는다.** 큐가 전 머신에서 불리므로 각 머신이 자기 무기의 오라를 켠다. 늦게 관련성을 얻은 클라는 새 무기 액터(요청 수 0)에 On Become Relevant가 다시 불려 따라잡는다.
+- 캐릭터 스켈레톤의 무기 뼈가 아니라 **무기 메시에 붙는다.** 뼈 이름은 캐릭터마다 달라 쓰지 않는다. 무기를 칼집에 넣으면 오라도 무기를 따라간다.
+- 끌 때는 `Deactivate()`로 새 파티클 생성만 멈춰 남은 파티클이 자연스럽게 사라진다. 다시 켜면 `Activate(true)`로 처음부터 재생한다.
+- 오라 Niagara 에셋은 팩 원본을 고치지 말고 `/Game/ChainBurst/` 아래로 복제해서 쓴다.
+
+**메시 표면을 샘플링하는 이펙트일 때만** (Particle Spawn의 Static Mesh Location — 파티클이 무기 모양을 따라 퍼지는 형식. 모양이 정해진 오라면 해당 없음)
+
+| 항목 | 값 | 이유 |
+|---|---|---|
+| Mesh → Source Mode | **`Default`** | `Attach Parent`는 부모만 봐서 에디터 미리보기(부모 없음)에서 메시를 못 찾는다(`StaticMesh data interface has no valid mesh` 로그). `Default`는 게임에서 부착된 `WeaponMesh`를 먼저 잡으므로 동작이 같다 |
+| Preview Mesh | 대표 무기 메시 하나 | 에디터 미리보기 전용, 쿠킹 시 제거된다. **Default Mesh에는 넣지 않는다** — 쿠킹에 포함되는 고정 참조가 되고 "Potentially unused Default Mesh set!" 경고가 뜬다 |
+| Sampling Mode | Random Triangle | 표면에 고르게 |
+| Emitter Properties → Local Space | 켬 | 휘두를 때 칼날에 붙어 따라온다 (궤적에 남기는 연출이면 끔) |
+
+- ⚠️ **오라를 쓰는 무기 스태틱 메시마다 `Allow CPU Access`를 켠다.** 표면·정점 샘플링은 메시 데이터를 읽어 CPU 접근이 필요하다(엔진 `NiagaraDataInterfaceStaticMesh.cpp` `FunctionNeedsCpuAccess` — 바운드·소켓 함수만 예외). 에디터 스택에 "CPU access error"로 뜨고 Fix 버튼이 있지만, **Fix는 Preview Mesh 하나만 고친다.** 게임에서 붙는 나머지 무기 메시에 빠지면 **파티클이 조용히 안 나오고** 로그에 `used by CPU emitter and does not allow CPU access`만 남는다. GPU 시뮬로 바꿔도 에디터 검사는 같은 기준이라 우회가 안 된다.
+- 무기 메시가 서드파티 팩 원본이면 이 플래그 변경은 **팩 원본(서브모듈) 수정**이다. 의도된 수정으로 기록해 두고, 팩 갱신 시 다시 켠다. 원본을 건드리지 않으려면 소켓(`WeaponRoot`/`WeaponTip`)만 쓰는 방식(CPU 접근 불필요, 스크래치 패드로 두 소켓 사이에 스폰)이 있으나 표면 대신 중심선을 따라 퍼진다. **샘플링하지 않는 오라로 바꿨다면 이 플래그는 필요 없다.**
+
+**큐 BP(`GCN_FX_WeaponAura`) 규칙**
+- `/Game/ChainBurst/GameplayCues`에 저장(`DefaultGame.ini`의 `GameplayCueNotifyPaths`. 밖에 두면 스캔되지 않아 **조용히 안 뜬다**). `Auto Destroy On Remove` 켬.
+- **BP에서는 이름이 다르다.** C++ 이름에 표시 이름이 따로 붙어 있고, `bool`을 반환하는 `BlueprintNativeEvent`라 이벤트 그래프의 이벤트가 아니라 **My Blueprint → Functions → Override**에 있다(엔진 `GameplayCueNotify_Actor.h`). 반환값은 엔진이 읽지 않는다(기본 구현과 같이 `false`).
+
+  | C++ | BP 표시 이름 | 불리는 때 |
+  |---|---|---|
+  | `OnActive` | On Burst | GE가 실제로 적용된 순간 1회 |
+  | `WhileActive` | **On Become Relevant** | 적용 순간 + 활성 중에 관련성을 얻은 클라에서 |
+  | `OnRemove` | **On Cease Relevant** | GE 제거 |
+
+- 오버라이드한 두 함수의 시작에 **부모 함수 호출**을 둔다. 엔진 기본 구현이 큐 액터의 숨김 상태를 관리한다(켤 때 보이기 / 끌 때 숨기기 — 큐 액터 재활용용).
+- ⚠️ **On Burst(`OnActive`)에서 `ActivateAura`를 부르지 않는다.** 적용 순간 On Burst와 On Become Relevant가 둘 다 불려 요청 수가 2가 되고, 끄기는 한 번만 오므로 **오라가 영원히 꺼지지 않는다.**
+- `My Target`이 캐릭터(ASC 아바타)다(`UAbilitySystemComponent::InvokeGameplayCueEvent`). `Parameters`의 `Instigator`는 플레이어면 PlayerState라 쓰지 않는다.
+
+```
+On Become Relevant (My Target) → 부모 호출 → My Target → Get Component by Class(CBCombatComponent)
+    → Get Equipped Weapon Instances → For Each → Activate Aura
+On Cease Relevant (My Target)  → 부모 호출 → (같은 경로) → For Each → Deactivate Aura
+```
+
+**검토했지만 채택하지 않은 것**
+
+| 안 | 이유 |
+|---|---|
+| `GameplayCueNotify_Looping` | 그래프 없이 이펙트를 지정하고 정리도 자동이지만, 스폰 대상이 큐 파라미터의 `TargetAttachComponent`(GE로 켜지는 큐는 비어 있음) → **캐릭터 메시**로 고정된다(`GameplayCueNotifyTypes.cpp`). 무기 뼈에 붙여야 하는데 **캐릭터마다 무기 뼈 이름이 달라** 캐릭터별 큐가 필요해진다. 또 오라 Niagara가 **자체적으로 루프**하므로 큐는 시작에 켜고 끝에 끄기만 하면 되어, Looping의 반복·단계별 이펙트 기능이 필요 없다 |
+| 큐 BP가 직접 스폰·배열 관리 | 컴포넌트가 무기에 붙어 큐 액터와 수명이 어긋나고, 출처가 겹치면 이펙트도 겹친다 |
+| 버스트 어빌리티가 큐를 추가·제거 | 어빌리티 큐는 어빌리티 종료(=발동 몽타주 종료) 때 제거되고, ASC에 직접 추가하면 만료·사망·서버 거부 제거를 다시 짜야 한다. GE가 수명을 대신 관리한다 |
+| 데이터 에셋(`UCBWeaponData`)에 이펙트 | 큐는 전 클라에서 도는데 클라에는 무기 → 데이터 에셋 경로가 없다. 만들려면 컴뱃 컴포넌트의 복제 구조체를 바꿔야 해서, 오라를 모르는 컴포넌트를 건드리지 않는 쪽을 택했다 |
 
 ## 관련 문서
 - 콤보 인덱스를 소비하는 몽타주 재생 흐름: [Montage.md](Montage.md)

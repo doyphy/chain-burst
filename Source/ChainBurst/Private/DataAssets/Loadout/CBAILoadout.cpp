@@ -10,5 +10,5 @@ void UCBAILoadout::Auth_ApplyBehaviorTreeToController(AController* InController)
 	if (!AIController) return;
 
 	// 이 로드아웃의 BT를 컨트롤러에 주입 (null이면 BT 두뇌 없음)
-	AIController->SetBehaviorTree(GetBehaviorTree());
+	AIController->SetBehaviorTree(BehaviorTree);
 }

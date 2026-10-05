@@ -2,12 +2,18 @@
 #include "CBAbilitySystemLibrary.h"
 #include "CBGameplayTags.h"
 #include "AbilitySystem/CBAbilitySystemComponent.h"
+#include "Types/CBCollisionChannels.h"
 
 // engine
+#include "Abilities/GameplayAbility.h"
+#include "Abilities/GameplayAbilityTargetTypes.h"
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "GameFramework/Character.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
@@ -25,6 +31,27 @@ const AActor* UCBAbilitySystemLibrary::ResolveOwningPawn(const AActor* InActor)
 	if (const APlayerState* PlayerState = Cast<APlayerState>(InActor)) return PlayerState->GetPawn();
 
 	return InActor;
+}
+
+// 캐릭터 메시의 소켓(또는 본) 월드 위치 조회
+bool UCBAbilitySystemLibrary::FindMeshSocketLocation(const AActor* InActor, FName InSocketName, FVector& OutLocation)
+{
+	const ACharacter* Character = Cast<ACharacter>(InActor);
+	const USkeletalMeshComponent* Mesh = Character ? Character->GetMesh() : nullptr;
+
+	// 소켓·본 이름 모두 허용. 없는 이름이면 엔진이 컴포넌트 위치를 돌려주므로 먼저 거름.
+	if (!Mesh || InSocketName.IsNone() || !Mesh->DoesSocketExist(InSocketName)) return false;
+
+	OutLocation = Mesh->GetSocketLocation(InSocketName);
+	return true;
+}
+
+// 두 지점 사이를 벽이 가로막는지 검사 (Weapon 채널)
+bool UCBAbilitySystemLibrary::IsBlockedByWall(const UWorld& InWorld, const FVector& InFrom, const FVector& InTo, const FCollisionQueryParams& InQueryParams)
+{
+	// 캐릭터 메시는 이 채널에 Overlap 이라 단일 트레이스의 블로킹 결과에 걸리지 않음 → 걸리는 것은 벽·지형뿐
+	FHitResult WallHit;
+	return InWorld.LineTraceSingleByChannel(WallHit, InFrom, InTo, CBCollisionChannels::Weapon, InQueryParams);
 }
 
 UAbilitySystemComponent* UCBAbilitySystemLibrary::GetASC(const AActor* InActor)
@@ -244,4 +271,51 @@ void UCBAbilitySystemLibrary::Auth_ExecuteHitCue(AActor* InTargetActor, AActor* 
 
 	// 서버에서 실행하면 전 클라이언트로 멀티캐스트됨
 	TargetASC->ExecuteGameplayCue(InCueTag, CueParams);
+}
+
+// [서버] 데미지 GE 를 타겟 하나에게 적용
+void UCBAbilitySystemLibrary::Auth_ApplyDamageToTarget(UGameplayAbility& InAbility, TSubclassOf<UGameplayEffect> InDamageEffectClass, float InDamageCoefficient, const FHitResult& InHitResult)
+{
+	UAbilitySystemComponent* SourceASC = InAbility.GetAbilitySystemComponentFromActorInfo();
+	if (!SourceASC) return;
+
+	// 데미지 GE 스펙 만들기 (GE 미지정·생성 실패면 무효 핸들)
+	const FGameplayEffectSpecHandle SpecHandle = MakeDamageSpec(InAbility, InDamageEffectClass, InDamageCoefficient);
+	if (!SpecHandle.IsValid()) return;
+
+	// 적용 중 어빌리티가 끝나거나 제거되지 않게 잠금 (엔진 TARGETLIST_SCOPE_LOCK 과 같음)
+	FScopedTargetListLock TargetListLock(*SourceASC, InAbility);
+
+	// 타겟 하나에게 적용
+	Auth_ApplyDamageSpecToTarget(SpecHandle, InHitResult, SourceASC->GetPredictionKeyForNewAction());
+}
+
+// 데미지 GE 스펙 생성 (타겟·타격 지점은 적용 시점에 붙음)
+FGameplayEffectSpecHandle UCBAbilitySystemLibrary::MakeDamageSpec(const UGameplayAbility& InAbility, TSubclassOf<UGameplayEffect> InDamageEffectClass, float InDamageCoefficient)
+{
+	if (!InDamageEffectClass) return FGameplayEffectSpecHandle();
+
+	// Spec 만들기 (소스는 시전자 ASC 로 자동 설정됨)
+	FGameplayEffectSpecHandle SpecHandle = InAbility.MakeOutgoingGameplayEffectSpec(InDamageEffectClass, InAbility.GetAbilityLevel());
+	if (!SpecHandle.IsValid()) return SpecHandle;
+
+	// 데미지 계수 설정 (SetByCaller 등록)
+	SpecHandle.Data->SetSetByCallerMagnitude(CBGameplayTags::Data_Damage_Coefficient, InDamageCoefficient);
+
+	return SpecHandle;
+}
+
+// [서버] 만들어 둔 데미지 스펙을 타겟 하나에게 적용
+void UCBAbilitySystemLibrary::Auth_ApplyDamageSpecToTarget(const FGameplayEffectSpecHandle& InSpecHandle, const FHitResult& InHitResult, FPredictionKey InPredictionKey /* = FPredictionKey() */)
+{
+	if (!InSpecHandle.IsValid()) return;
+
+	// 시전자가 파괴돼 ASC 가 사라졌으면 적용 불가 (엔진 적용 함수가 ensure 로 막는 상태라 먼저 거름)
+	if (!InSpecHandle.Data->GetContext().GetInstigatorAbilitySystemComponent()) return;
+
+	// 이 타겟 하나에게만 GE 적용.
+	// 여러 대상을 담은 핸들을 쓰면 대상 수만큼 도는 호출자 루프에서 N² 번 적용됨.
+	// 엔진이 적용마다 스펙·컨텍스트를 복사하고 히트 정보(피격 방향 등)를 붙이므로 원본 스펙은 그대로 남음.
+	FGameplayAbilityTargetData_SingleTargetHit SingleTarget(InHitResult);
+	SingleTarget.ApplyGameplayEffectSpec(*InSpecHandle.Data.Get(), InPredictionKey);
 }

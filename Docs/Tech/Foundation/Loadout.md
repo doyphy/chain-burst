@@ -23,8 +23,8 @@
 ```
 UCBCharacterLoadout
 ├── UCBChaserLoadout            ← 플레이어
-└── UCBAILoadout (Abstract)     ← AI 공통 (AI 전용 데이터의 홈)
-    ├── UCBRogueLoadout         ← BehaviorTree 등록 (GetBehaviorTree 오버라이드)
+└── UCBAILoadout (Abstract)     ← AI 공통 (AI 전용 데이터의 홈) — BehaviorTree 등록
+    ├── UCBRogueLoadout
     └── UCBOutlawLoadout
 ```
 캐릭터 계층(`ACBBaseCharacter → {Chaser, ACBAICharacter → {Outlaw, Rogue}}`)과 대칭. AI 전용 데이터(예: 비헤이비어 트리)는 `UCBAILoadout`에 두어 Chaser 로드아웃이 오염되지 않게 한다. AI 두뇌 에셋의 흐름은 [AI.md](../Gameplay/AI.md) 참조.

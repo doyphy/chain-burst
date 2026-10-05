@@ -42,8 +42,13 @@ public:
 
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, LifeOnHit)
 
+	ATTRIBUTE_ACCESSORS(UCBAttributeSet, StunGauge)
+
 	/** 버스트 게이지 최대값. (차는 속도는 UCBBurstGaugeAbility으로 조절하므로 상수로 고정함) */
 	static constexpr float MaxBurstGauge = 100.f;
+
+	/** 기절 게이지 최대값. (차는 속도는 UCBStunGaugeAbility 의 적립량으로 조절하므로 상수로 고정함) */
+	static constexpr float MaxStunGauge = 100.f;
 
 	/** 캐릭터 시스템 준비 완료 시 캐릭터에서 호출되는 함수 (초기화 작업) */
 	void OnCharacterSystemReady();
@@ -83,6 +88,14 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_LifeOnHit)
 	FGameplayAttributeData LifeOnHit;
 
+	/**
+	 * 기절 게이지 (0 ~ MaxStunGauge). 가득 차면 기절.
+	 * 서버만 기록함 (피격·자기 어빌리티 종료는 서버에서 판정). 적립·소모 모두 UCBStunGaugeAbility.
+	 * 복제는 UI(보스 기절 게이지) 표시용.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_StunGauge)
+	FGameplayAttributeData StunGauge;
+
 	/** 리플리케이션 설정 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	
@@ -109,6 +122,9 @@ public:
 
 	UFUNCTION()
 	virtual void OnRep_LifeOnHit(const FGameplayAttributeData& OldLifeOnHit);
+
+	UFUNCTION()
+	virtual void OnRep_StunGauge(const FGameplayAttributeData& OldStunGauge);
 
 	void UpdateMovementSpeed(float NewValue);
 

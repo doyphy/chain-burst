@@ -39,6 +39,20 @@ enum class ECBSuccessType : uint8
 };
 
 /**
+ * 투사체 발사 방식
+ * 조준점(발동 순간의 타겟 위치)까지 어떤 궤적으로 날아갈지를 정함. 투사체 BP 에서 지정.
+ */
+UENUM(BlueprintType)
+enum class ECBProjectileLaunchMode : uint8
+{
+	// 조준점을 향해 InitialSpeed 로 직선 발사 (중력 0 권장)
+	Direct	UMETA(DisplayName = "Direct"),
+
+	// 하늘로 쏘아 올려 조준점에 떨어지는 포물선 (중력 필요, 속도는 궤적에서 계산)
+	Arc		UMETA(DisplayName = "Arc")
+};
+
+/**
  * 캐릭터 치장(의상) 부위 슬롯
  * 모듈러 메시의 의상 파츠를 부위별로 식별하는 키.
  */

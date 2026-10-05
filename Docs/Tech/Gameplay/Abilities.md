@@ -50,6 +50,7 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
             • NetExecutionPolicy: ServerOnly (AI 컨트롤러가 서버 전용)
             • 콤보 없음. bRandomizeMontage 로 변형 몽타주 무작위 선택
             • 무기 검사·트레이스·데미지 GE 는 Chaser 공격과 같은 무기 트레이스 기능을 씀 (코드 공유)
+            • 범위 판정은 영역 공격 기능을, 원거리는 투사체 기능을 씀 — 세 기능 모두 노티파이로만 동작해 몽타주가 공격 종류를 정함
 ```
 
 > C++ 클래스가 곧 최종 구현인 것(**C++ 최종 엣지**, 예: `UCBGADash`)과, **BP 자식으로 다양화되는 C++ 베이스**(예: `UCBChaserAttackAbility`, `UCBGAChangeSpeed`)를 구분한다. 후자는 BP 자식(GA_Sprint, GA_Walk, 각종 공격 BP)이 실제 엣지다.
@@ -66,7 +67,9 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 
 기능 조각은 **필요한 어빌리티가 멤버로 소유하고 수명 시점마다 직접 호출하는 기능 객체**다. 베이스가 조각을 순회하거나 훅을 대신 불러주지 않는다. 설계 근거는 [ActionFragment.md](ActionFragment.md).
 
-현재 조각은 하나다. 무기 공격에 필요한 세 가지가 늘 함께 쓰이므로 한 기능으로 묶었다.
+조각은 셋이다 — 무기가 닿은 대상을 판정하는 무기 트레이스(이 절), 범위 안의 대상을 판정하는 영역 공격, 투사체를 쏘는 투사체(아래 절). **나뉘는 것은 판정뿐이고, 맞은 대상 하나에 데미지를 적용하는 코드는 공용 함수를 함께 쓴다.**
+
+무기 트레이스는 무기 공격에 필요한 세 가지가 늘 함께 쓰이므로 한 기능으로 묶었다.
 
 | 함수 | 하는 일 | 호스트 호출 위치 |
 |---|---|---|
@@ -79,6 +82,73 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 - **Outer가 곧 호스트 어빌리티다**(`GetOwningAbility()`). 기본 서브오브젝트라 어빌리티 인스턴스가 만들어질 때 함께 만들어지고(`InstancedPerActor` → ASC당 하나), BP에서 지정한 값은 아키타입에서 복사된다.
 - **`CanActivate`는 인자 `ActorInfo`를 쓴다.** CDO에서도 불릴 수 있어 호스트의 `CurrentActorInfo`를 믿을 수 없다. 컴뱃 컴포넌트는 `ICBCombatInterface`로 찾는다.
 - **GE 적용은 엔진 경로를 직접 밟는다.** 엔진 `UGameplayAbility::ApplyGameplayEffectSpecToTarget`이 protected라 조각에서 부를 수 없어서, 그 내부(권한·예측키 검사 → 타겟 리스트 잠금 → 타겟 데이터의 `ApplyGameplayEffectSpec`)를 그대로 수행한다. 전부 public API다. 베이스에 래퍼를 두지 않는 이유는 베이스가 "히트"라는 특정 기능을 알게 되기 때문이다.
+  - **권한·예측키 검사는 조각이 이벤트 단위로 한 번**, 그 뒤 **타겟 하나에 대한 적용(스펙 생성·계수·잠금·`SingleTargetHit`)은 `UCBAbilitySystemLibrary::Auth_ApplyDamageToTarget()`** 이 한다. 무기 트레이스·영역 공격이 이 함수를 공유하므로 N² 방지 같은 적용 규칙은 여기 한 곳에만 있다.
+  - 이 함수는 안에서 둘로 나뉜다 — **`MakeDamageSpec()`**(스펙 생성 + 계수) → 잠금 → **`Auth_ApplyDamageSpecToTarget()`**(`SingleTargetHit` 로 타겟 하나에 적용). 판정과 적용이 떨어진 투사체는 앞의 것을 발사 시점에, 뒤의 것을 명중 시점에 따로 부른다(아래 "투사체").
+  - **HitResult 는 엔진이 붙인다.** `FGameplayAbilityTargetData::ApplyGameplayEffectSpec()` 이 적용마다 스펙·컨텍스트를 복사하고 컨텍스트에 히트가 없으면 타겟 데이터의 HitResult 를 넣는다. 그래서 스펙 하나를 여러 타겟·여러 번 재사용해도 원본이 오염되지 않는다.
+
+## 기능 조각 — 영역 공격 (`UCBFragment_AreaAttack`)
+
+무기가 닿았는지가 아니라 **범위 안에 있는지로** 판정한다. 내려찍기·충격파처럼 한 순간 터지는 광역기용이다.
+
+| 함수 | 하는 일 | 호스트 호출 위치 |
+|---|---|---|
+| `Start()` | [서버] 영역 공격 이벤트(`Event.Combat.AreaAttack`) 대기 → 범위 판정 → 타겟마다 데미지 GE + 피격 큐 | `ActivateAbility`의 `PlayActionMontage()` 직후 |
+
+- **발동 검사·종료 호출이 없다.** 무기처럼 전제로 요구할 것이 없고, 이벤트 대기가 어빌리티 태스크라 어빌리티가 끝나면 함께 정리된다.
+- **판정 시점은 기존 노티파이 `CBAN_SendGameplayEventToOwner`** (`EventTag = Event.Combat.AreaAttack`)가 정한다. 한 몽타주에 여러 개 두면 매번 따로 판정한다(연속 내려찍기에서 같은 적이 두 번 맞는 것이 의도). 이 노티파이는 로컬에서 보내고 비권한이면 서버로 RPC 하므로, 판정은 서버 한 곳에서만 돈다.
+- **판정 순서** (서버):
+  1. 중심 = 시전자 위치 + 시전자 회전 × `CenterOffset`
+  2. `OverlapMultiByChannel` — `Weapon` 채널, **박스 `BoxExtent`를 시전자 회전으로 돌려서**, 시전자 제외
+  3. 액터 단위 중복 제거 — 스켈레탈 메시는 피직스 바디마다 결과가 따로 나온다
+  4. 적대 진영(`FGenericTeamId::GetAttitude`, 무기 트레이스와 같은 기준) + ASC 보유만
+  5. **벽 차단** — **검사 시작점**에서 대상 위치까지 `Weapon` 채널 라인 트레이스. 캐릭터는 이 채널을 막지 않으므로(캡슐 Ignore·메시 Overlap) 막는 것은 벽·지형뿐이다. 막히면 제외
+     - 시작점은 `WallCheckSocketName` 이 정한다. **None(기본) = 판정 중심**, 지정하면 **시전자 메시의 그 소켓(또는 본)**. 아래 "벽 검사 시작점" 참고
+  6. `FHitResult` 구성 → `Auth_ApplyDamageToTarget()` + `Auth_ExecuteHitCue()`
+- **오버랩은 타격 지점을 주지 않는다**(`FOverlapResult`는 컴포넌트·액터·바디 인덱스뿐). 그래서 HitResult 를 직접 만든다 — 타격 지점 = 대상 액터 위치, 법선 = 중심에서 바깥쪽. 피격 넉백은 가해자 폰 위치를 먼저 보므로(아래 "피격 넉백") 이 값에 좌우되지 않는다.
+- **피격 큐는 `HitCueTag`로 따로 지정한다.** 영역 공격은 무기가 아니라서 무기 피격 큐를 쓸 근거가 없고, 따로 두면 컴뱃 컴포넌트에 의존하지도 않는다. 비우면 연출 없이 데미지만 들어간다.
+- **`DamageEffectClass`를 비운 채 이벤트가 오면 경고 로그**를 남긴다. 조각이 모든 AI 공격 BP에 들어 있어 비어 있는 것이 기본값이므로, 실제로 판정 이벤트가 왔을 때만 알린다.
+- **벽 검사 시작점 — 공격이 어디서 "나오는가"로 고른다.**
+  | 공격 | `WallCheckSocketName` | 이유 |
+  |---|---|---|
+  | 내려찍기·충격파 (터진 자리에서 퍼짐) | None → 판정 중심 | 피해가 퍼지는 원점이 판정 중심이다 |
+  | 브레스·전방 방사 (입·손에서 뿜음) | 입·손 소켓 | 박스가 벽 너머까지 뻗으면 **판정 중심이 이미 벽 너머**라, 중심에서 그은 선은 시전자와 대상 사이의 벽을 못 본다 |
+  - 소켓은 **지면보다 충분히 위**(손·입·가슴)여야 한다. 발처럼 낮으면 선이 지면에 걸려 대상이 전부 제외된다(아래 `CenterOffset.Z` 와 같은 함정).
+  - 시전자는 쿼리에서 제외되므로 소켓이 몸 안쪽이어도 자기 몸에 막히지 않는다.
+  - 이름을 못 찾으면 경고 후 판정 중심에서 검사한다. 소켓 조회는 투사체 발사 위치와 같은 공용 함수 `UCBAbilitySystemLibrary::FindMeshSocketLocation()` 을 쓴다(엔진 `GetSocketLocation` 이 없는 이름에 컴포넌트 위치를 조용히 돌려주는 것을 막음).
+  - 두 방식 모두 **시작점 → 대상 중심 한 줄**만 본다. 대상 몸 일부가 벽 밖으로 나와 있어도 중심이 벽 뒤면 맞지 않는다.
+  - enum 과 소켓 이름을 따로 두지 않고 **이름 하나로 선택을 표현**했다(비었으면 중앙). 기존 BP 는 None 이라 동작이 바뀌지 않는다.
+- **범위 확인은 `Draw Debug (Server Only)`**(`bDrawDebug`, 어빌리티 BP의 `Area Attack > Debug`)를 켠다. 판정 순간의 박스(주황)와 대상마다 **검사 시작점에서 그은** 벽 차단 검사 선(초록 = 적중 / 빨강 = 벽에 막힘)을 2초간 그린다.
+  - 판정과 같은 값(중심·크기·회전)으로 판정 함수 안에서 그리므로 **보이는 것이 곧 판정**이다.
+  - **리슨 서버 호스트 화면에만 보인다.** 디버그 드로우는 그린 머신의 월드에만 나오고 판정은 서버에서 돈다. 클라이언트로 접속한 화면에서 확인하려면 호스트 쪽을 봐야 한다.
+  - 어빌리티마다 따로 켜진다(공격 하나만 골라 볼 수 있다). 쉬핑 빌드에서는 `ENABLE_DRAW_DEBUG`로 빠져 켜 있어도 그리지 않는다.
+  - 플레이어에게 보여주는 예고 표시(텔레그래프)는 이것과 별개다 — 미구현. 만든다면 GameplayCue 액터가 데칼을 시전자에 붙여 그리고, 크기·중심은 조각이 큐 파라미터로 넘긴다(값을 두 벌 두지 않기 위해).
+- **`CenterOffset.Z`를 낮추지 말 것.** 중심이 지면 아래로 가면 벽 차단 트레이스가 지면에 걸려 전부 제외된다. 시전자 위치(캡슐 중심)에서 전방(X)만 옮기는 것이 기본이다.
+- **서버에서 직접 판정하므로 AI 용이다.** 플레이어가 쓰면 서버가 레이턴시만큼 다른 위치로 판정하므로, 무기 트레이스처럼 로컬 감지 → 서버 검증 경로가 필요하다(미구현). 플레이어용을 만들 때 함께 할 일:
+  - **적중 알림 분리.** 버스트 게이지(`UCBBurstGaugeAbility`)·적중 회복(`UCBLifeOnHitAbility`)은 무기 트레이스의 운반용 이벤트 `Event.Combat.Attack.Hit`를 듣는다. 영역 공격은 이 이벤트를 보내지 않으므로 게이지·회복이 따라오지 않는다 — 지금은 둘 다 Chaser 로드아웃에만 부여돼 AI 영역 공격과 만날 일이 없다. 그렇다고 영역 공격이 이 이벤트를 보내게 하면, 한 어빌리티에 무기 트레이스가 같이 있을 때 무기 트레이스 조각도 그 이벤트를 받아 **무기 데미지가 한 번 더 들어간다.** 그래서 `Auth_ApplyDamageToTarget()` 쪽에서 별도 알림 이벤트를 보내고 패시브들이 그것을 듣게 옮기는 쪽이 맞다.
+- **사용하는 어빌리티**: `UCBAIAttackAbility`. BP의 `Combat > Area Attack` 항목에서 `DamageEffectClass`·`DamageCoefficient`·`HitCueTag`·`BoxExtent`·`CenterOffset`·`WallCheckSocketName`을 지정한다.
+- **판정 도형은 박스다.** 전방 길이·좌우 너비·높이를 따로 정하려면 박스뿐이다 — 구는 반지름 하나로 묶이고, 캡슐은 높이(절반 높이)가 반지름보다 작아질 수 없어 **넓고 납작한 판정을 만들 수 없다.** 높이를 따로 두면 낮고 넓은 박스로 **점프로 피하는 내려찍기**도 만들 수 있다.
+  - 대가: 모서리가 변보다 멀리 닿는다(정사각형이면 대각선이 약 1.4배). 사방으로 퍼지는 원형 판정이 필요해지면 그때 추가한다 — 넓고 납작한 원형이면 박스로 거른 뒤 수평 거리로 한 번 더 거르는 원기둥 판정이 된다. 도형 선택 enum 은 쓰는 곳이 하나라 두지 않았다.
+  - `BoxExtent`는 엔진 Box Extent 와 같은 **절반 크기**다(X = 전방 / Y = 좌우 / Z = 위아래). 중심이 시전자 캡슐 중심 높이이므로, 발밑까지 닿으려면 `Z ≥ 캡슐 절반 높이`. 몸 앞에서 시작하는 박스는 `CenterOffset.X = BoxExtent.X` 정도로 둔다.
+
+## 기능 조각 — 투사체 (`UCBFragment_Projectile`)
+
+투사체를 **몇 발, 어디서, 어느 쪽으로** 쏠지와 명중 데미지를 정한다. **어떻게 날아가는지**(직선·포물선·유도·속도·모양)는 투사체 액터 `ACBProjectile` 의 BP 가 정한다. 명중 판정은 투사체 쪽 → [Combat.md](Combat.md) "투사체 판정".
+
+| 함수 | 하는 일 | 호스트 호출 위치 |
+|---|---|---|
+| `Start(TargetActor)` | 조준 대상 기록 + [서버] 발사 이벤트(`Event.Combat.FireProjectile`) 대기 → 타겟 현재 위치로 조준 → 데미지 스펙 1회 생성 → 소켓에서 부채꼴로 N발 스폰·`Auth_Launch` | `ActivateAbility`의 `PlayActionMontage()` 직후 |
+
+- **조각이 아니라 액터가 따로 있는 이유**: 투사체는 몽타주·어빌리티가 끝난 뒤에도 날아가 맞는다. 조각은 어빌리티와 수명을 같이하므로 명중을 기다릴 수 없고, 명중 순간 어빌리티로 스펙을 만드는 `Auth_ApplyDamageToTarget()` 도 쓸 수 없다(시전자가 죽어 어빌리티가 제거됐을 수도 있음). 그래서 **스펙은 발사 순간 `MakeDamageSpec()` 으로 만들어 넘기고, 적용은 명중 순간 투사체가 `Auth_ApplyDamageSpecToTarget()` 으로** 한다. 공격력도 발사 순간 값으로 고정된다.
+- **조준은 매 발 다시 한다.** 호스트가 블랙보드 타겟을 `Start()` 에 주입하고(워프와 같은 헬퍼 `GetBlackboardTarget()`), 조각은 **발사 이벤트마다 그 타겟의 현재 위치**를 조준점으로 읽는다. 연사 중 모션 워핑으로 몸이 플레이어를 따라 도는 것과 탄이 같은 곳을 향한다. 타겟이 사라지면 마지막 조준 위치로 계속 쏜다. 조각은 블랙보드를 모른다.
+  - 처음엔 발동 순간 위치로 고정했다(선딜 동안 피할 수 있는 공격). 그러나 워프로 몸은 플레이어를 따라 도는데 탄은 옛 자리로 날아가 **연출과 판정이 어긋나** 매 발 조준으로 바꿨다. 피할 여지는 탄속·선딜로 준다.
+- **발사 시점은 `CBAN_SendGameplayEventToOwner`** (`EventTag = Event.Combat.FireProjectile`). 한 몽타주에 여러 개 두면 **연사**다(코드 불필요).
+- **발사 소켓 위치는 서버의 본 갱신에 의존한다.** 서버가 보스를 그리지 않을 때도 몽타주 중 본이 갱신되도록 AI 메시의 애님 틱 설정을 바꿔 뒀다 → [Montage.md](Montage.md) "서버 애니메이션 틱에 의존한다".
+- **동시 다발은 `ProjectileCount` + `SpreadAngle`.** 가운데 발이 조준점을 향하고 좌우 대칭으로 균등 분배한다. 회전 대상이 **조준점**(발사 지점 축)이라 직선은 방향이, 포물선은 착탄점이 돌아 **파라미터 하나가 두 방식에 모두 맞는다.** 360 이면 처음·끝 발이 겹치지 않게 발 수로 나눠 전방위로 뿌린다.
+- **발사 위치는 `SpawnSocketName`**(시전자 메시의 소켓 또는 본). None 이면 시전자 중심. 이름을 못 찾으면 경고 후 중심에서 쏜다 — `GetSocketLocation` 은 못 찾으면 컴포넌트 위치를 조용히 돌려주기 때문에 먼저 검사한다(공용 함수 `UCBAbilitySystemLibrary::FindMeshSocketLocation()`, 영역 공격의 벽 검사 시작점과 공유).
+- **투사체는 스폰이 끝난 뒤 `Auth_Launch` 한다.** 이동 컴포넌트 초기화(`InitializeComponent`)가 속도 크기를 `InitialSpeed` 로 덮어써, 먼저 넣은 포물선 속도가 깨지기 때문.
+- **`ProjectileClass`·`DamageEffectClass` 를 비운 채 이벤트가 오면 경고 로그**를 남기고 쏘지 않는다(영역 공격과 같은 이유 — 모든 AI 공격 BP 에 조각이 들어 있어 비어 있는 것이 기본값).
+- **서버에서 스폰하므로 AI 용이다.** 플레이어가 쓰려면 로컬 예측 발사(가짜 투사체 → 서버 투사체로 교체) 경로가 필요하다(미구현).
+- **사용하는 어빌리티**: `UCBAIAttackAbility`. BP의 `Combat > Projectile` 항목에서 `ProjectileClass`·`SpawnSocketName`·`ProjectileCount`·`SpreadAngle`·`DamageEffectClass`·`DamageCoefficient`·`HitCueTag` 를 지정한다.
 
 ## 피격 반응 (`UCBHitReactAbility`)
 
@@ -169,7 +239,7 @@ if (!ContainsModifier(Animation, StartTime, EndTime))   // Animation + 윈도우
 - **재발동마다 넉백이 새로 적용되어 누적된다.** 연쇄 경직 차단이 사실상의 상한 역할을 한다.
 - **전투 사이클이 진동할 수 있다.** 넉백이 `IsAtLocation(근접 반경)` 경계를 넘나들면 추격↔경계가 플리커한다 (→ [AI.md](AI.md)).
 
-> AI 피격 몽타주의 `Enable Root Motion`은 **꺼야 한다.** 루트모션 몽타주와 루트모션 소스가 같은 프레임에 이동을 다투면 결과가 애매해진다.
+> AI 피격 몽타주의 `Enable Root Motion`은 **꺼야 한다.** 엔진 CMC 는 애님 루트모션이 있으면 루트모션 소스를 **아예 적용하지 않는다**(`ApplyRootMotionToVelocity` — 애님 루트모션 우선, 제자리 클립도 루트모션이 켜져 있으면 "있음"으로 판정). 켜 두면 넉백이 조용히 사라진다. 같은 이유로 공격 몽타주의 돌진은 루트모션 소스가 아니라 워프 모디파이어로 만든다 → [Montage.md](Montage.md) "일정 속도 돌진".
 
 ### 슈퍼아머 — 끊기지 않는 어빌리티
 
@@ -316,6 +386,9 @@ AssetTag(`Ability.Combat.Death`)는 예외적으로 **C++ 생성자에서** 지�
 
 - **`ServerOnly`인 이유**: AI 컨트롤러는 서버에만 존재하므로 예측할 클라이언트가 없다. 몽타주는 `UCBActionAbility`가 `GameplayCue.PlayAction`으로 전 클라이언트에 동기화하므로 복제 실행이 불필요하다. → [Montage.md](Montage.md)
 - **무기 트레이스 기능 한 벌로 플레이어·AI를 함께 처리한다**: AI 폰은 서버에서 AI 컨트롤러에 빙의되어 있어 서버가 곧 권위이자 로컬 컨트롤러다(`IsLocallyControlled()`·`IsNetAuthority()` 둘 다 참 — `FGameplayAbilityActorInfo::IsLocallyControlled`가 폰의 컨트롤러로 판정하고, 서버의 AI 컨트롤러는 `IsLocalController()`가 참). 그래서 `UCBFragment_WeaponTrace::Start()`의 로컬/서버 분기가 AI에서는 둘 다 걸려, 예전 AI 전용 코드가 분기 없이 세 대기를 모두 걸던 것과 결과가 같다. 무기 트레이스 파이프라인 자체는 [Combat.md](Combat.md) 그대로 재사용된다.
+- **한 클래스가 무기 공격·영역 공격·투사체를 함께 가진다.** 세 조각 모두 몽타주 노티파이 이벤트로만 동작하므로, **공격 종류는 BP와 몽타주의 노티파이 배치가 정한다** — 트레이스 구간(`CBANS_GameplayEventWindow`)만 있으면 무기 공격, 영역 공격 노티파이만 있으면 영역 공격, 발사 노티파이만 있으면 원거리, 섞으면 "주먹 + 충격파" 같은 복합기다.
+  - **영역 공격·투사체용 클래스를 따로 만들지 않은 이유**: 서버 전용 실행·쿨다운 커밋·몽타주 무작위 선택·타겟 워프를 그대로 복사해야 했다. 진영(Outlaw)별 클래스로 나누지 않는 것도 같은 이유다 — 진영 어빌리티 베이스는 쓰는 곳이 없어 이미 삭제됐다(→ [ActionFragment.md](ActionFragment.md) §7.1). "보스 전용 공격"은 클래스가 아니라 **로드아웃이 어떤 공격 BP 를 부여하느냐**로 정한다.
+  - **대가**: 영역 공격·투사체도 무기 검사(`UCBFragment_WeaponTrace::CanActivate`)를 통과해야 발동한다. 지금 AI 는 전부 무기나 본체 무기(`ACBBodyWeapon`)를 가지므로 문제없다. **무기 없는 AI(마법사형 등)가 생기면 그때 클래스를 나눈다.** 또 모든 AI 공격 BP 디테일 패널에 세 조각의 설정 칸이 함께 보인다.
 - **쿨다운은 GAS 표준**(`CooldownGameplayEffectClass` + `CommitAbility`). 쿨다운 중이면 활성화가 실패하고 **BT 태스크가 Failed를 받아** 다른 분기로 흐르므로, BT 쪽에 쿨다운 데코레이터를 둘 필요가 없다.
 - **전투 상태를 요구하지 않는다**: `SetCombatMode()`를 호출하는 것은 Chaser의 무기 장착/해제 어빌리티뿐이라, AI는 현재 전투 상태에 진입하지 않는다. 여기서 `IsCombatMode()`를 검사하면 AI 공격이 영영 발동하지 않으므로 무기 유효성만 검사한다(`UCBFragment_WeaponTrace::CanActivate`).
   - ⚠️ 그 결과 **AI 무기는 칼집(Sheath) 소켓에 붙은 채로 공격 모션이 재생되고, 애님도 비전투 상태머신을 쓴다.** 몬스터가 무장 상태로 보이게 하려면 AI 캐릭터가 준비 완료 시점에 `SetCombatMode(true)`를 한 번 호출해야 한다(미구현).

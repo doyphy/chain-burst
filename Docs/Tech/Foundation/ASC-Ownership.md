@@ -47,7 +47,7 @@ ASC 소유 구조가 캐릭터마다 달라서(플레이어=PlayerState, AI=Char
 
 | 위치 | 기준 | 예 |
 |---|---|---|
-| **`UCBAbilitySystemLibrary`** | **상태 없는(stateless) ASC/태그 질의·GE 적용 유틸리티.** 특히 두 곳 이상이 공유하는 공용 판정은 여기 두고 중복 구현 금지 | `GetASC`, `HasGameplayTag`, `IsCombatMode`, `GetCurrentGaitTag`, `GetGaitMontageIndex`, GE 스펙 생성/적용 |
+| **`UCBAbilitySystemLibrary`** | **상태 없는(stateless) ASC/태그 질의·GE 적용 유틸리티.** 특히 두 곳 이상이 공유하는 공용 판정은 여기 두고 중복 구현 금지 | `GetASC`, `HasGameplayTag`, `IsCombatMode`, `GetCurrentGaitTag`, `GetGaitMontageIndex`, GE 스펙 생성/적용. 기능 조각 둘 이상이 쓰는 시전자 기준 유틸(`FindMeshSocketLocation` — 투사체 발사 위치·영역 공격 벽 검사 시작점)과 판정 규칙(`IsBlockedByWall` — 무기 트레이스·영역 공격의 벽 검사)도 같은 이유로 여기 둔다 |
 | 컴포넌트 | 상태를 소유(캐싱·타이머)하거나 **태그를 부여/제거**하는 로직 — 라이브러리는 읽기 전용, 쓰기는 소유자 컴포넌트가 담당 | `UCBCombatComponent`의 InCombat 부여, `UCBLocomotionProcessor`의 파생 상태 미러링(예정) |
 | 어빌리티 | 해당 어빌리티 전용 로직 (공용화 필요가 생기면 라이브러리로 승격) | `UCBGADash::SelectActionMontageIndex`의 전투 분기 |
 

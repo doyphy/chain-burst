@@ -94,7 +94,7 @@
 | `Action.*` | 식별 | 몽타주 식별 태그 (UCBActionComponent에서 몽타주 선택) |
 | `GameplayCue.*` | 식별 | 게임플레이 큐 라우팅 |
 | `Effect.*` | 속성 | GE 동작 의도 선언 (Opt-in, 여러 GE 공유 가능) |
-| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`, `Staggered`, `Burst`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망) |
+| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`, `Staggered`, `Stunned`, `Burst`, `Engaged`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망) |
 | `Cooldown.*` | 상태 | 어빌리티 쿨다운 (쿨다운 GE의 GrantedTags — GAS가 자동 검사. 관례상 별도 루트 유지) |
 | `Event.*` | 이벤트 | 애님노티파이 등 이벤트 트리거 |
 
@@ -114,7 +114,11 @@ Status.Movement.Overridden                  ← 속도 오버라이드 GE
 
 **`Status.Combat.Staggered`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 `UCBHitReactAbility` 하나이고, **어빌리티 활성 구간이 곧 경직 구간**이다(= 피격 몽타주의 `Event.Action.EndAbility` 노티파이 위치가 경직 길이를 정한다). 소비자는 `ACBAIController` 로, 태그 변화를 블랙보드 bool 키로 미러링해 BT 가 경직 분기로 빠지게 한다 (→ [AI.md](../Gameplay/AI.md) "피격 경직"). 시뮬 프록시는 이 태그를 알 필요가 없다 — 프록시가 봐야 하는 경직 연출은 피격 몽타주이고 그건 GameplayCue 로 이미 동기화된다.
 
+**`Status.Combat.Stunned`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 기절 어빌리티(`GA_Stun`, `UCBEventActionAbility` BP)이고 **어빌리티 활성 구간이 곧 기절 구간**이다(= 기절 몽타주 길이). 소비자는 `UCBStunGaugeAbility`(기절 중 적립 중단)이며 이후 보스 UI·추가 피해 등이 붙을 자리다. 같은 어빌리티가 `Status.Combat.Staggered`(BT 경직 분기)·`Status.Combat.SuperArmor`(피격 반응 차단)도 함께 소유한다 — 경직과 구분되는 태그를 따로 둔 이유는 **경직 중에는 기절 게이지가 계속 쌓여야** 하기 때문이다 (→ [Stun.md](../Gameplay/Stun.md)).
+
 **`Status.Combat.SuperArmor`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 "피격에 끊기지 않아야 하는" 어빌리티 자신(스킬 BP 등)이고, 소비자는 `UCBHitReactAbility`의 `ActivationBlockedTags` 하나뿐이다 (→ [Abilities.md](../Gameplay/Abilities.md) "슈퍼아머"). 서버와 오너 클라에서만 존재하면 충분하다 — 판정도 몽타주 스킵도 어빌리티 발동 단계에서 끝나므로 시뮬 프록시는 이 태그를 알 필요가 없다.
+
+**`Status.Combat.Engaged`** — 복제 경로 ③(수동 루스 태그, `TagOnly`). **AI 의 교전 개시** — 첫 타겟을 잡은 순간부터 사망까지 붙어 있다. 부여 주체는 `ACBAIController::UpdateTargetInBlackboard()`(블랙보드 타겟 쓰기의 유일한 경로)이고 **떼지 않는다** — 타겟을 잠깐 잃을 때마다 소비자가 꺼졌다 켜지지 않게 하기 위함이다. AI ASC 는 캐릭터와 함께 파괴되므로 `EndPlay` 정리도 필요 없다(③의 "폰이 사라질 때 뺀다"는 PlayerState 소유 ASC 의 규칙). 소비자는 `UCBUIComponent`(화면 상단 보스 바 → [UI.md](../Presentation/UI.md) "보스 바"). 클라 UI 가 구독하므로 `StrafeFocus` 의 `Strafe` 와 같은 이유로 복제한다. **플레이어의 `InCombat`(무기를 든 상태)과는 다른 뜻**이라 따로 둔다 — AI 는 `InCombat` 을 쓰지 않는다. 보스 리셋(전멸 시 회복)이 생기면 그 지점이 이 태그를 떼는 곳이 된다.
 
 **`Status.Combat.Burst`** — 복제 경로 ①(GE GrantedTags). 소유자는 `GE_Burst`이고, 부여 주체는 `UCBBurstAbility`(예측 적용), 제거는 GE 만료 또는 `UCBBurstGaugeAbility`의 종료(사망·캐릭터 변경 시 `RemoveActiveEffectsWithGrantedTags`). 소비자는 `UCBBurstGaugeAbility`(버스트 중 적립 중단)이며 이후 UI·이펙트가 붙는다. 버프 모디파이어 때문에 GE가 어차피 필요하므로 ①이 추가 비용 없이 따라온다 (→ [Burst.md](../Gameplay/Burst.md)).
 

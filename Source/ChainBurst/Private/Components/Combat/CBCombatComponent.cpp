@@ -13,6 +13,7 @@
 #include "GameplayEffect.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 
 UCBCombatComponent::UCBCombatComponent()
@@ -325,6 +326,16 @@ void UCBCombatComponent::TickWeaponTrace()
 	// 디버그 드로잉 설정
 	EDrawDebugTrace::Type DebugTraceType = bShowDebugTrace ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None;
 
+	// 벽 검사 - 공격자 중심에서 대상 중심까지 (나 자신·무기 제외)
+	const UWorld* World = GetWorld();
+	if (!World) return;
+	const FVector AttackerLocation = OwnerPawn->GetActorLocation();
+	FCollisionQueryParams WallQueryParams(SCENE_QUERY_STAT(CBWeaponWallCheck), false);
+	WallQueryParams.AddIgnoredActors(ActorsToIgnore);
+
+	// 이번 틱에 벽에 막힌 대상 (같은 틱 안에서는 위치가 같으므로 바디·샘플마다 다시 긋지 않음)
+	TSet<const AActor*> WallBlockedActors;
+
 	// 트레이스의 기본 세로 범위 = 오너 캡슐의 발바닥 ~ 머리끝.
 	float BodyBottomZ = 0.0f;
 	float BodyTopZ = 0.0f;
@@ -409,18 +420,35 @@ void UCBCombatComponent::TickWeaponTrace()
 			{
 				AActor* HitActor = Hit.GetActor();
 
-				// 충돌한 액터가 유효하고, 충돌한 기록이 없다면 처리
-				if (HitActor && !AlreadyHitActors.Contains(HitActor))
-				{
-					// 진영 판정 결과와 무관하게 기록해, 같은 대상을 서브디비전마다 다시 검사하지 않게 함
-					AlreadyHitActors.Add(HitActor);
+				// 충돌한 액터가 유효하고, 이번 스윙에 처리한 기록이 없을 때만
+				if (!HitActor || AlreadyHitActors.Contains(HitActor) || WallBlockedActors.Contains(HitActor)) continue;
 
-					// 적대 진영만 배칭 목록에 추가 (아군·중립·팀 없는 액터는 여기서 걸러짐)
-					// 배칭 목록에 담아두고 일정 간격 마다 한 번에 처리함. (RPC 최적화)
-					if (IsHostileTarget(HitActor))
+				const bool bHostile = IsHostileTarget(HitActor);
+
+				// 벽 검사 - 공격자 중심과 대상 중심 사이가 벽에 막혔으면 무시.
+				// 칼날 일부가 처음부터 벽 너머에 있으면 스윕이 벽을 지나지 않아 뒤의 적이 걸리므로 따로 검사함.
+				// 기록하지 않으므로, 같은 스윙 안에서 대상이 벽 밖으로 나오면 다시 맞을 수 있음.
+				if (bHostile && UCBAbilitySystemLibrary::IsBlockedByWall(*World, AttackerLocation, HitActor->GetActorLocation(), WallQueryParams))
+				{
+					WallBlockedActors.Add(HitActor);
+#if ENABLE_DRAW_DEBUG
+					// [디버그] 벽에 막힌 검사 선 (트레이스 디버그와 같은 스위치·유지 시간)
+					if (bShowDebugTrace)
 					{
-						PendingHits.Add(Hit);
+						DrawDebugLine(World, AttackerLocation, HitActor->GetActorLocation(), FColor::Red, false, 2.0f, 0, 2.f);
 					}
+#endif
+					continue;
+				}
+
+				// 진영 판정 결과와 무관하게 기록해, 같은 대상을 서브디비전마다 다시 검사하지 않게 함
+				AlreadyHitActors.Add(HitActor);
+
+				// 적대 진영만 배칭 목록에 추가 (아군·중립·팀 없는 액터는 여기서 걸러짐)
+				// 배칭 목록에 담아두고 일정 간격 마다 한 번에 처리함. (RPC 최적화)
+				if (bHostile)
+				{
+					PendingHits.Add(Hit);
 				}
 			}
 		}

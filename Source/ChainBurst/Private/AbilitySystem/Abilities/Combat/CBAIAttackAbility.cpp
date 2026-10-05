@@ -1,6 +1,8 @@
 // project
 #include "AbilitySystem/Abilities/Combat/CBAIAttackAbility.h"
 #include "AbilitySystem/Abilities/Fragments/CBFragment_WeaponTrace.h"
+#include "AbilitySystem/Abilities/Fragments/CBFragment_AreaAttack.h"
+#include "AbilitySystem/Abilities/Fragments/CBFragment_Projectile.h"
 #include "Components/Animation/CBActionComponent.h"
 #include "Controllers/CBAIController.h"
 
@@ -17,6 +19,12 @@ UCBAIAttackAbility::UCBAIAttackAbility()
 
 	// 무기 트레이스 기능 (무기 검사 · 트레이스 · 데미지 GE)
 	WeaponTrace = CreateDefaultSubobject<UCBFragment_WeaponTrace>(TEXT("WeaponTrace"));
+
+	// 영역 공격 기능 (범위 판정 · 데미지 GE)
+	AreaAttack = CreateDefaultSubobject<UCBFragment_AreaAttack>(TEXT("AreaAttack"));
+
+	// 투사체 기능 (발사 · 데미지 스펙 전달)
+	Projectile = CreateDefaultSubobject<UCBFragment_Projectile>(TEXT("Projectile"));
 }
 
 // 발동 전제 조건 (무기가 없으면 활성화 단계에서 막음)
@@ -60,6 +68,12 @@ void UCBAIAttackAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle
 
 	// 무기 트레이스 시작 (서버의 AI 폰은 로컬·서버 모두 참이라 트레이스 구간·히트 대기가 전부 걸림)
 	WeaponTrace->Start();
+
+	// 영역 공격 판정 대기 (몽타주에 영역 공격 노티파이가 없으면 아무 일도 하지 않음)
+	AreaAttack->Start();
+
+	// 발동 순간의 타겟 위치로 조준 고정 + 발사 대기 (몽타주에 발사 노티파이가 없으면 아무 일도 하지 않음)
+	Projectile->Start(GetBlackboardTarget());
 }
 
 void UCBAIAttackAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
@@ -95,17 +109,23 @@ void UCBAIAttackAbility::BuildActionCueParameters(FGameplayCueParameters& CuePar
 {
 	if (!bWarpToTarget) return;
 
-	// 블랙보드 가져오기.
-	const APawn* Avatar = Cast<APawn>(GetAvatarActorFromActorInfo());
-	const AAIController* AIController = Avatar ? Cast<AAIController>(Avatar->GetController()) : nullptr;
-	const UBlackboardComponent* Blackboard = AIController ? AIController->GetBlackboardComponent() : nullptr;
-	if (!Blackboard) return;
-
-	// 블랙보드에서 타겟 액터 가져오기.
-	const AActor* TargetActor = Cast<AActor>(Blackboard->GetValueAsObject(ACBAIController::TargetActorKey));
+	const AActor* TargetActor = GetBlackboardTarget();
 	if (!TargetActor) return;
 
 	// 큐 파라미터로 타겟 컴포넌트와 접근 거리 전달.
 	CueParams.TargetAttachComponent = TargetActor->GetRootComponent();
 	CueParams.NormalizedMagnitude = WarpStopDistance;
+}
+
+// 블랙보드의 현재 타겟 (모션 워핑·투사체 조준 공용)
+AActor* UCBAIAttackAbility::GetBlackboardTarget() const
+{
+	// 블랙보드 가져오기.
+	const APawn* Avatar = Cast<APawn>(GetAvatarActorFromActorInfo());
+	const AAIController* AIController = Avatar ? Cast<AAIController>(Avatar->GetController()) : nullptr;
+	const UBlackboardComponent* Blackboard = AIController ? AIController->GetBlackboardComponent() : nullptr;
+	if (!Blackboard) return nullptr;
+
+	// 블랙보드에서 타겟 액터 가져오기.
+	return Cast<AActor>(Blackboard->GetValueAsObject(ACBAIController::TargetActorKey));
 }

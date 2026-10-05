@@ -9,6 +9,7 @@ class UCBAILoadout;
 /**
  * AI 캐릭터 공통 베이스 (Outlaw·Rogue 등).
  * ASC·AttributeSet을 캐릭터 자체가 소유하며, AI 공통 초기화 흐름을 담는다.
+ * 공격 판정이 서버에서 소켓을 읽으므로, 렌더링되지 않아도 몽타주 중에는 본을 갱신하도록 메시 애님 틱을 설정.
  * 직접 스폰하지 않는 추상 클래스.
  */
 UCLASS(Abstract)

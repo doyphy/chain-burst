@@ -7,17 +7,22 @@
 class UUserWidget;
 class UCBHealthBarWidget;
 class UCBNamePlateWidget;
+class UCBBossBarWidget;
 class UCBAbilitySystemComponent;
 class UWidgetComponent;
+class APlayerController;
 class ACBHUD;
 struct FOnAttributeChangeData;
+struct FGameplayTag;
 
 /**
  * 캐릭터 부착형 UI의 공용 관리자 컴포넌트 (전 캐릭터 공통, ACBBaseCharacter가 소유).
  * 캐릭터 시스템 준비 완료 후 오너 유형에 맞는 체력 UI를 생성·소유:
  * - 로컬 조작 플레이어: HUD 위젯을 생성해 HUD 스택(Game 레이어)에 위임
  * - 그 외(AI·원격 캐릭터): 머리 위 UWidgetComponent(Screen 모드)를 런타임 생성·부착
- * 
+ * - 보스(보스 바 위젯 클래스가 주입된 AI): 교전 개시 태그(Status.Combat.Engaged, 복제)를 구독해
+ *   각 클라이언트가 화면 상단 보스 바를 자기 로컬 HUD 스택(Game 레이어)에 올림. 보스가 파괴될 때 제거
+ *
  * 로비에서는 체력 UI 대신 발밑 이름표(UWidgetComponent)만 만듦 — PlayerState 의 닉네임.
  *
  * 머리 위 바는 평소 숨김 상태로, 오너의 체력 감소(=피격)를 구독해 일정 시간 표시.
@@ -38,6 +43,9 @@ public:
 
 	/** 로드아웃에서 HUD 위젯 클래스를 주입하는 세터 (소유 클라이언트 전용 경로) */
 	FORCEINLINE void SetHUDWidgetClass(TSubclassOf<UUserWidget> InWidgetClass) { HUDWidgetClass = InWidgetClass; }
+
+	/** 로드아웃(Outlaw)에서 화면 상단 보스 바 위젯 클래스를 주입하는 세터 (전 인스턴스 공용 경로) */
+	FORCEINLINE void SetBossBarWidgetClass(TSubclassOf<UCBBossBarWidget> InWidgetClass) { BossBarWidgetClass = InWidgetClass; }
 
 	/**
 	 * 로드아웃에서 발밑 이름표 설정을 주입하는 세터 (전 인스턴스 공용 경로).
@@ -68,12 +76,12 @@ public:
 
 protected:
 	//~ Begin UActorComponent Interface.
-	/** 생성한 HUD 위젯·머리 위 위젯 컴포넌트를 정리. */
+	/** 생성한 HUD 위젯·보스 바·머리 위 위젯 컴포넌트를 정리. */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	//~ End UActorComponent Interface.
 
 	//~ Begin UCBExtensionComponent Interface.
-	/** 준비 완료 시 오너 유형에 맞는 체력 UI를 생성 (로컬 플레이어=HUD, 그 외=머리 위 바). */
+	/** 준비 완료 시 오너 유형에 맞는 체력 UI를 생성 (로컬 플레이어=HUD, 그 외=머리 위 바 + 보스면 교전 개시 구독). */
 	virtual void OnCharacterSystemReady() override;
 	//~ End UCBExtensionComponent Interface.
 
@@ -109,11 +117,32 @@ private:
 	/** [로컬 전용] HUD 위젯을 생성해 HUD 스택에 넘기는 함수 (로컬 조작 플레이어). ASC 바인딩은 HUD 위젯(WBP) 내부에서 처리 */
 	void Local_CreateHUDWidget();
 
-	/** [로컬 전용] 생성한 HUD 위젯을 HUD 스택(Game 레이어)에 삽입하는 함수 */
-	void Local_PushHUDWidgetToStack();
+	/**
+	 * [로컬 전용] 위젯을 지정한 로컬 컨트롤러의 HUD 스택(Game 레이어)에 삽입하는 함수 (HUD 위젯·보스 바 공용).
+	 * @param InPC     HUD 를 가진 로컬 플레이어 컨트롤러
+	 * @param InWidget 삽입할 위젯
+	 * @return 제거에 쓸 HUD (제거 시점엔 컨트롤러 연결이 끊겼을 수 있어 호출자가 캐싱). 실패하면 nullptr
+	 */
+	ACBHUD* Local_PushWidgetToStack(const APlayerController* InPC, UUserWidget* InWidget) const;
 
-	/** [로컬 전용] HUD 위젯을 HUD 스택에서 제거하는 함수 */
-	void Local_RemoveHUDWidgetFromStack();
+	/**
+	 * [로컬 전용] 위젯을 HUD 스택에서 제거하는 함수 (HUD 위젯·보스 바 공용).
+	 * @param InHUD    삽입 시점에 캐싱한 HUD (없으면 무시)
+	 * @param InWidget 제거할 위젯
+	 */
+	static void Local_RemoveWidgetFromStack(ACBHUD* InHUD, UUserWidget* InWidget);
+
+	/** 보스 바 위젯 클래스가 있으면 오너 ASC 의 교전 개시 태그를 구독하는 함수 (이미 교전 중이면 즉시 표시) */
+	void BindBossBarTrigger(UCBAbilitySystemComponent* InASC);
+
+	/** 교전 개시 태그 구독을 해제하는 함수 */
+	void UnbindBossBarTrigger();
+
+	/** 교전 개시 태그 변경 콜백. 태그가 붙으면 보스 바를 띄움 */
+	void HandleEngagedTagChanged(const FGameplayTag Tag, int32 NewCount);
+
+	/** [로컬 전용] 보스 바를 생성해 로컬 플레이어 HUD 스택에 올리는 함수 (한 번만) */
+	void Local_CreateBossBarWidget();
 
 	/** 머리 위 위젯 컴포넌트를 런타임 생성·부착하는 함수 (AI·원격 캐릭터) */
 	void CreateOverheadWidget(UCBAbilitySystemComponent* InASC);
@@ -206,6 +235,23 @@ private:
 
 	/** HUD 스택 제거용 HUD 캐시 (제거 시점엔 컨트롤러 연결이 끊겼을 수 있어 삽입 시점에 캐싱) */
 	TWeakObjectPtr<ACBHUD> CachedHUD;
+
+	/** 화면 상단 보스 바 위젯 클래스. 로드아웃(Outlaw)에서 주입되는 런타임 캐시. 비어 있으면 보스 바 없음 */
+	UPROPERTY()
+	TSubclassOf<UCBBossBarWidget> BossBarWidgetClass = nullptr;
+
+	/** 생성한 보스 바 위젯 인스턴스 (교전 개시 후, 각 클라이언트 로컬) */
+	UPROPERTY()
+	TObjectPtr<UCBBossBarWidget> BossBarWidget = nullptr;
+
+	/** 보스 바 스택 제거용 HUD 캐시 (로컬 플레이어의 HUD) */
+	TWeakObjectPtr<ACBHUD> CachedBossBarHUD;
+
+	/** 교전 개시 태그 구독 대상이자 보스 바가 표시할 오너 ASC */
+	TWeakObjectPtr<UCBAbilitySystemComponent> BossBarTriggerASC;
+
+	/** 교전 개시 태그 구독 해제용 핸들 */
+	FDelegateHandle EngagedTagChangedHandle;
 
 	/** 체력 감소 구독 해제용 ASC 캐시 */
 	TWeakObjectPtr<UCBAbilitySystemComponent> OverheadTriggerASC;

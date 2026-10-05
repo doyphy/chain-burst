@@ -14,6 +14,7 @@ class UCBAbilityTask_WaitMontageBlendOut;
  *     애님노티파이 종료 이벤트(Event.Action.EndAbility) → 몽타주 정지 후 정상 종료
  *     자기 몽타주 인스턴스의 블렌드 아웃 시작 → 정상 종료 (끊긴 경우는 캔슬)
  *     마지막 프레임을 유지하는 몽타주(Auto Blend Out 꺼짐) → 블렌드 아웃이 오지 않으므로 재생 직후 정상 종료
+ * - 섹션 점프: 몽타주 재생 중 섹션 점프 요청 이벤트(Event.Action.JumpSection) → GameplayCue.JumpActionSection 으로 전 클라 점프
  * - 트리거 방식(입력 / 이벤트)은 자식 클래스에서 결정
  *
  * 자식 확장 지점:
@@ -79,6 +80,14 @@ protected:
 	 */
 	UFUNCTION()
 	void OnActionMontageBlendingOut(bool bInterrupted);
+
+	/**
+	 * 섹션 점프 요청 수신 시 호출 (Event.Action.JumpSection. 예: 돌진 워프가 도착·막힘으로 멈춤).
+	 * 전 클라에 섹션 점프 큐를 실행. 같은 몽타주 인스턴스 안의 이동이라 블렌드 아웃 대기·종료 경로는 그대로 유지됨.
+	 * 요청을 보내는 쪽이 판정 머신을 정함 (돌진 워프는 서버 권위라 예측 윈도우를 열지 않음).
+	 */
+	UFUNCTION()
+	void OnActionSectionJumpRequested(FGameplayEventData Payload);
 
 protected:
 	/** 이 어빌리티와 연결된 액션(몽타주) 태그 */

@@ -7,6 +7,7 @@
 
 class UCBActionMontageData;
 class UCBCharacterAnimInstance;
+class UAnimMontage;
 
 /**
  * 액션(몽타주) 관련 처리 컴포넌트
@@ -44,6 +45,14 @@ public:
 
 	/** 현재 재생 중인 몽타주 강제 중단 */
 	void StopMontage(float BlendOutTime = 0.25f);
+
+	/**
+	 * 재생 중인 몽타주를 지정한 섹션으로 점프.
+	 * 그 몽타주가 이 머신에서 재생 중이 아니거나(다른 몽타주로 바뀜), 이미 그 섹션 시작을 지났으면 무시 (되감지 않음).
+	 * @param InMontage      점프할 몽타주
+	 * @param InSectionIndex 점프할 섹션 인덱스
+	 */
+	void JumpToSection(const UAnimMontage* InMontage, int32 InSectionIndex);
 
 	/** 마지막으로 재생한 몽타주 인스턴스 ID 반환 (재생 실패 시 INDEX_NONE) */
 	FORCEINLINE int32 GetLastMontageInstanceID() const { return LastMontageInstanceID; }

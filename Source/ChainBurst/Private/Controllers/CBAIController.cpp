@@ -8,12 +8,15 @@
 // engine
 #include "AbilitySystemComponent.h"
 #include "Abilities/GameplayAbility.h"
+#include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISense_Sight.h"
 #include "Perception/AISenseConfig_Sight.h"
 #include "Perception/AISenseConfig_Hearing.h"
+#include "Perception/AISenseConfig_Damage.h"
+#include "Perception/AISense_Damage.h"
 
 // 블랙보드 타겟 키 이름 (에디터 BB 키 이름과 반드시 일치)
 const FName ACBAIController::TargetActorKey(TEXT("TargetActor"));
@@ -52,9 +55,16 @@ ACBAIController::ACBAIController(const FObjectInitializer& ObjectInitializer)
 	HearingConfig->DetectionByAffiliation.bDetectNeutrals = false;
 	HearingConfig->DetectionByAffiliation.bDetectFriendlies = false;
 
-	// 위에서 구성한 Sight/Hearing 설정을 퍼셉션 컴포넌트에 등록 (이 감각들로 감지를 수행)
+	// 피해 감각 설정 - 맞으면 가해자를 인지. (시야(전방)·청각(이동 소음)으로 못 잡는, 등 뒤에서 가만히 때리는 대상을 보완)
+	// 자극 유지 시간은 RecentDamageMemoryTime 하나로 관리 (BP 값은 생성자에서 읽을 수 없어 빙의 시 다시 적용).
+	// 소속 필터는 없지만 피격 자체가 적대 대상에게서만 오므로(무기 히트 필터) 문제없음.
+	DamageConfig = CreateDefaultSubobject<UAISenseConfig_Damage>(TEXT("DamageConfig"));
+	DamageConfig->SetMaxAge(RecentDamageMemoryTime);
+
+	// 위에서 구성한 Sight/Hearing/Damage 설정을 퍼셉션 컴포넌트에 등록 (이 감각들로 감지를 수행)
 	PerceptionComponent->ConfigureSense(*SightConfig);
 	PerceptionComponent->ConfigureSense(*HearingConfig);
+	PerceptionComponent->ConfigureSense(*DamageConfig);
 	// 지배 감각을 Sight로 지정 (여러 감각이 한 타겟을 감지할 때 최종 위치/상태의 기준이 되는 감각)
 	PerceptionComponent->SetDominantSense(SightConfig->GetSenseImplementation());
 	// 타겟 감지 상태가 바뀔 때(감지↔상실) 호출될 콜백 바인딩
@@ -81,6 +91,14 @@ void ACBAIController::OnPossess(APawn* InPawn)
 	if (PerceptionComponent)
 	{
 		PerceptionComponent->RequestStimuliListenerUpdate();
+
+		// 피격 기억 시간을 피해 감각의 자극 유지 시간으로 적용 (컨트롤러 BP 에서 조정한 값 반영).
+		// 이미 등록된 감각을 다시 구성하면 엔진이 유지 시간만 갱신함.
+		if (DamageConfig)
+		{
+			DamageConfig->SetMaxAge(RecentDamageMemoryTime);
+			PerceptionComponent->ConfigureSense(*DamageConfig);
+		}
 	}
 
 	// 이미 준비 완료면 즉시 BT 시작, 아직이면 준비 완료 델리게이트에 바인딩해 대기
@@ -111,12 +129,21 @@ void ACBAIController::OnUnPossess()
 	Super::OnUnPossess();
 }
 
-// AI BT 시작 진입점. 베이스는 태그 이벤트 구독만 하고, BT 구동은 자식이 담당.
+// AI 두뇌 시작 진입점. 폰 ASC 구독 후 로드아웃이 주입한 BT를 구동. BT가 없으면 안전하게 스킵.
 void ACBAIController::StartAILogic()
 {
 	// 폰 ASC 구독 일괄 (위협 판정 + 경직)
 	// 준비 완료 이후라 폰의 ASC 가 확정돼 있음
 	BindPawnASCEvents();
+
+	// RunBehaviorTree가 BT에 지정된 Blackboard를 자동 세팅함 (별도 BB 참조 불필요).
+	if (BehaviorTree)
+	{
+		RunBehaviorTree(BehaviorTree);
+
+		// BT 시작으로 블랙보드가 준비된 뒤 1회 선정 (이미 시야에 있던 정지 타겟 놓침 방지)
+		UpdateTarget();
+	}
 }
 
 // [서버] 폰 ASC 에 거는 구독의 단일 진입점.
@@ -210,6 +237,18 @@ void ACBAIController::UpdateTargetInBlackboard(AActor* InTarget)
 	if (InTarget)
 	{
 		BB->SetValueAsObject(TargetActorKey, InTarget);
+
+		// 지정 시각 기록. 같은 대상을 다시 써도 갱신 (Outlaw 는 이걸로 집중을 다시 시작함)
+		const UWorld* World = GetWorld();
+		TargetAssignedTime = World ? World->GetTimeSeconds() : 0.f;
+
+		// 첫 타겟 = 교전 개시. 사망까지 유지하는 복제 태그로 알림 (보스 바 등 클라 UI 가 구독).
+		// 타겟을 잠깐 잃어도 떼지 않음 - 남은 플레이어가 인지 밖이라 타겟이 비는 순간마다 UI 가 꺼졌다 켜지지 않게.
+		UAbilitySystemComponent* ASC = CachedPawnASC.Get();
+		if (ASC && !ASC->HasMatchingGameplayTag(CBGameplayTags::Status_Combat_Engaged))
+		{
+			ASC->AddLooseGameplayTag(CBGameplayTags::Status_Combat_Engaged, 1, EGameplayTagReplicationState::TagOnly);
+		}
 	}
 	else
 	{
@@ -235,7 +274,36 @@ void ACBAIController::UpdateTarget()
 		CurrentTarget = nullptr;
 	}
 
-	// 타겟 후보 수집 (nullptr = 감각 종류 무관, 시각·청각 모두 포함)
+	// 들고 있던 타겟이 없으면 최고 점수 후보를 즉시 반영 (후보도 없으면 nullptr 로 클리어)
+	if (!CurrentTarget)
+	{
+		UpdateTargetInBlackboard(FindBestTarget());
+		return;
+	}
+
+	// 전환 금지 구간(공격 몽타주 등)에서는 현재 타겟 유지
+	if (!CanSwitchTarget()) return;
+
+	// 교체 여부는 등급별 규칙이 판단 (베이스 = 점수 배수 비교)
+	ReevaluateTarget(CurrentTarget);
+}
+
+// 현재 타겟을 들고 있을 때 교체 판단 - 베이스는 점수 배수 비교 (히스테리시스)
+void ACBAIController::ReevaluateTarget(AActor* InCurrentTarget)
+{
+	AActor* BestTarget = FindBestTarget();
+
+	// 현재 타겟보다 SwitchScoreRatio 배 이상 높을 때만 교체 (1.0으로 두면 튐 (히스테리시스))
+	if (BestTarget && BestTarget != InCurrentTarget && ScoreTarget(BestTarget) > ScoreTarget(InCurrentTarget) * SwitchScoreRatio)
+	{
+		UpdateTargetInBlackboard(BestTarget);
+	}
+}
+
+// 인지 중인 후보 중 최고 점수 대상 (InExclude 는 후보에서 뺌)
+AActor* ACBAIController::FindBestTarget(const AActor* InExclude /* = nullptr */) const
+{
+	// 타겟 후보 수집 (nullptr = 감각 종류 무관, 시각·청각·피해 모두 포함)
 	TArray<AActor*> PerceivedActors;
 	if (const UAIPerceptionComponent* Perception = GetAIPerceptionComponent())
 	{
@@ -245,16 +313,16 @@ void ACBAIController::UpdateTarget()
 	// 최고 점수 후보 계산
 	AActor* BestTarget = nullptr;
 	float BestScore = 0.f;
-	
+
 	// 타겟 후보 순회
 	for (AActor* Candidate : PerceivedActors)
 	{
-		// 적이 아니거나 이미 죽은 후보는 제외
-		if (!IsValidTarget(Candidate) || !IsTargetAlive(Candidate)) continue;
+		// 제외 대상이거나, 적이 아니거나 이미 죽은 후보는 제외
+		if (Candidate == InExclude || !IsValidTarget(Candidate) || !IsTargetAlive(Candidate)) continue;
 
 		// *후보 점수 계산
 		const float Score = ScoreTarget(Candidate);
-		
+
 		// 최고 점수 후보 갱신
 		if (Score > BestScore)
 		{
@@ -263,23 +331,14 @@ void ACBAIController::UpdateTarget()
 		}
 	}
 
-	// 들고 있던 타겟이 없으면 즉시 반영 (후보도 없으면 BestTarget = nullptr 로 클리어)
-	if (!CurrentTarget)
-	{
-		// 블랙보드 타겟 갱신 (nullptr = 클리어)
-		UpdateTargetInBlackboard(BestTarget);
-		return;
-	}
+	return BestTarget;
+}
 
-	// 전환 금지 구간(공격 몽타주 등)에서는 현재 타겟 유지
-	if (!CanSwitchTarget()) return;
-
-	// 현재 타겟보다 SwitchScoreRatio 배 이상 높을 때만 교체 (1.0으로 두면 튐 (히스테리시스))
-	if (BestTarget && BestTarget != CurrentTarget && BestScore > ScoreTarget(CurrentTarget) * SwitchScoreRatio)
-	{
-		// 블랙보드 타겟 갱신
-		UpdateTargetInBlackboard(BestTarget);
-	}
+// 대상이 최근에 자신을 때렸는지 (피해 감각 자극이 유지 시간 안에 살아 있는지)
+bool ACBAIController::HasRecentlyDamagedMe(const AActor* InActor) const
+{
+	const UAIPerceptionComponent* Perception = GetAIPerceptionComponent();
+	return InActor && Perception && Perception->HasActiveStimulus(*InActor, UAISense::GetSenseID<UAISense_Damage>());
 }
 
 // 후보의 우선순위 점수 계산 (거리 + 시야 확보 + 최근 피격)
@@ -310,18 +369,11 @@ float ACBAIController::ScoreTarget(AActor* InActor) const
 		}
 	}
 
-	// 최근 피격: 최근에 자신을 공격한 대상이면 (Event_Combat_HitReact 태그 이벤트 콜백 함수에서 갱신)
-	if (LastDamageTime >= 0.f && LastDamageInstigator.Get() == InActor)
+	// 최근 피격: RecentDamageMemoryTime 안에 자신을 공격한 대상이면 RecentDamageBonus 가산.
+	// 피해 감각이 가해자별로 기억하므로 여럿이 번갈아 때려도 각자 가산점을 받음.
+	if (HasRecentlyDamagedMe(InActor))
 	{
-		// 현재 시간 가져오기
-		const UWorld* World = GetWorld();
-		const float Now = World ? World->GetTimeSeconds() : 0.f;
-		
-		// 최근 피격 기억 시간 이내라면 RecentDamageBonus 가산
-		if (Now - LastDamageTime <= RecentDamageMemoryTime)
-		{
-			Score += RecentDamageBonus;
-		}
+		Score += RecentDamageBonus;
 	}
 
 	return Score;
@@ -385,7 +437,7 @@ void ACBAIController::BindHitReactEvent(UAbilitySystemComponent& InASC)
 		.AddUObject(this, &ACBAIController::HandleHitReactEvent);
 }
 
-// [서버] 피격 반응 이벤트 구독 해제 (위협 기록도 함께 비운다)
+// [서버] 피격 반응 이벤트 구독 해제
 void ACBAIController::UnbindHitReactEvent(UAbilitySystemComponent& InASC)
 {
 	// 피격 이벤트 구독중이라면 해제
@@ -394,25 +446,24 @@ void ACBAIController::UnbindHitReactEvent(UAbilitySystemComponent& InASC)
 		InASC.GenericGameplayEventCallbacks.FindOrAdd(CBGameplayTags::Event_Combat_HitReact).Remove(HitReactEventHandle);
 	}
 
-	// 핸들·위협 기록 초기화
 	HitReactEventHandle.Reset();
-	LastDamageInstigator.Reset();
-	LastDamageTime = -1.f;
 }
 
-// 피격 반응 이벤트 콜백 - 누가 때렸는지만 기록하고, 전환 여부는 UpdateTarget 이 판단
+// 피격 반응 이벤트 콜백 - 가해자를 피해 감각에 보고만 하고, 전환 여부는 UpdateTarget 이 판단
 void ACBAIController::HandleHitReactEvent(const FGameplayEventData* Payload)
 {
-	if (!Payload) return;
+	APawn* SelfPawn = GetPawn();
+	if (!Payload || !SelfPawn) return;
 
 	// 가해자 소유 폰 가져오기
 	// 플레이어는 ASC 소유자가 PlayerState라 폰이 아니라, 폰으로 변환해야 함
 	const AActor* ThreatPawn = UCBAbilitySystemLibrary::ResolveOwningPawn(Payload->Instigator.Get());
 	if (!ThreatPawn) return;
 
-	const UWorld* World = GetWorld();
-	LastDamageInstigator = ThreatPawn;
-	LastDamageTime = World ? World->GetTimeSeconds() : 0.f;
+	// 피해 감각에 보고 → 다음 퍼셉션 갱신에서 가해자가 인지됨 (OnTargetPerceptionUpdated → UpdateTarget).
+	// 가해자별로 기억되어 HasRecentlyDamagedMe·점수 가산의 근거가 됨. 엔진 API 가 비const 라 const_cast (읽기만 함)
+	UAISense_Damage::ReportDamageEvent(this, SelfPawn, const_cast<AActor*>(ThreatPawn), Payload->EventMagnitude,
+		ThreatPawn->GetActorLocation(), SelfPawn->GetActorLocation());
 }
 #pragma endregion
 

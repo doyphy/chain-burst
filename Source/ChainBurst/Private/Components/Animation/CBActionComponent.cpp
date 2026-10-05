@@ -6,6 +6,9 @@
 #include "Characters/CBBaseCharacter.h"
 #include "AbilitySystem/CBAttributeSet.h"
 
+// engine
+#include "Animation/AnimMontage.h"
+
 bool UCBActionComponent::RequestPlayMontage(const FGameplayTag& InActionTag, int32 InIndex /* = 0 */)
 {
 	// 이전 재생의 몽티즈 ID 초기화
@@ -41,6 +44,26 @@ void UCBActionComponent::StopMontage(float BlendOutTime /* = 0.25 */)
 		// 현재 재생중인 몽타주 중지
 		CachedAnimInstance->Montage_Stop(BlendOutTime);
 	}
+}
+
+void UCBActionComponent::JumpToSection(const UAnimMontage* InMontage, int32 InSectionIndex)
+{
+	if (!InMontage || !InMontage->IsValidSectionIndex(InSectionIndex)) return;
+	if (!GetCachedAnimInstance(CachedAnimInstance)) return;
+
+	UCBCharacterAnimInstance* AnimInstance = CachedAnimInstance.Get();
+
+	// 이 머신에서 그 몽타주가 재생 중일 때만 (큐가 오기 전에 피격 등 다른 몽타주로 바뀌었으면 무시)
+	if (!AnimInstance->Montage_IsPlaying(InMontage)) return;
+
+	// 이미 그 섹션 시작을 지났으면 무시.
+	// 큐가 늦게 도착하는 사이 구간이 자연히 끝나 넘어간 경우 되감지 않기 위함 (점프는 항상 앞으로만)
+	float SectionStartTime = 0.f;
+	float SectionEndTime = 0.f;
+	InMontage->GetSectionStartAndEndTime(InSectionIndex, SectionStartTime, SectionEndTime);
+	if (AnimInstance->Montage_GetPosition(InMontage) >= SectionStartTime) return;
+
+	AnimInstance->Montage_JumpToSection(InMontage->GetSectionName(InSectionIndex), InMontage);
 }
 
 int32 UCBActionComponent::GetMontageCount(const FGameplayTag& InActionTag) const

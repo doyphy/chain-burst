@@ -68,6 +68,12 @@ void UCBActionAbility::PlayActionMontage()
 	EndActionTask->EventReceived.AddDynamic(this, &ThisClass::OnActionEnded);
 	EndActionTask->ReadyForActivation();
 
+	// 섹션 점프 요청 대기 (돌진 워프의 도착·막힘 등. 한 몽타주에서 여러 번 올 수 있음)
+	UAbilityTask_WaitGameplayEvent* JumpSectionTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
+		this, CBGameplayTags::Event_Action_JumpSection, nullptr, false);
+	JumpSectionTask->EventReceived.AddDynamic(this, &ThisClass::OnActionSectionJumpRequested);
+	JumpSectionTask->ReadyForActivation();
+
 	// 몽타주 인스턴스의 블렌드 아웃 대기 (노티파이가 없거나 삼켜진 경우의 종료, 다른 몽타주에 끊긴 경우의 캔슬)
 	BlendOutTask = UCBAbilityTask_WaitMontageBlendOut::WaitMontageBlendOut(this, AnimInstance, MontageInstanceID);
 	BlendOutTask->OnBlendOut.AddDynamic(this, &ThisClass::OnActionMontageBlendingOut);
@@ -113,6 +119,22 @@ void UCBActionAbility::OnActionMontageBlendingOut(bool bInterrupted)
 
 	// 어빌리티 정상 종료 - 복제하지 않음.(bReplicateEndAbility = false).
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
+}
+
+// 섹션 점프 요청 수신 → 전 클라에 섹션 점프 큐
+void UCBActionAbility::OnActionSectionJumpRequested(FGameplayEventData Payload)
+{
+	UCBAbilitySystemComponent* CBASC = GetCBAbilitySystemComponentFromActorInfo();
+	if (!CBASC) return;
+
+	// 이벤트·큐 파라미터에 섹션 이름을 실을 수 없어 몽타주 + 섹션 인덱스로 전달.
+	// 받는 쪽은 그 몽타주가 아직 재생 중일 때만 점프함 (그 사이 다른 몽타주로 바뀐 머신은 무시)
+	FGameplayCueParameters CueParams;
+	CueParams.SourceObject = Payload.OptionalObject.Get();
+	CueParams.RawMagnitude = Payload.EventMagnitude;
+
+	// 게임플레이 큐 실행 (섹션 점프, 전 클라 동기화)
+	CBASC->ExecuteGameplayCue(CBGameplayTags::GameplayCue_JumpActionSection, CueParams);
 }
 
 // 몽타주 정지 요청 (게임플레이 큐, 전 클라 동기화).

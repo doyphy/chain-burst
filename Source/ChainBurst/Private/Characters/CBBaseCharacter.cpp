@@ -63,6 +63,12 @@ ACBBaseCharacter::ACBBaseCharacter()
 	GetMesh()->SetCollisionResponseToChannel(CBCollisionChannels::Weapon, ECR_Overlap);
 #pragma endregion
 
+#pragma region 카메라 채널
+	// 다른 캐릭터에 카메라가 당겨지지 않도록 Camera 채널 무시 (벽·지형만 스프링암을 당김)
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+#pragma endregion
+
 	CBLocomotionProcessor = CreateDefaultSubobject<UCBLocomotionProcessor>(TEXT("CBLocomotionProcessor"));
 	CBActionComponent = CreateDefaultSubobject<UCBActionComponent>(TEXT("CBActionComponent"));
 	CBUIComponent = CreateDefaultSubobject<UCBUIComponent>(TEXT("CBUIComponent"));
@@ -118,6 +124,17 @@ void ACBBaseCharacter::RequestStopMontage(float BlendOutTime /* = 0.f */)
 	}
 
 	CBActionComponent->StopMontage(BlendOutTime);
+}
+
+void ACBBaseCharacter::RequestJumpToSection(const UAnimMontage* InMontage, int32 InSectionIndex)
+{
+	if (!CBActionComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] ActionComponent 가 없음"), *GetName());
+		return;
+	}
+
+	CBActionComponent->JumpToSection(InMontage, InSectionIndex);
 }
 
 UCBCombatComponent* ACBBaseCharacter::GetCBCombatComponent() const

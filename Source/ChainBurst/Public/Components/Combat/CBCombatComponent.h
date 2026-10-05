@@ -215,7 +215,10 @@ public:
 	/** 무기 트레이스 시작 함수 */
 	void StartWeaponTrace();
 
-	/** 무기 트레이스 틱 함수 */
+	/**
+	 * 무기 트레이스 틱 함수.
+	 * 칼날 구간 스윕으로 걸린 적대 대상 중, 공격자 중심 → 대상 중심이 벽에 막힌 대상은 제외 (칼날이 벽을 뚫은 경우).
+	 */
 	void TickWeaponTrace();
 
 	/** 무기 트레이스 종료 함수 */
@@ -256,7 +259,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Trace")
 	TEnumAsByte<ETraceTypeQuery> WeaponTraceChannel = UEngineTypes::ConvertToTraceType(CBCollisionChannels::Weapon);
 
-	/** 트레이스 디버그 표시 여부 */
+	/** 트레이스 디버그 표시 여부 (벽에 막힌 대상은 공격자 중심에서 빨간 선으로 표시) */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Trace")
 	bool bShowDebugTrace = false;
 

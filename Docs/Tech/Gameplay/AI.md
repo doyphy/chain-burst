@@ -7,7 +7,7 @@
 ```
 AAIController (엔진)
 └── ACBAIController (Abstract)      ← 공통: 두뇌 시작 게이트
-    ├── ACBOutlawController         ← 보스/엘리트: 복잡한 두뇌
+    ├── ACBOutlawController         ← 보스/엘리트: 찍은 타겟을 놓지 않음
     └── ACBRogueController          ← 일반 잡몹: 단순한 두뇌
 ```
 
@@ -64,37 +64,37 @@ AI 두뇌는 로드아웃 비동기 로드가 끝나(어빌리티·이동 데이
 - 빙의한 폰을 `ACBAICharacter`로 캐싱.
 - 이미 `IsCharacterSystemReady()`면 `StartAILogic()` 즉시 호출.
 - 아직이면 `OnCharacterSystemReadyDelegate`에 바인딩해 대기(핸들은 `OnUnPossess`에서 해제).
-- `StartAILogic()`은 **베이스는 비어 있는 가상 함수**. 자식이 오버라이드해 실제 두뇌(BT/StateTree)를 구동한다 — 두뇌 방식은 아직 미결정이라 훅만 열어둔 상태.
+- `StartAILogic()`은 **베이스가 두뇌 구동까지 끝낸다** — 폰 ASC 구독(`BindPawnASCEvents()`) → 로드아웃이 주입한 BT를 `RunBehaviorTree` → 타겟 1회 시드(`UpdateTarget()`). BT가 없으면 구동만 건너뛰고 AI는 제자리에 선다. `virtual`로 남겨 둔 것은 BT가 아닌 두뇌가 필요한 자식을 위한 자리다(아래 "두뇌 방식").
 
 **서버 권위**: AIController는 서버에만 존재하므로 `StartAILogic()` 이하 AI 결정은 자연히 서버 권위다. → [Multiplayer.md](../Conventions/Multiplayer.md)
 
-## 두뇌 방식 (등급별)
+## 두뇌 방식
 
-컨트롤러 계층이 자식별로 `StartAILogic()`을 따로 오버라이드하므로 등급별로 다른 두뇌를 쓸 수 있다.
+**Rogue·Outlaw 모두 BehaviorTree.** BT 슬롯은 `UCBAILoadout`, 구동은 `ACBAIController::StartAILogic()` — 둘 다 AI 공통 베이스에 있어 등급별 컨트롤러·로드아웃은 BT 때문에 코드를 갖지 않는다.
 
-- **Rogue = BehaviorTree** (확정). 단순 잡몹.
-- **Outlaw = 미정** (BT vs StateTree). 페이즈 전투를 강하게 요구하면 StateTree가 유리. StateTree로 가면 `ACBOutlawController::StartAILogic()`에서 StateTree를 구동하고, BT 계층은 건드리지 않는다.
+- **예전에는 Rogue 에만 있었다.** Outlaw(보스)의 두뇌가 BT냐 StateTree냐 미정이던 시절, 쓰지 않을 BT 슬롯이 Outlaw 로드아웃에 남지 않도록 BT 를 확정된 Rogue 로드아웃·컨트롤러에만 뒀다. 첫 Outlaw(Hulk, 맨손 근접)가 Rogue 와 같은 전투 사이클이라 BT 로 정해지면서 분리의 근거가 사라져 베이스로 합쳤다 — Outlaw 에 같은 필드·같은 `StartAILogic` 을 복사하는 것은 중복이라 택하지 않았다.
+- **StateTree 가 필요한 AI 가 생기면**: 그 컨트롤러가 `StartAILogic()`을 오버라이드해 **`Super` 호출 후** StateTree 를 구동하고, 로드아웃의 BT 는 비워 둔다(베이스가 BT 구동을 건너뜀). `Super` 를 빼면 ASC 구독(위협 판정·경직)이 조용히 죽는다. 그 전까지 StateTree 슬롯·분기는 두지 않는다.
 
-## BT 데이터 흐름 (Rogue)
+## BT 데이터 흐름
 
 BT 애셋은 "AI를 정의하는 에셋"이므로 로드아웃이 관리한다 (에셋 등록 원칙 → [Loadout.md](../Foundation/Loadout.md)). BT를 **쓰는 주체는 컨트롤러**(두뇌)이므로, 로드아웃은 BT를 **컨트롤러에 하드 참조로 주입(inject)**한다 — 캐릭터가 MontageData를 ActionComponent에 넘기는 것과 동일한 "에셋을 사용처에 주입" 패턴. 캐릭터는 자기 컨트롤러를 로드아웃 함수에 넘겨 **호출만** 한다.
 
 ```
-UCBRogueLoadout::BehaviorTree (하드 참조)
-   │  UCBAILoadout::GetBehaviorTree() (virtual, 베이스는 null)
+UCBAILoadout::BehaviorTree (하드 참조, Rogue·Outlaw 로드아웃 공통)
    ▼
 ACBAICharacter::InitializeAISystem() 로드 콜백 [서버 분기]
    → LoadedLoadout->Auth_ApplyBehaviorTreeToController(GetController())   ← 로드아웃이 적용
    ▼
 ACBAIController::BehaviorTree (하드 참조, SetBehaviorTree로 주입)
    ▼
-ACBRogueController::StartAILogic()  (SystemReady 후)
+ACBAIController::StartAILogic()  (SystemReady 후)
    → RunBehaviorTree(BehaviorTree)   ← BT에 지정된 Blackboard 자동 세팅
 ```
 
-- **적용 함수는 로드아웃이 소유**: `UCBAILoadout::Auth_ApplyBehaviorTreeToController(AController*)`가 내부에서 `ACBAIController`로 캐스팅 후 `SetBehaviorTree(GetBehaviorTree())` 주입. 캐릭터는 오케스트레이터로서 호출만 하고 두뇌 애셋을 보관하지 않는다(자기가 쓰지 않는 애셋을 들지 않음).
-- 로드아웃 계층: `UCBCharacterLoadout → {UCBChaserLoadout, UCBAILoadout → {Rogue, Outlaw}}` — 캐릭터 계층과 대칭. BT getter는 `UCBAILoadout`에만 있어 Chaser 로드아웃은 오염되지 않는다.
-- BT 멤버는 `ACBAIController`(베이스)가 하드 참조로 보유(생존 보장). 실행 방식(`RunBehaviorTree`)은 자식 `StartAILogic()`이 결정 — StateTree 쓰는 Outlaw는 이 멤버를 쓰지 않고 자체 두뇌를 구동.
+- **적용 함수는 로드아웃이 소유**: `UCBAILoadout::Auth_ApplyBehaviorTreeToController(AController*)`가 내부에서 `ACBAIController`로 캐스팅 후 `SetBehaviorTree(BehaviorTree)` 주입. 캐릭터는 오케스트레이터로서 호출만 하고 두뇌 애셋을 보관하지 않는다(자기가 쓰지 않는 애셋을 들지 않음).
+- 로드아웃 계층: `UCBCharacterLoadout → {UCBChaserLoadout, UCBAILoadout → {Rogue, Outlaw}}` — 캐릭터 계층과 대칭. BT 슬롯은 `UCBAILoadout`에만 있어 Chaser 로드아웃은 오염되지 않는다.
+- BT 멤버는 `ACBAIController`(베이스)가 하드 참조로 보유(생존 보장)하고, 구동도 베이스 `StartAILogic()`이 한다.
+- **로드아웃에 BT 를 안 넣으면 AI 는 서 있기만 한다.** 에러가 나지 않으므로, 새 AI 로드아웃을 만들면 BT 지정부터 확인한다.
 - **하드 참조 트레이드오프**: BT가 로드아웃 하드 참조라 클라이언트에도 로드된다(AI는 서버 전용인데). BT/BB는 가벼워 감수. 로드아웃 원칙(중첩 async 금지)을 지키기 위한 선택.
 
 ## 인식 → 추격 (Perception)
@@ -102,7 +102,7 @@ ACBRogueController::StartAILogic()  (SystemReady 후)
 적 감지와 타겟 결정은 컨트롤러(두뇌)가, 추격 행동은 BT가 담당한다.
 
 ```
-[인식] UAIPerceptionComponent (Sight + Hearing)  →  적 플레이어 감지
+[인식] UAIPerceptionComponent (Sight + Hearing + Damage)  →  적 플레이어 감지
    │  ACBAIController::HandleTargetPerceptionUpdated  (감각 종류를 가리지 않음)
    │  UCBBTService_UpdateTarget                       (주기적 재평가)
    ▼
@@ -117,18 +117,20 @@ ACBRogueController::StartAILogic()  (SystemReady 후)
 
 **연속 추격의 주체는 `MoveTo`다.** 블랙보드에 위치(Vector)가 아닌 **액터 참조**(`SetValueAsObject`)를 저장하므로, `MoveTo`가 그 액터의 실시간 위치를 추적하며 경로를 갱신한다(`bTrackMovingGoal`). 퍼셉션은 "타겟 획득/상실" 두 이벤트만 담당하고, 매 프레임 위치를 먹여줄 필요가 없다.
 
-### 두 감각의 역할 분리
+### 세 감각의 역할 분리
 
-| 감각 | 범위 | 시야 차단(LOS) | 감지 조건 |
-|---|---|---|---|
-| **Sight** | 전방 부채꼴 (반각 60° = 전체 120°), 반경 1500 | **적용** (벽 뒤 못 봄) | 시야 안 + 가림 없음 + **진영이 적** |
-| **Hearing** | **전방위**, 기준 반경 1500 | 무관 | 대상이 **소음을 낼 때만** + **진영이 적** |
+| 감각 | 범위 | 시야 차단(LOS) | 감지 조건 | 유지 시간(`MaxAge`) |
+|---|---|---|---|---|
+| **Sight** | 전방 부채꼴 (반각 60° = 전체 120°), 반경 1500 | **적용** (벽 뒤 못 봄) | 시야 안 + 가림 없음 + **진영이 적** | 5초 (보이는 동안은 매번 갱신) |
+| **Hearing** | **전방위**, 기준 반경 1500 | 무관 | 대상이 **소음을 낼 때만** + **진영이 적** | 3초 |
+| **Damage** | 거리 무관 | 무관 | **나를 때렸을 때** (가해자를 인지) | `RecentDamageMemoryTime` (5초) |
 
-두 감각 모두 `DetectionByAffiliation`이 적만 감지로 설정돼 있어 아군·중립은 자극조차 오지 않는다. 진영 판정 규칙은 → [Teams.md](../Foundation/Teams.md)
+시야·청각은 `DetectionByAffiliation`이 적만 감지로 설정돼 있어 아군·중립은 자극조차 오지 않는다. 피해 감각은 소속 필터가 없지만, 피격 자체가 적대 대상에게서만 온다(무기 히트 필터 → [Teams.md](../Foundation/Teams.md)).
 
 - **시각은 순수하게 시각으로 둔다** — "근접이면 360° 시야" 같은 인위적 처리를 하지 않는다(AI가 뒤통수로 보는 셈이라 부자연스러움).
 - **등 뒤 사각지대는 청각이 보완한다.** 대신 **가만히 서 있으면 소음이 없어 감지되지 않는다** — 버그가 아니라 의도된 스텔스 규칙.
-- `UAISense_Hearing`은 **이벤트 기반**이라 폰을 수동 감지하지 않는다. 반드시 `ReportNoiseEvent`로 소음을 보고해야 한다(Sight의 `bAutoRegisterAllPawnsAsSources` 같은 자동 등록이 없음).
+- **그 스텔스로 때리는 것은 피해 감각이 막는다.** 플레이어가 전부 근접이라 등 뒤에 서서 때리는 경우가 흔한데, 공격은 제자리라 소음이 없고 시야는 전방뿐이라 **맞으면서도 가해자를 몰랐다** — 피격 기록은 남지만 후보는 인지한 액터에서만 고르므로 그 플레이어를 타겟으로 고를 수 없었고, 타겟이 없던 Rogue 는 맞으면서 서 있었다. 맞으면 안다는 것은 스텔스 규칙을 깨지 않는다(들키지 않는 것은 때리기 전까지다).
+- `UAISense_Hearing`은 **이벤트 기반**이라 폰을 수동 감지하지 않는다. 반드시 `ReportNoiseEvent`로 소음을 보고해야 한다(Sight의 `bAutoRegisterAllPawnsAsSources` 같은 자동 등록이 없음). 피해 감각도 같다 — 아래 "위협 입력"이 `ReportDamageEvent`로 보고한다.
 
 ### 소음 발생 — `UCBNoiseEmitterComponent`
 
@@ -148,7 +150,7 @@ ACBRogueController::StartAILogic()  (SystemReady 후)
 
 개이트 판별은 `UCBAbilitySystemLibrary::GetCurrentGaitTag(ASC)` 재사용. → [GameplayTags.md](../Foundation/GameplayTags.md)
 
-- 퍼셉션은 **`ACBAIController`(베이스)**가 소유 (Rogue·Outlaw 공통 두뇌 기능). 생성자에서 `UAISenseConfig_Sight`·`UAISenseConfig_Hearing`을 구성 후 `OnTargetPerceptionUpdated`에 바인딩. 콜백은 감각 종류를 가리지 않으며, 감지·상실 어느 쪽이든 `UpdateTarget()` 재선정으로 합류시킨다(아래).
+- 퍼셉션은 **`ACBAIController`(베이스)**가 소유 (Rogue·Outlaw 공통 두뇌 기능). 생성자에서 `UAISenseConfig_Sight`·`UAISenseConfig_Hearing`·`UAISenseConfig_Damage`를 구성 후 `OnTargetPerceptionUpdated`에 바인딩. 피해 감각의 유지 시간만 **`OnPossess`에서 `RecentDamageMemoryTime`으로 다시 적용**한다 — 생성자에서는 컨트롤러 BP 에서 조정한 값을 읽을 수 없어서다(이미 등록된 감각에 `ConfigureSense`를 다시 부르면 엔진이 유지 시간만 갱신). 콜백은 감각 종류를 가리지 않으며, 감지·상실 어느 쪽이든 `UpdateTarget()` 재선정으로 합류시킨다(아래).
 - **함정 — 한 감각의 만료를 "상실"로 읽지 말 것.** 콜백은 감각을 가리지 않고 한 덩어리로 오는데, 청각 자극은 `MaxAge`(3초)가 지나면 `UAIPerceptionComponent::AgeStimuli()` 가 만료 표시 후 **자극을 다시 등록**해 `WasSuccessfullySensed() == false` 인 업데이트를 보낸다. 타겟이 멈춰 소음이 끊기면 이 만료가 반드시 오고, 실패 분기가 무조건 지우면 **눈앞에 보이는 타겟이 3초마다 None 으로 초기화**된다(움직일 땐 소음이 갱신돼 증상이 안 보임). 그래서 만료를 그 자리에서 "상실"로 처리하지 않고 재선정에 넘긴다 — 후보 수집(`GetCurrentlyPerceivedActors`)과 `IsTargetStillValid()` 의 `HasAnyCurrentStimulus(Actor)` 검사가 **다른 감각이 아직 인지 중인지**를 대신 판단한다.
   - 시야 자극은 만료되지 않는다 — `UAISense_Sight` 는 보이는 동안 매 업데이트마다 성공 자극을 재등록하므로 `MaxAge` 에 걸릴 일이 없다. 그래서 "청각 만료 + 시야 유효"가 정상 상태로 존재한다.
 - **적 판정 seam — `IsValidTarget(AActor*)`**: 이 한 함수가 "적이냐"를 격리한다. 현재는 `FGenericTeamId::GetAttitude(this, InActor) == Hostile`(진영 판정)만 본다 — 퍼셉션 소속 필터와 **같은 기준**이라 두 단계의 결론이 어긋나지 않는다. `virtual`이므로 자식이 추가 조건(생존·등급 등)으로 좁힐 수 있다. → [Teams.md](../Foundation/Teams.md)
@@ -163,13 +165,30 @@ ACBRogueController::StartAILogic()  (SystemReady 후)
 
 **블랙보드에 쓰는 경로는 `UpdateTarget()` 하나뿐이다.** 퍼셉션 콜백도 여기로 합류하므로, 점수 규칙을 우회하는 두 번째 쓰기 지점이 생기지 않는다. 소비자(EQS 컨텍스트·BT·모션 워핑)는 예전과 똑같이 키를 읽기만 한다.
 
+**첫 타겟을 쓰는 순간이 교전 개시다.** `UpdateTargetInBlackboard()` 가 폰 ASC 에 `Status.Combat.Engaged` 를 `TagOnly` 로 붙여 사망까지 유지한다(→ [GameplayTags.md](../Foundation/GameplayTags.md)). 블랙보드는 서버 전용이라 클라는 "보스가 싸우기 시작했다"를 알 수 없는데, 이 복제 태그가 그 신호다 — 소비자는 화면 상단 보스 바(→ [UI.md](../Presentation/UI.md) "보스 바"). 쓰기 경로가 한 곳이라 훅을 새로 만들지 않고 여기에 두었고, 그래서 Rogue 도 태그를 받는다(소비자가 없어 무해). **타겟을 잃어도 떼지 않는다** — 타겟이 죽고 남은 플레이어가 인지 밖이면 타겟이 잠깐 비는데, 그때마다 보스 바가 꺼졌다 켜지면 안 되기 때문이다.
+
 | 나누는 축 | 소유 | 이유 |
 |---|---|---|
 | **언제** 평가하나 | `UCBBTService_UpdateTarget` (주기) + 퍼셉션 콜백 (이벤트) | 실행 시점은 두뇌의 관심사 |
 | **누구를** 고르나 | `ACBAIController` | BT 노드에 넣으면 StateTree·BT 밖에서 재사용 불가 |
 
-- **주기 평가가 반드시 필요하다.** 점수에 거리가 들어가는 순간, 아무 자극이 없어도 순위가 바뀐다(적이 조용히 다가오기만 해도 역전). 자극 콜백만으로는 그 변화를 못 잡는다.
-- 등급별 차이는 `ScoreTarget()`·`CanSwitchTarget()` 오버라이드로. 2차 위협도 테이블(누적·감쇠·도발)도 `ScoreTarget()` 한 곳으로 들어온다.
+- **주기 평가가 반드시 필요하다.** 점수에 거리가 들어가는 순간, 아무 자극이 없어도 순위가 바뀐다(적이 조용히 다가오기만 해도 역전). 자극 콜백만으로는 그 변화를 못 잡는다. 보스의 집중 시간 만료도 주기 평가가 잡는다.
+- 등급별 차이는 `ScoreTarget()`·`CanSwitchTarget()`·`IsTargetStillValid()`·**`ReevaluateTarget()`** 오버라이드로. 2차 위협도 테이블(누적·감쇠·도발)도 `ScoreTarget()` 한 곳으로 들어온다.
+
+**흐름은 베이스가, 교체 규칙은 등급이 갖는다.**
+
+```
+UpdateTarget()
+  ├ 현재 타겟이 유지 불가(IsTargetStillValid 실패) → 버림
+  ├ 현재 타겟 없음 → FindBestTarget() 을 바로 씀 (없으면 클리어)
+  ├ 전환 금지 구간(CanSwitchTarget 실패) → 유지
+  └ ReevaluateTarget(현재 타겟)          ← virtual
+        베이스(Rogue) : 최고 점수가 현재 점수 × SwitchScoreRatio 를 넘으면 교체
+        Outlaw        : 집중 규칙 (아래 "보스의 타겟 유지")
+```
+
+- `FindBestTarget(Exclude)`: 인지 중인 후보(적 + 생존) 중 최고 점수. 베이스와 Outlaw 가 같은 후보 수집·점수를 쓰도록 뺀 함수이고, `Exclude` 는 보스가 순환할 때 현재 타겟을 빼는 데 쓴다.
+- `UpdateTargetInBlackboard()` 가 타겟을 쓸 때마다 **지정 시각(`TargetAssignedTime`)** 을 기록한다. **같은 대상을 다시 써도 갱신**되므로 보스는 이걸로 "다시 집중"을 표현한다(블랙보드 값은 그대로라 BT 관찰자는 울리지 않는다).
 
 #### 점수
 
@@ -182,6 +201,7 @@ Score = BaseTargetScore(1.0)
 
 - **바닥값(`BaseTargetScore`)이 있는 이유**: 히스테리시스가 **배수 비교**라 점수가 0이 되면 비교가 무너진다(0 × 1.25 = 0). 모든 항이 0 이상이고 바닥이 1.0 이면 안전하다. `ScoreTarget()` 을 오버라이드할 때도 이 전제(항상 0보다 큼)를 지킬 것.
 - 시야 확보 판정은 `HasActiveStimulus(Actor, UAISense::GetSenseID<UAISense_Sight>())` — "소리만 들리는 적"보다 "보이는 적"을 우선.
+- **최근 피격 판정은 `HasRecentlyDamagedMe()`** = 피해 감각 자극이 유지 시간 안에 살아 있는가(`HasActiveStimulus(Actor, Damage)`). 엔진이 **가해자별로** 기억하므로 여럿이 번갈아 때려도 **각자** 가산점을 받는다. 예전에는 마지막에 때린 1명만 기억해서, A 가 때린 직후 B 가 때리면 A 의 기록이 지워졌다 — "현재 타겟이 최근에 나를 때렸나"를 물을 수 없었던 이유다.
 - 가중치는 전부 컨트롤러의 `EditDefaultsOnly`. 캐릭터별로 갈리면 그때 로드아웃 데이터로 옮긴다.
 
 #### 전환 안정화 세 가지
@@ -189,13 +209,68 @@ Score = BaseTargetScore(1.0)
 | | 값 | 무엇을 막나 |
 |---|---|---|
 | **재평가 주기** | `UBTService::Interval` 0.5초 ± 0.1 | 매 틱 순회. 편차는 AI 여럿의 순회가 한 프레임에 몰리는 것 |
-| **히스테리시스** | `SwitchScoreRatio` 1.25 | 점수가 엎치락뒤치락할 때 매 평가마다 타겟이 뒤바뀌는 것 |
+| **히스테리시스** | `SwitchScoreRatio` 1.25 (베이스 규칙 — Rogue) | 점수가 엎치락뒤치락할 때 매 평가마다 타겟이 뒤바뀌는 것. 보스는 대신 집중 시간(아래) |
 | **전환 금지 구간** | `TargetLockAbilityTags` (기본 `Ability.Combat.Attack`) | 공격 몽타주 도중 결정이 바뀌어, 끝나자마자 반대쪽으로 튀는 것 |
 
 - **잠금은 활성 어빌리티를 조회한다.** ASC 의 `GetActivatableAbilities()` 를 돌며 `Spec.IsActive() && GetAssetTags().HasAny(TargetLockAbilityTags)` 이면 교체 금지. 상태 태그를 새로 만들지 않은 이유는 잠금 범위를 **컨트롤러 클래스마다 데이터로** 정하기 위함(잡몹은 공격만, 보스는 스킬·돌진까지). `Ability.Combat.Attack` 은 하위 공격을 한 번에 매칭하려고 추가한 부모 태그다(`HasAny` 는 부모 매칭).
-- **잠금이 막는 것은 교체뿐이다.** 현재 타겟이 죽거나·인지에서 사라지거나·파괴되면(`IsTargetStillValid()` 실패) 잠금과 무관하게 즉시 버린다. 아니면 이미 없는 대상을 향해 몽타주가 끝날 때까지 서 있게 된다.
+- **잠금이 막는 것은 교체뿐이다.** 현재 타겟이 죽거나·인지에서 사라지거나(Outlaw 는 제외 — 아래)·파괴되면(`IsTargetStillValid()` 실패) 잠금과 무관하게 즉시 버린다. 아니면 이미 없는 대상을 향해 몽타주가 끝날 때까지 서 있게 된다.
 - **모션 워핑은 몽타주 중간에 꺾이지 않는다.** `UCBAIAttackAbility::BuildActionCueParameters()` 가 활성화 시점에 타겟 컴포넌트를 큐 파라미터로 고정하므로, 잠금이 없어도 워프 대상은 안 바뀐다. 잠금이 실제로 막는 것은 **판단과 연출의 불일치**(때리는 대상과 쫓기로 정한 대상이 다름)와 BT 브랜치 흔들림이다.
 - 사망 판정은 아직 사망 시스템이 없어 `CurrentHealth > 0`(`IsTargetAlive()`)으로 대신한다. 체력 어트리뷰트가 없는 대상은 생존으로 간주. → 사망 어빌리티가 들어오면 이 자리를 상태 태그 검사로 교체할 것.
+
+#### 보스의 타겟 유지 — `ACBOutlawController`
+
+보스는 **한 사람에게 집중해서 쫓고 때리되, 그 사람이 싸우지 않거나 너무 오래 붙잡혀 있으면 다른 사람으로 넘어간다.** 숨어도 위치를 안다.
+
+| 축 | 방법 |
+|---|---|
+| **놓지 않기** (인지를 잃어도 유지) | `IsTargetStillValid()` 오버라이드 — 인지 검사(`HasAnyCurrentStimulus`)를 빼고 `IsValidTarget && IsTargetAlive` 만 |
+| **집중** (언제 바꾸나) | `ReevaluateTarget()` 오버라이드 — 아래 규칙. 점수 배수(`SwitchScoreRatio`)는 쓰지 않는다 |
+
+**집중 유지 조건** (그동안 교체하지 않는다):
+
+```
+잡은 지 < MaxFocusTime(12초)
+  그리고 ( 잡은 지 < RecentDamageMemoryTime(5초)        ← 처음 잡았을 때의 유예
+           또는 HasRecentlyDamagedMe(현재 타겟) )       ← 현재 타겟이 싸우는 중
+```
+
+**집중이 끝나면 다시 고른다** — 끝난 이유에 따라 현재 타겟을 후보에 넣거나 뺀다.
+
+| 끝난 이유 | 후보 | 결과 |
+|---|---|---|
+| **현재 타겟이 조용함** (도망·회피) | 현재 타겟 **포함** | 점수 1위 — 때린 사람 > 가까운 사람. 현재 타겟이 여전히 1위면(근처에서 회피 중) 그대로 **다시 집중** |
+| **최대 시간 도달** | 현재 타겟 **제외** | 다른 사람으로 **순환** |
+| 다른 후보가 없음 (솔로·혼자만 인지) | — | 같은 대상으로 다시 집중 (`UpdateTargetInBlackboard(같은 대상)` → 지정 시각 갱신) |
+
+| 상황 (피격 가산 1.5 기준) | 결과 |
+|---|---|
+| A 가 계속 때리고 B·C 는 등 뒤에서 때림 | 12초까지 A → 이후 B·C 중 점수 1위 |
+| A 가 5초간 안 때리고 도망, B 는 근처 | B |
+| A 는 근처에서 회피만, B 는 멀리서 대기 | A 유지 (다시 집중) |
+| A 는 조용하고 B 가 때림 | B (피격 가산) |
+| 등 뒤에서 가만히 서서 때리는 C | 피해 감각으로 인지돼 후보가 됨 |
+| 솔로 | 항상 같은 대상 |
+
+- **교체는 현재 타겟이 조용해졌거나 최대 시간이 됐을 때뿐이다.** 그래서 여럿이 돌아가며 때려도 분산되지 않는다 — 교체는 많아야 유예 시간(5초)에 한 번이다. 원래 고민이었던 두 극단(한 명만 쫓다 쉬워짐 ↔ 맞을 때마다 바뀌어 분산)을 시간 두 개로 가른다.
+- **"도망"을 따로 판정하지 않는다.** 플레이어가 전부 근접이라 도망치는 사람은 때릴 수 없고, 그래서 "조용함"에 이미 포함된다. 원거리 무기가 생기면 "때리면서 멀어지는 대상"이 집중을 유지하게 되므로 다시 볼 것.
+- **순환을 끄려면 `MaxFocusTime = 0`.** 그러면 현재 타겟이 조용해질 때만 바뀐다("가능한 한 한 사람에게 집중").
+- **유예 시간 = `RecentDamageMemoryTime`.** "피격을 교전으로 쳐주는 시간"과 같은 개념이라 값을 따로 두지 않았다. 너무 짧으면 보스 콤보를 피하느라 못 때리는 사이 집중이 풀려 분산되고, 길면 도망이 오래 통한다.
+- **공격 중에는 바꾸지 않는다** — 베이스의 전환 금지 구간이 `ReevaluateTarget()` 앞에서 막는다. 등 뒤 대응(회전 베기 등)은 타겟과 무관한 영역 공격이라 이 규칙과 얽히지 않는다.
+- **`BP_OutlawController` 권장값**: `RecentDamageBonus` 1.5 — "때린 사람 > 가까운 사람"을 점수로 보장하려면 피격 가산이 거리 + 시야 최대치(1.5)와 같아야 멀리서 때린 사람이 가깝기만 한 사람과 대등해진다. `SwitchScoreRatio` 는 보스에서 쓰이지 않는다(예전 권장 2.5 는 사실상 교체하지 않는 값이었다).
+- **위치를 따로 공급하지 않는다.** 블랙보드에 액터 참조가 들어 있는 한 `MoveTo`·`Strafe Focus`·EQS 컨텍스트가 그 액터의 실제 위치를 읽는다. 즉 "놓지 않기"만 하면 "위치를 계속 안다"는 저절로 성립한다.
+- **최초 획득은 여전히 퍼셉션이다.** 인지 검사를 빼는 것은 이미 들고 있는 타겟의 유지 조건뿐이라, 보거나 듣거나 맞기 전에는 어그로가 끌리지 않는다.
+- **타겟이 풀리는 경우는 사망·파괴·진영 변화뿐**(교체는 위 규칙). 접속 종료와 캐릭터 교체(무기 변경 = 폰 재스폰 → [GameFlow.md](../Flow/GameFlow.md))는 옛 폰이 파괴돼 풀린다. 새 폰은 다시 퍼셉션으로 잡아야 한다.
+- **베이스에 "인지 필요 여부" bool 을 두지 않은 이유**: 등급별 차이는 오버라이드로 한다는 원칙과 같고, `UPROPERTY` 추가는 에디터 재시작 비용이 붙는다.
+
+**채택하지 않은 것**
+
+| 안 | 이유 |
+|---|---|
+| 점수 배수(`SwitchScoreRatio`)만 올려서 버티기 | 2.5 는 보이는 현재 타겟(1.5 × 2.5 = 3.75)이 최고 점수(3.5)보다 커서 **풀리지 않는 잠금**이었다. 배수 하나로는 "싸우는 동안은 유지, 조용하면 교체"를 표현할 수 없다 |
+| 맞을 때마다 즉시 교체 | 여럿이 돌아가며 때리면 타겟이 분산된다 |
+| 가중치 랜덤 재선정 | 근접 전용이라 후보 점수가 비슷하고 거리 차이로 갈린다. 확정 규칙이 튜닝·디버깅에 낫다. 단조롭다는 플레이테스트 결과가 나오면 추가 |
+| 누적 딜량 위협도 | 규칙이 전부 "최근에 때렸나(예/아니오)"로 성립한다 |
+| 가해자별 피격 시각 맵 직접 구현 | 엔진 피해 감각이 같은 일을 하고, 퍼셉션 경로(후보·유지·콜백)와 자동으로 합류한다 |
 
 #### 위협 입력 — 피격 이벤트 재사용
 
@@ -203,16 +278,19 @@ Score = BaseTargetScore(1.0)
 UCBAttributeSet::PostGameplayEffectExecute [서버]
   └ Event.Combat.HitReact  (Payload.Instigator = 가해자의 ASC 소유 액터)
         ▼
-ACBAIController::HandleHitReactEvent  →  ResolveThreatPawn() → LastDamageInstigator / LastDamageTime
-        ▼
-ScoreTarget() 의 최근 피격 가산점
+ACBAIController::HandleHitReactEvent  →  ResolveOwningPawn() → UAISense_Damage::ReportDamageEvent(내 폰, 가해자 폰)
+        ▼  (다음 퍼셉션 갱신)
+가해자 인지 → OnTargetPerceptionUpdated → UpdateTarget
+HasRecentlyDamagedMe() → ScoreTarget() 의 최근 피격 가산점 · 보스의 집중 유지 판정
 ```
 
-- **새 배관을 만들지 않고 피격 반응 이벤트를 구독한다.** 구독은 베이스 `StartAILogic()`(SystemReady 이후라 ASC 확정), 해제는 `OnUnPossess()`. **자식 컨트롤러는 `StartAILogic()` 에서 반드시 `Super` 를 호출할 것** — 안 부르면 위협 가산점만 조용히 죽는다.
+- **새 배관을 만들지 않고 피격 반응 이벤트를 구독한다.** 구독은 베이스 `StartAILogic()`(SystemReady 이후라 ASC 확정), 해제는 `OnUnPossess()`. **자식 컨트롤러는 `StartAILogic()` 에서 반드시 `Super` 를 호출할 것** — 안 부르면 피해 감각 보고가 조용히 죽는다(가해자 인지·가산점·보스 집중이 함께 무너진다).
+- **기록하지 않고 감각에 보고한다.** 누가 언제 때렸는지는 퍼셉션이 가해자별로 들고 있고, 유지 시간이 지나면 엔진이 만료시킨다. 컨트롤러에 피격 상태 변수가 없다.
 - **폰 ASC 에 거는 구독은 전부 `BindPawnASCEvents()` / `UnbindPawnASCEvents()` 한 쌍을 통한다.** ASC 조회와 캐시(`CachedPawnASC`)를 여기서만 하고, 개별 구독 함수는 넘겨받은 ASC 로 자기 핸들만 다룬다. 구독이 늘어도 이 두 함수만 고치면 되고 호출 지점(`StartAILogic`·`OnUnPossess`)은 건드리지 않는다 — 짝이 어긋나는 것을 구조적으로 막는 배치다.
-- **함정 — `Payload.Instigator` 는 폰이 아니다.** `UAbilitySystemComponent::MakeEffectContext()` 가 `AddInstigator(OwnerActor, AvatarActor)` 로 채우므로 `GetInstigator()` 는 **ASC 소유 액터**다. 플레이어는 ASC 가 PlayerState 에 있어(→ [ASC-Ownership.md](../Foundation/ASC-Ownership.md)) 여기로 `ACBPlayerState` 가 들어온다. 퍼셉션 후보(폰)와 그대로 비교하면 **영원히 일치하지 않으므로**, `ResolveThreatPawn()` 이 컨트롤러·PlayerState 를 폰으로 환원한다.
+- **함정 — `Payload.Instigator` 는 폰이 아니다.** `UAbilitySystemComponent::MakeEffectContext()` 가 `AddInstigator(OwnerActor, AvatarActor)` 로 채우므로 `GetInstigator()` 는 **ASC 소유 액터**다. 플레이어는 ASC 가 PlayerState 에 있어(→ [ASC-Ownership.md](../Foundation/ASC-Ownership.md)) 여기로 `ACBPlayerState` 가 들어온다. 퍼셉션 후보(폰)와 그대로 비교하면 **영원히 일치하지 않으므로**, `UCBAbilitySystemLibrary::ResolveOwningPawn()` 이 컨트롤러·PlayerState 를 폰으로 환원한다(피해 감각도 폰을 가해자로 보고해야 후보와 같은 액터가 된다).
 - **한계(수용)**: 이 이벤트는 GE 의 `Effect.HitReact` **옵트인**이라, 태그가 없는 지속(DoT)·환경 데미지는 위협으로 잡히지 않는다. 체력이 0 이 되는 타격도 스킵되지만 죽는 순간이라 무관. 모든 데미지를 위협으로 삼으려면 어트리뷰트셋에 별도 이벤트를 하나 더 발행해야 한다.
-- 기록만 하고 **타겟을 즉시 바꾸지는 않는다.** 피격은 점수 항목일 뿐이고 전환 여부는 잠금·문턱을 거친다. (도발은 2차에서 즉시 전환 예외로 들어올 자리)
+- 보고만 하고 **타겟을 즉시 바꾸지는 않는다.** 피격은 인지·점수의 입력일 뿐이고 전환 여부는 잠금과 등급별 규칙(`ReevaluateTarget`)을 거친다. 단 **타겟이 없을 때는** 인지된 가해자가 곧 후보라 바로 잡는다. (도발은 2차에서 즉시 전환 예외로 들어올 자리)
+- `ReportDamageEvent` 는 맞은 쪽 폰을 받아 그 **컨트롤러의 퍼셉션**에 자극을 넣는다(엔진 `FAIDamageEvent::GetDamagedActorAsPerceptionListener` — 폰이면 컨트롤러로 환원). 엔진 API 가 가해자를 비const 로 받아 `const_cast` 한다(읽기만 함).
 
 ## 피격 경직 (Stagger)
 
@@ -229,6 +307,7 @@ BehaviorTree  →  경직 분기 (Blackboard 데코레이터, Observer Aborts = 
 - 키 이름은 `ACBAIController::StaggeredKey`(= `"bIsStaggered"`) 상수. **에디터 BB 키 이름과 반드시 일치.**
 - **연속 피격 시 태그가 1 → 0 → 1로 한 번 튄다** (피격 어빌리티 재발동 → `ActivationOwnedTags` 재부여). 같은 호출 스택이라 BT 는 다음 틱에 최종값만 보지만, 데코레이터 옵저버가 두 번 울려 경직 브랜치가 한 번 재진입(= `Wait` 재시작)할 수 있다. 동작상 무해하다.
 - 구독/해제는 위협 판정과 같은 진입점(`BindPawnASCEvents()`)을 탄다. 단 **구독은 `RunBehaviorTree()` 보다 앞서므로 초기 값 1회 반영은 블랙보드가 없어 버려진다.** 태그·BB 키 둘 다 기본값이 false 라 어긋나지 않는다.
+- **기절(보스)도 이 경로를 그대로 탄다.** 기절 어빌리티가 `Status.Combat.Staggered` 를 함께 소유하므로 컨트롤러·블랙보드·BT 경직 분기를 하나도 바꾸지 않고 "이동을 끊고 기절 동안 대기"가 된다. 기절 고유의 판단(게이지 적립 중단 등)은 별도 태그 `Status.Combat.Stunned` 가 맡는다 → [Stun.md](Stun.md).
 
 ### 이벤트가 아니라 태그를 구독하는 이유
 
@@ -261,7 +340,8 @@ AI 쪽에서 눈여겨볼 두 가지:
 | 하고 싶은 것 | 노드 |
 |---|---|
 | 적에게 다가가기 | `BTTask_MoveTo` (`AcceptableRadius` = 공격 사거리) — 내장 |
-| 사거리 판정 | `BTDecorator_IsAtLocation` — 내장 |
+| 사거리 판정 (선택 시점만) | `BTDecorator_IsAtLocation` — 내장. 이동 중 끊기가 필요하면 아래 거리 서비스 + `Blackboard` 데코레이터 |
+| **이동 중 거리 변화로 끊기** | **커스텀** — `UCBBTService_UpdateTargetDistance` (아래) + 내장 `Blackboard` 데코레이터 |
 | 타겟 바라보기 | `BTTask_RotateToFaceBBEntry` — 내장 |
 | 타겟 보유 여부 | `BTDecorator_Blackboard` (`Is Set`) — 내장 |
 | 어빌리티 재생 중 다른 행동 차단 | `BTDecorator_CheckGameplayTagsOnActor` — 내장 |
@@ -269,6 +349,9 @@ AI 쪽에서 눈여겨볼 두 가지:
 | **후퇴·경계 지점 계산** | **EQS** — `BTTask_RunEQSQuery`(내장) + 쿼리 에셋 (아래) |
 | **경계 중 타겟 주시 + 스트레이프 회전** | **커스텀** — `UCBBTService_StrafeFocus` (아래) |
 | **타겟 재선정 주기** | **커스텀** — `UCBBTService_UpdateTarget` (아래) |
+| **후보 중 무작위 선택** (쓸 수 있는 공격 중 하나) | **커스텀** — `UCBBTComposite_RandomSelector` (아래) |
+| **타겟까지 벽 없이 보이는가** | **커스텀** — `UCBBTDecorator_HasLineOfSight` (아래) |
+| **등 뒤에 플레이어가 있는가** | **커스텀** — `UCBBTDecorator_IsPlayerBehind` (아래) |
 
 ### 둘로 나누는 기준은 등급이 아니라 "기다릴 것이 있느냐"
 
@@ -362,6 +445,62 @@ bUseControllerDesiredRotation = true;
 - `bCallTickOnSearchStart = true` 로 브랜치 진입 즉시 1회 평가. 주기를 기다리며 타겟 없이 서 있는 구간이 사라진다.
 - **BT 루트에 붙인다.** 전투든 순찰이든 타겟 평가는 항상 돌아야 한다. 특정 가지에만 붙이면 그 가지 밖에서는 재선정이 퍼셉션 이벤트에만 의존하게 된다.
 
+### 타겟 거리 — `UCBBTService_UpdateTargetDistance`
+
+블랙보드 타겟(`TargetActorKey`)과의 **수평 거리**를 주기적으로 블랙보드 float 키(기본 `TargetDistance`)에 쓴다. 거리를 블랙보드 값으로 만들어 엔진 `Blackboard` 데코레이터의 **Observer Aborts** 로 "이동 중 거리가 구역을 넘으면 끊기"를 하기 위한 것이다 — 엔진 `Is At Location` 은 블랙보드 값 변화에만 반응해, 액터 키는 대상이 움직여도 다시 평가되지 않는다. 쓰임은 → [전투 사이클 (Outlaw)](#전투-사이클-outlaw) "거리 판정".
+
+- **주기 0.1초 ± 0.02**(엔진 `Interval` — BT 에서 조정). 이동 중단의 반응 속도가 이 값이고, 하는 일은 거리 계산 하나라 짧게 둔다.
+- **`bCallTickOnSearchStart = true`** — 가지를 고르는 순간에도 최신 거리로 판단한다. 없으면 이전 주기의 값으로 구역을 고를 수 있다.
+- **BT 루트에 붙인다**(`Update Target` 옆). 어느 가지가 돌든 거리가 갱신돼야 다른 가지의 중단 데코레이터가 반응한다.
+- **수평 거리**(`Dist2D`) — 계단·경사 등 높이 차이로 구역이 바뀌지 않게.
+- 타겟이 없으면 쓰지 않는다. 전투 가지가 `TargetActor Is Set` 으로 이미 막혀 있어 낡은 값이 쓰일 경로가 없다.
+- 판정(어느 구역인가)은 들고 있지 않다 — 기준값(700·1500 등)은 BT 데코레이터에 있어 코드 수정 없이 조정한다.
+
+### 무작위 선택 — `UCBBTComposite_RandomSelector`
+
+엔진 컴포짓은 `Selector`·`Sequence`·`SimpleParallel` 뿐이라 무작위 선택이 없다. 엔진 `Selector` 와 **규칙은 같고 시도 순서만 매번 무작위**인 컴포짓을 하나 뒀다 — 하나가 성공하면 멈추고, 전부 실패하면 실패.
+
+- **실패하면 남은 자식 중에서 다시 뽑는다.** 쿨다운으로 활성화에 실패한 공격(`Activate Ability And Wait` → `Failed`)이나 데코레이터에 막힌 자식은 건너뛰고, **지금 쓸 수 있는 공격 중 하나**가 나온다. 엔진은 데코레이터에 막힌 자식도 실패로 다시 `GetNextChildHandler()` 를 부르므로 같은 경로로 걸러진다.
+- **대안이었던 방식 — 블랙보드 인덱스 + 데코레이터**(BP 태스크로 랜덤 정수를 쓰고 자식마다 `AttackIndex == N`): 뽑힌 공격이 쿨다운이면 **다른 공격으로 넘어가지 못하고** 시퀀스 전체가 실패해 보스가 한 박자 멍하니 선다. 블랙보드 키·태스크도 하나씩 늘어 "분기는 조건으로만, 상태 변수 없이" 원칙과도 어긋나 택하지 않았다.
+- 구현: `GetNextChildHandler()` 오버라이드 + **이번 실행에서 시도한 자식을 비트마스크로 노드 메모리**에 기록(엔진 `SimpleParallel` 처럼 `FBTCompositeMemory` 확장). 노드에 들어올 때(`NotInitialized`)마다 비운다. 인스턴스화·블랙보드 키 불필요. 자식은 **최대 32개**.
+- **자식의 `Observer Aborts = Lower Priority` 는 고를 수 없다**(`CanAbortLowerPriority() = false`, 엔진 `Sequence`·`SimpleParallel` 과 같은 처리). 실행 순서가 무작위라 "낮은 우선순위"가 성립하지 않는다.
+- **모든 자식이 같은 확률.** 가중치는 필요해질 때 추가한다.
+- **"전부 실패하면 접근" 같은 폴백은 랜덤 셀렉터 안이 아니라 바깥 `Selector` 에 둔다.** 안에 넣으면 공격을 쓸 수 있을 때도 무작위로 접근을 고른다.
+
+### 시야 판정 — `UCBBTDecorator_HasLineOfSight`
+
+**폰 중심 → 블랙보드 타겟 중심**이 벽에 막히지 않았으면 통과. `Inverse Condition` 이면 "안 보일 때". 원거리 공격의 "쏠 수 있는가" 조건이다.
+
+- **퍼셉션 시야 감각을 쓰지 않는 이유**: 시야 감각은 **전방 120° 부채꼴 + 반경(발견 1500 / 상실 2000)** 이 섞인 "발견" 판정이다. 타겟이 등 뒤나 멀리 있으면 벽이 없어도 "안 보임"이 되어 원거리 공격이 엉뚱하게 막힌다. 보스는 타겟을 인지 밖에서도 유지하므로(→ [보스의 타겟 유지](#보스의-타겟-유지--acboutlawcontroller)) 인지 여부와 쏠 수 있는지는 다른 질문이다.
+- **Weapon 채널 — `UCBAbilitySystemLibrary::IsBlockedByWall()`**. 투사체가 Weapon 채널 스윕으로 벽에 막히므로 **"보인다 = 탄이 지나간다"** 가 같은 기준이 된다. 무기 트레이스·영역 공격의 벽 검사와도 같은 함수다 → [Combat.md](Combat.md).
+- **판정 시점 계산.** BT 가 그 가지를 고를 때만 선 하나를 긋는다 — 블랙보드 키·주기 갱신이 없다. 블랙보드 값 변화로 시야를 알 수 없으므로 중단(Observer Aborts) 옵션은 두지 않았다(엔진 `IsAtLocation` 과 같은 처리).
+- 타겟 키는 `UBTDecorator_BlackboardBase` 의 키 선택을 쓰고 기본값이 `TargetActor` 다.
+- 한계: 중심 한 줄이라, 타겟 몸 일부가 기둥 밖으로 나와 있어도 중심이 가려지면 "안 보임"이다. 발사 소켓(손)과 중심의 높이·위치 차이도 무시한다.
+
+### 등 뒤 판정 — `UCBBTDecorator_IsPlayerBehind`
+
+**등 뒤 반원, `Radius` 안에 살아있는 플레이어가 있으면 통과.** 등 뒤 대응 공격(회전 베기 등 → [Montage.md](Montage.md) "고정 각도 회전")을 고르는 조건이다.
+
+플레이어가 전부 근접이라 보스가 한 명을 때리는 동안 나머지가 등 뒤를 치면 너무 쉬워진다. **이건 타겟팅으로 풀리지 않는다** — 누구를 노리든 나머지는 옆·뒤에 있다. 그래서 "뒤에 있으면 맞는 공격"을 조건부로 고르게 한다.
+
+- **퍼셉션이 아니라 실제 위치로 판정한다.** 시야는 전방 120° 이고, 가만히 서서 때리는 플레이어는 소리가 없어 인지되지 않는다(→ 위 [두 감각의 역할 분리](#두-감각의-역할-분리)). 등 뒤에 붙은 플레이어가 정확히 그 경우다.
+- **후보는 서버의 `GetPlayerControllerIterator` → 폰, `IsDead()` 제외.** 스포너의 인원 집계(→ [Spawner.md](Spawner.md))와 같은 방식이다. 보스의 적이 플레이어뿐이라 진영 검사는 생략했다 — 플레이어가 아닌 적(소환수 등)이 생기면 진영 기준(`GetAttitude == Hostile`)으로 바꾼다.
+- **판정**: 수평 거리 ≤ `Radius` 이고 `Dot(정면, 보스→플레이어) < 0`(뒤쪽 반원). 높이는 무시한다(`Update Target Distance` 와 같은 수평 기준). 중심 간 거리이므로 **`Radius` 는 보스 캡슐 반경을 포함한 값**으로, 등 뒤 대응 공격이 닿는 거리에 맞춘다(기본 300).
+- **선택 시점 계산·중단 없음.** 위치는 블랙보드 값이 아니라 변화를 감지할 수 없고, 진행 중인 공격을 끊어서도 안 된다(`HasLineOfSight` 와 같은 처리). 반전은 엔진 `Inverse Condition`.
+- **1~4인에 저절로 맞는다.** 위치 판정이라 아무도 뒤에 없으면 고르지 않고, 솔로는 혼자 뒤로 돌 때만 고른다. 빈도는 그 공격의 GAS 쿨다운이 정한다.
+
+**채택하지 않은 것**
+
+| 안 | 이유 |
+|---|---|
+| 퍼셉션 인지 목록에서 찾기 | 등 뒤에서 가만히 때리는 플레이어가 빠진다 (위) |
+| 서비스 + 블랙보드 키 | 가지를 고를 때 한 번이면 충분하고, 공격을 끊는 중단이 필요 없다 |
+| 각도 파라미터 | 뒤쪽 반원(정면 기준 90° 밖)으로 고정. 보스마다 정면 공격 폭이 달라 좁혀야 할 근거가 생기면 추가 |
+| 최소 인원 조건 | 빈도는 쿨다운이 정하고, 인원 차이는 위치 판정이 만든다 |
+| 벽 검사 | 반경이 근접 사거리라 사이에 벽이 끼는 경우가 사실상 없다. 공격 판정에도 벽 검사가 있다 |
+| 현재 타겟 제외 | 타겟 자신이 등 뒤로 돌아가도 등 뒤 공격이 맞는 대응이다 |
+| 플레이어 순회 공용 함수 추출 | 스포너와 루프가 겹치지만 몇 줄이고, 추출하면 동작 중인 스포너를 고쳐야 한다. 세 번째 사용처가 생기면 `UCBAbilitySystemLibrary` 로 묶는다 |
+
 ## EQS — 위치 판단
 
 후퇴·경계처럼 **"타겟을 기준으로 어디에 설 것인가"** 는 EQS 가 담당한다. BT 는 지점을 계산하지 않는다.
@@ -436,8 +575,95 @@ Root
 - **경계 이동에 스트레이프를 쓰는 이유는 애니메이션이다.** 반경을 유지하는 경계 이동은 방향이 접선(좌/우)이라 기존 클립으로 커버되지만, **후진 클립이 없다.** 그래서 **경계용 반경은 좁게**(예: 240~260) 두고, `EQS_CombatPosition` 에 `Dot` 필터(LineA = Querier forward, LineB = Querier→Item, Min ≈ −0.3)를 걸어 뒤로 걸어야 하는 후보를 걸러낸다. 공격 접근(`MoveTo(TargetActor)`)은 정면 이동이라 스트레이프를 끈다.
 - **후퇴(공격 후 물러나기) 브랜치는 미구현이다.** 넣는다면 `EQS_CombatPosition` 을 `Single Best Item` 으로 돌려 쓰고, 몸을 돌려 전방 애님으로 처리하도록 `Allow Strafe` 를 끄며, `MoveTo` 의 `ReachTestIncludesAgentRadius` 를 꺼야 한다(기본값이면 절반쯤에서 도착 판정이 나 제자리에 가깝게 멈춘다).
 
+## 전투 사이클 (Outlaw)
+
+**거리로 세 구역을 나눈다 — 아주 멂(1500 이상) → 접근, 중간(700~1500) → 원거리·돌진, 가까움(700 미만) → 붙어서 근접. 공격 뒤엔 타겟을 주시하며 대기 → 반복.** 이동 중 거리가 구역을 넘으면 **이동만 끊고** 다시 고른다. Rogue 와 달리 원을 그리는 경계 이동(EQS)이 없다 — 보스는 제자리에서 버티며 몸만 돌린다.
+
+| 어빌리티 | 태그 | 구역 |
+|---|---|---|
+| 기본 근접 | `Ability.Combat.Attack.Basic` | 근접 |
+| 특수 근접 | `Ability.Combat.Attack.Skill.A` | 근접 |
+| 기본 원거리 | `Ability.Combat.Attack.Skill.B` | 중간 (시야 필요) |
+| 특수 원거리 | `Ability.Combat.Attack.Skill.C` | 중간 (시야 필요) |
+| 돌진 | `Ability.Combat.Attack.Skill.D` | 중간 (시야 필요 — 아래) |
+
+```
+Root  [Service: Update Target] [Service: Update Target Distance → TargetDistance]
+└─ Selector
+   ├─ [bIsStaggered Is Set, Aborts = Lower Priority] Wait                          ← 경직
+   ├─ [TargetActor Is Set] Selector "전투"   (위에서부터 검사)
+   │   │
+   │   ├─ [Is Player Behind (Radius)] Sequence "등 뒤 대응"                         ← ⓪ 구역과 무관
+   │   │   ├─ Activate Ability And Wait (등 뒤 대응 스킬 — 회전 베기 등)
+   │   │   └─ Wait (템포 ± 편차)   + Service: Strafe Focus (TargetActor)
+   │   │
+   │   ├─ MoveTo (TargetActor)   [TargetDistance ≥ 1500, Aborts = Self]
+   │   │                         ← ① 아주 멂: 접근하다 1500 안으로 들어오는 순간 끊고 다시 고름
+   │   │
+   │   ├─ [TargetDistance ≥ 700, Aborts = None]  Sequence "원거리"               ← ② 700~1500
+   │   │   ├─ Selector
+   │   │   │   ├─ CB Random Selector
+   │   │   │   │   ├─ [Has Line Of Sight] Activate Ability And Wait (Skill.D 돌진)
+   │   │   │   │   ├─ [Has Line Of Sight] Activate Ability And Wait (Skill.C)
+   │   │   │   │   └─ [Has Line Of Sight] Activate Ability And Wait (Skill.B)
+   │   │   │   └─ MoveTo (TargetActor)   [TargetDistance ≥ 650, Aborts = Self]
+   │   │   │                             ← 시야 없음·전부 쿨다운 → 접근하다 근접 구역에 들어오면 끊음
+   │   │   └─ Wait (템포 ± 편차)   + Service: Strafe Focus (TargetActor, SpeedAbilityTag 비움)
+   │   │
+   │   └─ Sequence "근접"   (데코레이터 없음 = 나머지, 700 미만)                ← ③
+   │       ├─ MoveTo (TargetActor, AcceptableRadius = 근접 사거리)   [TargetDistance < 750, Aborts = Self]
+   │       │                             ← 쫓다가 750 밖으로 도망가면 끊음
+   │       ├─ CB Random Selector
+   │       │   ├─ Activate Ability And Wait (Skill.A)
+   │       │   └─ Activate Ability And Wait (Basic)
+   │       └─ Wait (템포 ± 편차)   + Service: Strafe Focus
+   │
+   └─ [TargetActor Is Not Set] Wait                                                ← 타겟 없음
+```
+
+거리 데코레이터는 전부 엔진 **`Blackboard` 데코레이터**(`TargetDistance`, `Key Query` = `Is Greater Than Or Equal To` / `Is Less Than`, `Notify Observer` = **`On Result Change`**)다. 거리는 `Update Target Distance` 서비스가 쓴다(아래 "거리 판정").
+
+### 등 뒤 대응 — 구역보다 먼저
+
+- **근접 구역 안이 아니라 "전투" 의 첫 자식이다.** 타겟이 700 밖이면 보스는 원거리 구역을 고르는데, 그동안 다른 플레이어가 등 뒤에 붙어 있을 수 있다. 근접 구역 안에 두면 그때 대응하지 못한다.
+- **빈도는 그 스킬의 GAS 쿨다운이 정한다.** 쿨다운 중이면 활성화 `Failed` → 시퀀스 실패 → Selector 가 다음 구역으로 넘어간다(원거리 스킬과 같은 흐름). 쿨다운 GE 가 없으면 등 뒤에 누가 있는 한 이것만 반복한다.
+- **끝에 `Wait` + `Strafe Focus`.** 회전 베기가 180° 로 끝나면 뒤를 본 채 서 있게 되는데, 대기 동안 타겟 쪽으로 몸을 돌린다. 다른 구역과 템포도 맞춘다.
+- 판정·근거 → 위 [등 뒤 판정](#등-뒤-판정--ucbbtdecorator_isplayerbehind).
+
+### 거리 판정 — 끊는 건 이동뿐, 공격은 끊지 않는다
+
+엔진 `Is At Location` 은 이 구조에 쓸 수 없다. **블랙보드 값 변화에만 반응**하는데 액터 키는 대상이 움직여도 값이 바뀌지 않아, `MoveTo` 가 한번 시작되면 거리가 바뀌어도 끊을 수단이 없다. 그래서 **거리 자체를 블랙보드 float 값**으로 만들고(`UCBBTService_UpdateTargetDistance`) 엔진 `Blackboard` 데코레이터의 Observer Aborts 를 쓴다.
+
+- **가지 선택용 데코레이터는 `Aborts = None`, `MoveTo` 에 붙은 것만 `Aborts = Self`.** 가지 전체에 중단을 걸면 **공격 도중** 플레이어가 경계를 넘을 때 공격 어빌리티가 캔슬된다(`Activate Ability And Wait` 의 `AbortTask` → `CancelAbilityHandle`). 이동만 끊어야 공격·대기가 끝까지 재생된다 — 거리 변화는 공격이 끝난 뒤 다음 판단에서 반영된다.
+- **끊긴 `MoveTo` → 그 가지 실패 → 부모가 즉시 다시 고른다.** 서비스가 최신 거리를 써 두었으므로 맞는 구역으로 넘어간다.
+- **근접은 마지막 가지라, 거기서 끊기면 "전투" Selector 가 통째로 실패한다.** 그래서 "타겟 없음" `Wait` 에 **`TargetActor Is Not Set`** 을 붙인다 — 타겟이 있으면 루트가 곧바로 실패하고 다음 틱에 처음부터 다시 판단한다. 이 데코레이터가 없으면 타겟을 두고 대기 시간만큼 멍하니 선다.
+- **경계에 여유(히스테리시스)를 둔다** — 원거리 → 근접 전환은 650, 근접 → 원거리 전환은 750. 같은 700 이면 플레이어가 경계에서 오갈 때 두 `MoveTo` 가 번갈아 끊기며 떤다. 가지 **선택** 기준(700·1500)과 **중단** 기준(650·750·1500)이 다른 이유다.
+- **`On Result Change`** 라 기준선을 넘는 순간에만 반응한다. `On Value Change` 면 0.1 초마다 값이 바뀔 때마다 재평가를 요청한다(결과는 같지만 낭비).
+- 원거리·아주 먼 구역의 `MoveTo` 는 도착하기 전에 데코레이터가 먼저 끊으므로 `AcceptableRadius` 가 의미 없다. **근접 `MoveTo` 만** 공격 사거리로 둔다 — 이미 사거리 안이면 즉시 성공하고 바로 친다. 접근과 공격이 **한 시퀀스 안**이라 예전의 "도착했는데 근접 판정이 안 되는 경계 진동"(접근 가지와 공격 가지가 같은 반경으로 갈릴 때의 문제)이 생기지 않는다.
+- 블랙보드(`BB_Outlaw_Hulk`)에 `TargetActor`(Object)·`bIsStaggered`(Bool)·**`TargetDistance`(Float)** 키가 있어야 한다.
+
+### 스킬 선택
+
+- **쿨다운 + 랜덤 셀렉터.** 쿨다운 중인 스킬은 활성화 실패 → 남은 것 중에서 다시 뽑힌다. 쿨다운 데코레이터는 두지 않는다(위 공통 규칙). 각 스킬 GA BP 에 **쿨다운 GE** 가 있어야 리듬이 생긴다.
+  - **기본 원거리(Skill.B)에도 짧은 쿨다운을 둔다.** 없으면 중간 구역에서 항상 성공해, 플레이어가 700~1500 에 있는 한 **보스가 서서 쏘기만** 한다. 쿨다운이 있으면 그 사이 폴백 `MoveTo` 로 다가와 근접전으로 넘어간다.
+  - 태스크에는 **정확한 태그**를 넣는다. 부모 태그(`Ability.Combat.Attack`)는 여러 스펙에 매칭되어 첫 번째 것만 발동된다.
+- **폴백 `MoveTo` 는 랜덤 셀렉터 바깥 `Selector` 에 둔다.** 안에 넣으면 공격을 쓸 수 있을 때도 무작위로 접근을 고른다.
+- **시야가 없으면 원거리 대신 접근한다.** 원거리 공격 셋에 `Has Line Of Sight` 를 붙여, 기둥 뒤에 숨은 타겟에게는 랜덤 셀렉터가 전부 실패 → 폴백 `MoveTo` 가 **경로 탐색으로 벽을 돌아** 다가간다.
+  - **돌진에도 붙인다.** 돌진은 시작 순간 방향을 고정한 **직선**이라(→ [Montage.md](Montage.md) "일정 속도 돌진"), 기둥 뒤 타겟에게 돌진하면 기둥에 막혀 멈춘다(막힘 → 정지 섹션). "벽에 들이받는" 연출을 원하면 돌진에서만 데코레이터를 뺀다 — BT 데이터 차이라 코드와 무관하다.
+- **돌진 거리는 1500 을 덮어야 한다.** 돌진은 `Speed × 돌진 구간 길이` 까지만 가므로 구역 끝(1500)에서 쓰면 도중에 선다(예: 구간 1초면 `Speed` ≈ 1500).
+
+### 회전·대기
+
+- **추격 중 회전은 따로 걸지 않는다.** `MoveTo` 는 `bOrientRotationToMovement` 로 진행 방향을 보는데, 진행 방향이 곧 타겟 방향이다. 타겟이 숨어도 액터 참조로 추격하므로(→ [보스의 타겟 유지](#보스의-타겟-유지--acboutlawcontroller)) 경로가 벽을 돌아가도 끝까지 따라간다.
+- **`Strafe Focus` 는 `Wait` 에만 붙인다**(근접·원거리 모두). 시퀀스 전체에 붙이면 공격 몽타주 도중에도 컨트롤러 포커스가 몸을 타겟 쪽으로 계속 돌려 **공격이 플레이어를 따라 휜다** — 옆으로 피할 수 없는 보스가 된다. 공격 시점의 정렬은 모션 워핑이 한다. `Wait` 가 끝나면 `OnCeaseRelevant` 가 회전 모드·`Status.Movement.Strafe` 를 복원한다.
+- **`SpeedAbilityTag` 는 비운다.** 대기 중에는 이동하지 않으므로 걷기 속도를 걸 일이 없다.
+- **공격 → `Wait` 순서.** 공격 직전에 거리가 확정된 시점이라 곧바로 친다. 반대로 두면 대기 중 타겟이 빠져나간 뒤 헛스윙한다.
+
 ## 다음 단계
 
+- **[에디터]** `BT_Outlaw_Hulk` 를 위 [전투 사이클 (Outlaw)](#전투-사이클-outlaw) 대로 배선(세 구역·거리 서비스·랜덤 셀렉터·시야), `BB_Outlaw_Hulk` 에 `TargetDistance`(Float) 키 추가, `BP_OutlawController` 의 `RecentDamageBonus` = 1.5(`SwitchScoreRatio` 는 보스에서 쓰이지 않음 — [보스의 타겟 유지](#보스의-타겟-유지--acboutlawcontroller)), 스킬 GA BP 쿨다운 GE(Skill.B 포함) 확인.
+
+- **[C++ + 에디터]** 등 뒤 대응 스킬: `Ability`/`Action`/`Cooldown.Combat.Attack.Skill.E` 네이티브 태그 추가(A~D 와 같은 방식 → [GameplayTags.md](../Foundation/GameplayTags.md)) → 휩쓸기 몽타주 복제 + `Rotate By` 구간(→ [Montage.md](Montage.md)) → GA BP(쿨다운 GE 포함) → `BT_Outlaw_Hulk` 의 "전투" 첫 자식으로 배선(위 [등 뒤 대응](#등-뒤-대응--구역보다-먼저)), `Is Player Behind` 의 `Radius` 를 그 공격의 사거리에 맞춤.
 - **[에디터]** `EQS_CombatPosition` 에 `Dot` 필터 추가(후진 후보 제거) → 경계용 반경 파라미터 조정.
 - **[에디터]** `BT_Rogue` 루트에 `Update Target` 서비스 배치(안 붙이면 재선정이 퍼셉션 이벤트에만 의존한다).
 - **[C++]** 여러 마리 스폰 테스트 후, 타겟 앞에 뭉치면 공격 브랜치의 접근 지점도 EQS 로 전환(아군 회피 테스트 추가).

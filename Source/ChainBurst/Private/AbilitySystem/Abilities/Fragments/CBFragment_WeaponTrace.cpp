@@ -96,10 +96,9 @@ void UCBFragment_WeaponTrace::OnAttackHit(FGameplayEventData Payload)
 
 	UGameplayAbility* Ability = GetOwningAbility();
 	const FGameplayAbilityActorInfo* ActorInfo = Ability->GetCurrentActorInfo();
-	UAbilitySystemComponent* SourceASC = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr;
-	if (!SourceASC) return;
+	if (!ActorInfo) return;
 
-	// 권한·예측키 검사 — 중복 적용 방지 (엔진 UGameplayAbility::ApplyGameplayEffectSpecToTarget 과 같은 게이트)
+	// 권한·예측키 검사 — 서버이거나 예측 구간 안일 때만 적용 허용 (엔진 UGameplayAbility::ApplyGameplayEffectSpecToTarget 과 같은 게이트)
 	const FGameplayAbilityActivationInfo ActivationInfo = Ability->GetCurrentActivationInfo();
 	if (!Ability->HasAuthorityOrPredictionKey(ActorInfo, &ActivationInfo)) return;
 
@@ -128,26 +127,9 @@ void UCBFragment_WeaponTrace::OnAttackHit(FGameplayEventData Payload)
 		// ASC 가 없는 액터는 데미지 대상이 아님
 		if (!UCBAbilitySystemLibrary::GetASC(HitActor)) continue;
 
-		// Spec 만들기 (소스는 시전자 ASC 로 자동 세팅됨)
-		FGameplayEffectSpecHandle SpecHandle = Ability->MakeOutgoingGameplayEffectSpec(DamageEffectClass, Ability->GetAbilityLevel());
-		if (!SpecHandle.IsValid()) continue;
-
-		// 히트 정보를 스펙 컨텍스트에 실음 (피격 방향 등 소비자용).
-		// 스펙을 만든 뒤에 붙여야 함 — MakeOutgoingGameplayEffectSpec 이 컨텍스트를 새로 만듦.
-		SpecHandle.Data->GetContext().AddHitResult(*HitResult);
-
-		// 데미지 계수 설정 (SetByCaller 등록)
-		SpecHandle.Data->SetSetByCallerMagnitude(CBGameplayTags::Data_Damage_Coefficient, DamageCoefficient);
-
 		// 이번 반복에서 가져온 타겟 하나에게만 GE 적용.
-		// 배칭된 핸들 전체를 쓰면 타겟 수만큼 도는 이 루프에서 N² 번 적용됨.
-		{
-			// 적용 중 어빌리티가 끝나거나 제거되지 않게 잠금 (엔진 TARGETLIST_SCOPE_LOCK 과 같음)
-			FScopedTargetListLock TargetListLock(*SourceASC, *Ability);
-
-			FGameplayAbilityTargetData_SingleTargetHit SingleTarget(*HitResult);
-			SingleTarget.ApplyGameplayEffectSpec(*SpecHandle.Data.Get(), SourceASC->GetPredictionKeyForNewAction());
-		}
+		// 배칭된 핸들 전체를 쓰면 타겟 수만큼 도는 이 루프에서 N² 번 적용되므로, 타겟 하나씩 넘김.
+		UCBAbilitySystemLibrary::Auth_ApplyDamageToTarget(*Ability, DamageEffectClass, DamageCoefficient, *HitResult);
 
 		// 피격 연출 큐.
 		UCBAbilitySystemLibrary::Auth_ExecuteHitCue(HitActor, Ability->GetAvatarActorFromActorInfo(), HitCueTag, *HitResult);

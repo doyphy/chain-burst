@@ -2,11 +2,16 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "GameplayPrediction.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Types/CBEnumTypes.h"
 #include "CBAbilitySystemLibrary.generated.h"
 
 class UAbilitySystemComponent;
+class UGameplayAbility;
+class UGameplayEffect;
+class UWorld;
+struct FCollisionQueryParams;
 
 /**
  * 어빌리티 관련 공용 함수 모음.
@@ -127,14 +132,68 @@ public:
 	static const AActor* ResolveOwningPawn(const AActor* InActor);
 
 	/**
+	 * 캐릭터 메시의 소켓(또는 본) 월드 위치를 조회하는 함수. (C++ 전용)
+	 * 엔진 GetSocketLocation 은 이름을 못 찾으면 컴포넌트 위치를 반환하므로, 못 찾으면 위치 반환하지 말고 실패로 처리.
+	 * @param InActor 조회할 액터 (ACharacter 의 메시에서 찾음)
+	 * @param InSocketName 소켓 또는 본 이름
+	 * @param OutLocation 찾은 위치 (실패 시 변경하지 않음)
+	 * @return 찾았으면 true. 캐릭터가 아니거나 메시가 없거나 이름이 없으면 false
+	 */
+	static bool FindMeshSocketLocation(const AActor* InActor, FName InSocketName, FVector& OutLocation);
+
+	/**
+	 * 두 지점 사이를 벽이 가로막는지 검사하는 함수. (C++ 전용)
+	 * Weapon 채널 라인 트레이스 - 캐릭터는 이 채널을 막지 않으므로(캡슐 Ignore·메시 Overlap) 벽·지형(채널 기본 Block)만 막음.
+	 * 무기 트레이스·영역 공격이 "공격자 쪽 기준점 → 대상"이 벽에 막혔는지 같은 기준으로 판정할 때 사용.
+	 * @param InWorld 트레이스할 월드
+	 * @param InFrom 시작점 (공격자 쪽 기준점)
+	 * @param InTo 끝점 (대상 위치)
+	 * @param InQueryParams 쿼리 파라미터 (공격자 자신 등 제외할 액터)
+	 * @return 막혀 있으면 true
+	 */
+	static bool IsBlockedByWall(const UWorld& InWorld, const FVector& InFrom, const FVector& InTo, const FCollisionQueryParams& InQueryParams);
+
+	/**
 	 * [서버] 피격 연출 GameplayCue 를 피격자에게 실행하는 함수. (C++ 전용)
 	 * 큐의 대상이 피격자여야 연출이 맞은 쪽에 붙으므로 시전자가 아니라 타겟 ASC 로 실행함.
 	 * 타격 지점을 큐 파라미터에 실어, 큐가 액터 원점이 아니라 실제 맞은 자리에서 연출하게 함
-	 * (GE 가 쏘는 큐는 이 값이 비어 있어 대상 메시 원점으로 떨어진다).
 	 * @param InTargetActor 피격자
 	 * @param InInstigator 때린 액터. 큐의 "시전자가 로컬인가" 스폰 조건에 쓰임
 	 * @param InCueTag 실행할 큐 태그. 비어 있으면 아무것도 하지 않음
 	 * @param InHitResult 타격 지점·법선·표면 재질의 출처
 	 */
 	static void Auth_ExecuteHitCue(AActor* InTargetActor, AActor* InInstigator, const FGameplayTag& InCueTag, const FHitResult& InHitResult);
+
+	/**
+	 * [서버] 공격 어빌리티의 데미지 GE 를 타겟 하나에게 적용하는 함수. (C++ 전용)
+	 * 스펙 생성(MakeDamageSpec) + 타겟 하나에 적용(Auth_ApplyDamageSpecToTarget)을 어빌리티 잠금 안에서 한 번에 수행.
+	 * 판정과 적용이 같은 순간인 무기 트레이스·영역 공격용.
+	 * @param InAbility 데미지를 주는 어빌리티 (스펙의 소스·레벨 출처)
+	 * @param InDamageEffectClass 적용할 데미지 GE. 비어 있으면 아무것도 하지 않음
+	 * @param InDamageCoefficient 데미지 계수 (SetByCaller Data.Damage.Coefficient)
+	 * @param InHitResult 타겟과 타격 지점. 스펙 컨텍스트에 실려 피격 방향 등에 쓰임
+	 */
+	static void Auth_ApplyDamageToTarget(UGameplayAbility& InAbility, TSubclassOf<UGameplayEffect> InDamageEffectClass, float InDamageCoefficient, const FHitResult& InHitResult);
+
+	/**
+	 * 공격 어빌리티의 데미지 GE 스펙을 만드는 함수. (C++ 전용)
+	 * 소스·레벨은 어빌리티에서, 계수는 SetByCaller 로 실음. 타겟·타격 지점은 적용할 때 붙음.
+	 * 투사체처럼 적용 시점에 어빌리티가 살아 있다는 보장이 없을 때, 발사 시점에 미리 만들어 넘기는 용도.
+	 * @param InAbility 데미지를 주는 어빌리티 (스펙의 소스·레벨 출처)
+	 * @param InDamageEffectClass 적용할 데미지 GE. 비어 있으면 무효 핸들 반환
+	 * @param InDamageCoefficient 데미지 계수 (SetByCaller Data.Damage.Coefficient)
+	 * @return 생성한 스펙 핸들. 실패 시 무효 핸들
+	 */
+	static FGameplayEffectSpecHandle MakeDamageSpec(const UGameplayAbility& InAbility, TSubclassOf<UGameplayEffect> InDamageEffectClass, float InDamageCoefficient);
+
+	/**
+	 * [서버] 만들어 둔 데미지 스펙을 타겟 하나에게 적용하는 함수. (C++ 전용)
+	 * 타겟 하나만 담은 타겟 데이터로 적용하므로, 여러 대상을 도는 루프에서 불러도 N² 적용이 생기지 않음.
+	 * 엔진이 적용마다 스펙·컨텍스트를 복사해 타격 지점을 붙이므로 원본 스펙은 여러 번 재사용 가능.
+	 * 시전자 ASC 가 사라졌으면(시전자 파괴) 적용하지 않음.
+	 * @param InSpecHandle 적용할 데미지 스펙 (MakeDamageSpec 결과)
+	 * @param InHitResult 타겟과 타격 지점. 스펙 컨텍스트에 실려 피격 방향 등에 쓰임
+	 * @param InPredictionKey 예측 키. 어빌리티 밖(투사체 등)에서는 기본값
+	 */
+	static void Auth_ApplyDamageSpecToTarget(const FGameplayEffectSpecHandle& InSpecHandle, const FHitResult& InHitResult, FPredictionKey InPredictionKey = FPredictionKey());
 };

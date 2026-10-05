@@ -5,8 +5,10 @@
 #include "AbilitySystem/CBAttributeSet.h"
 #include "UI/Widgets/CBHealthBarWidget.h"
 #include "UI/Widgets/CBNamePlateWidget.h"
+#include "UI/Widgets/CBBossBarWidget.h"
 #include "UI/CBHUD.h"
 #include "GameStates/CBLobbyGameState.h"
+#include "CBGameplayTags.h"
 
 // engine
 #include "Blueprint/UserWidget.h"
@@ -48,6 +50,9 @@ void UCBUIComponent::OnCharacterSystemReady()
 	else
 	{
 		CreateOverheadWidget(ASC);
+
+		// 보스 바 위젯 클래스가 주입된 캐릭터(보스)만 교전 개시를 기다렸다 화면 상단 보스 바를 띄움
+		BindBossBarTrigger(ASC);
 	}
 }
 
@@ -62,38 +67,99 @@ void UCBUIComponent::Local_CreateHUDWidget()
 
 	// 위젯 생성.
 	HUDWidget = CreateWidget<UUserWidget>(PC, HUDWidgetClass);
-	
+
 	if (!HUDWidget) return;
 
-	// HUD 스택 삽입.
-	Local_PushHUDWidgetToStack();
+	// HUD 스택 삽입. 제거 시점엔 컨트롤러 연결이 이미 끊겼을 수 있으므로 삽입 시점의 HUD를 캐싱
+	CachedHUD = Local_PushWidgetToStack(PC, HUDWidget);
 }
 
-void UCBUIComponent::Local_PushHUDWidgetToStack()
+ACBHUD* UCBUIComponent::Local_PushWidgetToStack(const APlayerController* InPC, UUserWidget* InWidget) const
 {
+	if (!InWidget) return nullptr;
+
 	// 화면 배치는 HUD의 내비게이션 스택이 전담한다 (AddToViewport 사용 금지)
-	const APlayerController* PC = GetOwningController<APlayerController>();
-	ACBHUD* HUD = PC ? Cast<ACBHUD>(PC->GetHUD()) : nullptr;
+	ACBHUD* HUD = InPC ? Cast<ACBHUD>(InPC->GetHUD()) : nullptr;
 	if (!HUD)
 	{
-		// 리페어런팅 누락·HUD Class 오지정이면 여기서 걸린다 (그대로 두면 체력바가 조용히 안 뜸)
-		UE_LOG(LogTemp, Warning, TEXT("[%s] HUD가 ACBHUD가 아니어서 HUD 위젯을 스택에 넣지 못함"), *GetOwner()->GetName());
-		return;
+		// 리페어런팅 누락·HUD Class 오지정이면 여기서 걸린다 (그대로 두면 위젯이 조용히 안 뜸)
+		UE_LOG(LogTemp, Warning, TEXT("[%s] HUD가 ACBHUD가 아니어서 위젯 '%s' 를 스택에 넣지 못함"), *GetOwner()->GetName(), *InWidget->GetName());
+		return nullptr;
 	}
 
-	// 제거 시점엔 컨트롤러 연결이 이미 끊겼을 수 있으므로 삽입 시점의 HUD를 캐싱
-	CachedHUD = HUD;
-	HUD->PushGameLayerWidget(HUDWidget);
+	HUD->PushGameLayerWidget(InWidget);
+	return HUD;
 }
 
-void UCBUIComponent::Local_RemoveHUDWidgetFromStack()
+void UCBUIComponent::Local_RemoveWidgetFromStack(ACBHUD* InHUD, UUserWidget* InWidget)
 {
 	// RemoveFromParent를 쓰면 스택 배열에 항목이 남아 위젯이 화면에 그대로 남는다
-	if (ACBHUD* HUD = CachedHUD.Get())
+	if (InHUD && InWidget)
 	{
-		HUD->PopWidgetFromStack(HUDWidget);
+		InHUD->PopWidgetFromStack(InWidget);
 	}
-	CachedHUD.Reset();
+}
+
+// 보스 바 위젯 클래스가 있으면 오너 ASC 의 교전 개시 태그를 구독 (이미 교전 중이면 즉시 표시)
+void UCBUIComponent::BindBossBarTrigger(UCBAbilitySystemComponent* InASC)
+{
+	// 보스 바가 없는 캐릭터(일반 AI·원격 플레이어 등)면 할 일 없음
+	if (!BossBarWidgetClass || !InASC) return;
+
+	// 구독 해제용 캐시 겸 보스 바가 표시할 대상
+	BossBarTriggerASC = InASC;
+
+	// 교전 개시 태그 구독. 서버(AI 컨트롤러)가 TagOnly 로 붙이므로 복제 도착 시 클라에서도 전달
+	EngagedTagChangedHandle = InASC->RegisterGameplayTagEvent(CBGameplayTags::Status_Combat_Engaged, EGameplayTagEventType::NewOrRemoved)
+		.AddUObject(this, &UCBUIComponent::HandleEngagedTagChanged);
+
+	// 교전 중에 이 클라이언트로 보스가 복제돼 들어온 경우(늦은 연관성 등) 태그가 이미 있으므로 바로 띄움
+	if (InASC->HasMatchingGameplayTag(CBGameplayTags::Status_Combat_Engaged))
+	{
+		Local_CreateBossBarWidget();
+	}
+}
+
+// 교전 개시 태그 구독 해제 (EndPlay 에서 호출)
+void UCBUIComponent::UnbindBossBarTrigger()
+{
+	if (UCBAbilitySystemComponent* ASC = BossBarTriggerASC.Get())
+	{
+		ASC->RegisterGameplayTagEvent(CBGameplayTags::Status_Combat_Engaged, EGameplayTagEventType::NewOrRemoved).Remove(EngagedTagChangedHandle);
+	}
+
+	BossBarTriggerASC.Reset();
+	EngagedTagChangedHandle.Reset();
+}
+
+// 교전 개시 태그 변경 콜백. 태그는 사망까지 유지되므로 붙는 경우만 처리함
+void UCBUIComponent::HandleEngagedTagChanged(const FGameplayTag /*Tag*/, int32 NewCount)
+{
+	if (NewCount > 0)
+	{
+		Local_CreateBossBarWidget();
+	}
+}
+
+// [로컬 전용] 보스 바를 생성해 로컬 플레이어 HUD 스택에 올림 (한 번만)
+void UCBUIComponent::Local_CreateBossBarWidget()
+{
+	// 이미 띄웠으면 무시 (교전 개시는 한 번뿐)
+	if (BossBarWidget || !BossBarWidgetClass) return;
+
+	// 보스 바는 보스가 아니라 이 화면의 주인(로컬 플레이어) 기준으로 생성·삽입함.
+	// 리슨 서버 호스트는 호스트 자신, 클라이언트는 자기 컨트롤러
+	APlayerController* LocalPC = GEngine ? GEngine->GetFirstLocalPlayerController(GetWorld()) : nullptr;
+	if (!LocalPC) return;
+
+	BossBarWidget = CreateWidget<UCBBossBarWidget>(LocalPC, BossBarWidgetClass);
+	if (!BossBarWidget) return;
+
+	// 대상 바인딩. 아직 슬레이트가 없으므로 자식 위젯은 캐시만 해 두고 화면에 붙을 때 구독함
+	BossBarWidget->InitializeWithASC(BossBarTriggerASC.Get());
+
+	// 로컬 HUD 스택 삽입. 보스가 파괴될 때 빼기 위해 HUD 를 캐싱
+	CachedBossBarHUD = Local_PushWidgetToStack(LocalPC, BossBarWidget);
 }
 
 void UCBUIComponent::CreateOverheadWidget(UCBAbilitySystemComponent* InASC)
@@ -396,9 +462,19 @@ void UCBUIComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// 월드가 통째로 끝나는 경우(맵 전환·PIE 종료)엔 HUD도 함께 파괴되므로 정리가 무의미함.
 	if (HUDWidget && EndPlayReason == EEndPlayReason::Destroyed)
 	{
-		Local_RemoveHUDWidgetFromStack();
+		Local_RemoveWidgetFromStack(CachedHUD.Get(), HUDWidget);
+		CachedHUD.Reset();
 		HUDWidget = nullptr;
 	}
+
+	// 보스 바 정리. 같은 이유로 보스가 파괴된 경우(사망 후 디스폰·연관성 상실)만 스택에서 뺌
+	UnbindBossBarTrigger();
+	if (BossBarWidget && EndPlayReason == EEndPlayReason::Destroyed)
+	{
+		Local_RemoveWidgetFromStack(CachedBossBarHUD.Get(), BossBarWidget);
+	}
+	CachedBossBarHUD.Reset();
+	BossBarWidget = nullptr;
 
 	// 머리 위 바 표시 제어 정리 (구독·타이머). 위젯 컴포넌트를 없애기 전에 먼저 끊음
 	UnbindOverheadDamageTrigger();

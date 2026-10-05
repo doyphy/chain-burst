@@ -5,11 +5,15 @@
 #include "CBAIAttackAbility.generated.h"
 
 class UCBFragment_WeaponTrace;
+class UCBFragment_AreaAttack;
+class UCBFragment_Projectile;
 
 /**
  * [AI 전용] 공격 어빌리티 베이스.
  * BT 태스크가 어빌리티 태그로 직접 활성화(입력 없음).
- * 무기 검사·트레이스·데미지 GE 는 무기 트레이스 기능(WeaponTrace)을 가져와 씀.
+ * 무기 검사·트레이스·데미지 GE 는 무기 트레이스 기능(WeaponTrace)을, 범위 판정은 영역 공격 기능(AreaAttack)을,
+ * 투사체 발사는 투사체 기능(Projectile)을 가져와 씀.
+ * 세 기능 모두 몽타주 노티파이 이벤트로만 동작하므로, 어떤 공격이 될지는 BP 와 몽타주의 노티파이 배치가 결정.
  *
  * 플레이어 공격(UCBChaserAttackAbility)과 다른 점:
  *  - AI 컨트롤러가 서버 전용이라 NetExecutionPolicy = ServerOnly (몽타주는 GameplayCue 로 전 클라 동기화)
@@ -48,6 +52,18 @@ protected:
 	/** 무기 트레이스 기능 (무기 검사 · 트레이스 · 데미지 GE). 데미지 GE·계수는 BP 에서 지정 */
 	UPROPERTY(EditDefaultsOnly, Instanced, NoClear, Category = "Combat")
 	TObjectPtr<UCBFragment_WeaponTrace> WeaponTrace;
+
+	/** 영역 공격 기능 (범위 판정 · 데미지 GE). 몽타주에 영역 공격 노티파이가 있을 때만 동작. 데미지 GE·범위는 BP 에서 지정 */
+	UPROPERTY(EditDefaultsOnly, Instanced, NoClear, Category = "Combat")
+	TObjectPtr<UCBFragment_AreaAttack> AreaAttack;
+
+	/** 투사체 기능 (발사 수·위치·데미지 GE). 몽타주에 발사 노티파이가 있을 때만 동작. 날아가는 방식은 투사체 BP 에서 지정 */
+	UPROPERTY(EditDefaultsOnly, Instanced, NoClear, Category = "Combat")
+	TObjectPtr<UCBFragment_Projectile> Projectile;
+
+private:
+	/** 블랙보드의 현재 타겟 (모션 워핑·투사체 조준 공용). 없으면 nullptr */
+	AActor* GetBlackboardTarget() const;
 
 #pragma region MotionWarp
 	/** 몽타주 재생 중 타겟 쪽으로 접근·정렬시키는 모션 워핑 설정 */

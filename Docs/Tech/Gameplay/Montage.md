@@ -10,7 +10,7 @@
   - 무기 장착/해제(`Action.Combat.EquipWeapon`/`UnequipWeapon`)는 개이트로 인덱스 분기 — 인덱스 0 = Idle, 1 = Walk, 2 = Run/Sprint 공용 (`UCBAbilitySystemLibrary::GetGaitMontageIndex` 공용 헬퍼 — `Status.Movement.Idle` 파생 상태 태그 + `Gait.*` 태그 순수 조회).
   - 에디터 배열(`MontageEntries`) → 런타임 `TMap`(`MontageMap`) 변환(`UpdateRuntimeMap`).
   - 조회 API: `FindMontage(Tag, Index)`(인덱스 검사 내부 포함), `GetMontageCount(Tag)`.
-- `UCBActionComponent` (컴포넌트): **순수 몽타주 재생·정지기.** `RequestPlayMontage(Tag, Index)`로 받은 몽타주를 애님 인스턴스에 재생하고, `StopMontage(BlendOutTime)`로 정지한다. **재생과 정지 모두 GameplayCue가 호출한다**(아래 "정지도 큐를 경유한다"). **콤보 상태·단계 관리는 하지 않는다**(콤보 소유는 `UCBCombatComponent` — [Combat.md](Combat.md)). 데이터 에셋 접근을 캡슐화(`GetMontageCount`)하므로 외부는 데이터 에셋을 직접 참조하지 않는다. **방금 재생한 몽타주 인스턴스 ID**(`GetLastMontageInstanceID`)를 기록해 두고, 어빌리티는 이 ID로 자기 몽타주의 블렌드 아웃을 기다린다(아래 "어빌리티는 자기 몽타주의 블렌드 아웃 시작에 끝난다"). 이 ID는 각 머신이 재생할 때 직접 기록하는 로컬 값이라 복제하지 않는다.
+- `UCBActionComponent` (컴포넌트): **순수 몽타주 재생·정지기.** `RequestPlayMontage(Tag, Index)`로 받은 몽타주를 애님 인스턴스에 재생하고, `StopMontage(BlendOutTime)`로 정지하며, `JumpToSection(Montage, SectionIndex)`로 섹션을 넘긴다. **재생·정지·섹션 점프 모두 GameplayCue가 호출한다**(아래 "정지도 큐를 경유한다"). **콤보 상태·단계 관리는 하지 않는다**(콤보 소유는 `UCBCombatComponent` — [Combat.md](Combat.md)). 데이터 에셋 접근을 캡슐화(`GetMontageCount`)하므로 외부는 데이터 에셋을 직접 참조하지 않는다. **방금 재생한 몽타주 인스턴스 ID**(`GetLastMontageInstanceID`)를 기록해 두고, 어빌리티는 이 ID로 자기 몽타주의 블렌드 아웃을 기다린다(아래 "어빌리티는 자기 몽타주의 블렌드 아웃 시작에 끝난다"). 이 ID는 각 머신이 재생할 때 직접 기록하는 로컬 값이라 복제하지 않는다.
 
 **재생 흐름 (인덱스 기반):**
 1. 어빌리티(`UCBActionAbility`)가 재생 **인덱스 결정**: 콤보면 `UCBCombatComponent::AdvanceCombo(Tag, MaxCount)`로 다음 인덱스를 받고(MaxCount=`ActionComp->GetMontageCount(Tag)`), 아니면 `SelectActionMontageIndex()` 훅(기본 0 — 자식이 상태 분기로 재정의 가능, 예: 대시의 전투 상태 0/1 분기).
@@ -21,7 +21,7 @@
 
 > **이 선택은 2026-09-02에 `PlayMontageAndWait`와 재비교해 "유지"로 재확정했다.** 원래 동기 중 하나였던 "`PlayMontageAndWait`는 몽타주 위치 동기화 때문에 끊긴다"는 전제는 더 이상 성립하지 않는다. 갱신된 유지 근거와 전환을 재검토할 트리거는 아래 **검증 기록** 절에 있다.
 
-**정지도 같은 경로다.** `GameplayCue.StopAction` → `UCBGCN_StopAction` → `ACBBaseCharacter::RequestStopMontage()` → `UCBActionComponent::StopMontage()`. 이유는 아래.
+**정지도 같은 경로다.** `GameplayCue.StopAction` → `UCBGCN_StopAction` → `ACBBaseCharacter::RequestStopMontage()` → `UCBActionComponent::StopMontage()`. 이유는 아래. **섹션 점프도 같은 경로다** — `GameplayCue.JumpActionSection` → `UCBGCN_JumpActionSection` → `RequestJumpToSection()` → `UCBActionComponent::JumpToSection()` (아래 "섹션 점프").
 
 ## 정지도 큐를 경유한다 — 루트 모션 때문
 
@@ -118,6 +118,32 @@ if (!Owner->HasAuthority())
 
 > **한계 — 늦게 합류한 클라이언트.** 몽타주는 재생 큐를 받은 머신에서만 재생되므로, 죽은 뒤에 관련성을 얻은(멀리서 접근·늦게 접속) 클라이언트는 **서 있는 시체**를 본다. 해결은 `GameplayCue.Death` 노티파이의 `WhileActive`에서 포즈를 잡거나, ABP가 `Status.Dead`를 보고 사망 상태로 전이하는 것이다. 둘 다 미구현.
 
+## 섹션 점프 — 서버가 정하고 큐로 따라간다
+
+재생 중인 액션 몽타주를 다른 섹션으로 넘긴다. 현재 쓰는 곳은 돌진 워프(`Constant Speed Warp`)의 "도착·막힘 시 정지 섹션으로"(`StopSectionName`)다.
+
+```
+[서버] 요청자 (예: Constant Speed Warp 가 멈춘 순간, 다음 틱)
+   ▼ Event.Action.JumpSection   (OptionalObject = 몽타주, EventMagnitude = 섹션 인덱스)
+[서버] UCBActionAbility::OnActionSectionJumpRequested   (PlayActionMontage 가 재생 중 대기 등록)
+   ▼ GameplayCue.JumpActionSection   (SourceObject = 몽타주, RawMagnitude = 섹션 인덱스)
+[전 머신] UCBGCN_JumpActionSection → ACBBaseCharacter::RequestJumpToSection → UCBActionComponent::JumpToSection
+```
+
+- **점프는 모든 머신에서, 요청은 한 머신에서.** 재생·정지와 같은 이유로 점프는 큐로 전 머신이 한다(Simulated Proxy 에는 어빌리티가 없다). 어느 머신이 요청하느냐는 **요청자가 정한다** — 돌진 워프는 도착·막힘 판정이 게임플레이 결과라 **서버 권위**로만 요청하고, 어빌리티는 예측 윈도우를 열지 않는다.
+- **타이밍이 맞는 이유는 정지 큐와 같다.** 재생 큐와 점프 큐가 같은 경로·같은 지연을 겪으므로, Simulated Proxy 는 서버가 점프한 것과 거의 같은 몽타주 위치에서 점프한다.
+- **섹션은 인덱스로 보낸다.** 게임플레이 이벤트·큐 파라미터에 `FName` 필드가 없다. 전 머신이 같은 몽타주 에셋을 재생하므로 인덱스가 같다. 이름 → 인덱스 변환은 요청자가 하고, 못 찾으면 경고 후 요청하지 않는다.
+- **받는 쪽의 무시 조건 두 가지** (`JumpToSection`)
+  - **그 몽타주가 이 머신에서 재생 중이 아니면** — 큐가 오기 전에 피격 등 다른 몽타주로 바뀐 머신에서 엉뚱한 몽타주를 같은 인덱스로 점프시키지 않도록. 그래서 큐가 몽타주를 함께 싣는다(`SourceObject` 는 복제된다).
+  - **이미 그 섹션 시작을 지났으면** — 큐가 늦게 도착하는 사이 구간이 자연히 끝나 넘어간 머신을 되감지 않도록. 섹션 이름 비교가 아니라 **위치 비교**인 이유는, 이미 정지 섹션도 지나 다음 섹션에 있는 머신을 이름 비교로는 거를 수 없기 때문이다. 그래서 **점프 대상 섹션은 항상 요청 시점보다 뒤에 있어야 한다**(앞으로만 점프).
+- **요청은 다음 틱에 보낸다.** 돌진 워프는 CMC 이동 처리 도중(`ProcessRootMotion`)에 멈춤을 감지한다. 그 자리에서 이벤트 → 어빌리티 → 큐 → 점프가 연쇄 실행되면 루트모션 적용 도중에 몽타주 위치가 바뀌므로, 타이머(`SetTimerForNextTick`)로 한 틱 미룬다. 이동은 감지 즉시 멈추므로 늦는 것은 섹션 전환 한 틱뿐이다.
+- **같은 몽타주 인스턴스 안의 이동**이라 블렌드 아웃 대기·종료 노티파이 경로는 그대로다. 정지 섹션이 끝나면 평소처럼 블렌드 아웃되어 어빌리티가 정상 종료된다.
+- **에셋**: 큐는 에셋으로 등록돼야 동작한다 — `Content/ChainBurst/GameplayCues/GCN_JumpActionSection` (부모 `UCBGCN_JumpActionSection`, Gameplay Cue Tag = `GameplayCue.JumpActionSection`). 없으면 에러 없이 점프만 안 된다.
+
+**한계**
+- **플레이어 몽타주에 쓰면 소유 클라가 지연만큼 늦게 점프한다.** 판정이 서버 권위라 소유 클라는 서버 큐를 기다린다. 그동안 돌진 섹션을 더 재생하므로(이동은 자기 모디파이어가 이미 멈춤) 루트모션 트랙 위치가 어긋나 보정이 날 수 있다. 예측 점프는 클라·서버의 막힘 판정이 갈릴 수 있어(상대 플레이어 위치가 지연만큼 다름) 택하지 않았다.
+- 점프 큐도 재생·정지 큐처럼 **unreliable 멀티캐스트**다. 유실되면 그 화면에서만 섹션이 넘어가지 않는다. 위치는 서버 복제로 맞춰지므로 연출상의 문제에 그친다.
+
 ## 어빌리티는 자기 몽타주의 블렌드 아웃 시작에 끝난다
 
 노티파이가 없는 액션, 노티파이가 삼켜진 경우, 다른 몽타주에 끊긴 경우를 모두 **몽타주 인스턴스의 블렌드 아웃 시작**으로 처리한다. 예전에는 몽타주 길이만큼의 `WaitDelay`를 폴백으로 걸었는데, `GetPlayLength()`가 배속(`AttackSpeed`)과 에셋 `RateScale`을 반영하지 않아 **공격속도가 빠를수록 몽타주가 끝난 뒤에도 어빌리티가 남아 다음 행동을 막았다.** 딜레이를 계산하는 대신 실제 재생을 따라가도록 바꿨다.
@@ -149,7 +175,17 @@ if (!Owner->HasAuthority())
 - **자기가 몽타주를 멈추기 전에 대기부터 끊는다.** 애님 업데이트 밖에서 몽타주가 정지되면 블렌드 아웃 이벤트가 큐를 거치지 않고 **즉시(동기) 호출된다**(`UAnimInstance::QueueMontageBlendingOutEvent`). 대기가 살아 있으면 노티파이 종료·캔슬 경로의 자기 정지가 "끊김"으로 되돌아와 정상 종료가 캔슬로 바뀐다. `StopActionMontage()`가 맨 앞에서 `BlendOutTask`를 끝낸다.
 - **끊겼을 때는 정지 큐를 쏘지 않는다.** 끊김 이벤트는 **새 몽타주의 재생 호출 안에서** 들어온다. 이때 캔슬 경로가 정지 큐를 쏘면 `Montage_Stop`이 방금 시작된 새 몽타주를 끈다. 그래서 `bActionMontageStarted`를 먼저 내리고 캔슬로 끝낸다.
 - **루프 섹션 몽타주는 블렌드 아웃이 오지 않는다.** 마지막 섹션에 도달하지 않으므로 어빌리티가 끝나지 않는다. 현재 액션 몽타주에는 루프 섹션이 없다(2026-09-25 에셋 확인). 루프 액션을 만들면 노티파이나 입력으로 끝내야 한다.
-- **서버 애니메이션 틱에 의존한다.** 서버에서 몽타주가 진행돼야 이벤트가 온다. `ACharacter` 메시는 기본 `AlwaysTickPoseAndRefreshBones`이고 모듈러 메시도 리더 메시에 같은 설정을 준다(`UCBModularMeshComponent`). 트레이스·종료 노티파이도 같은 전제라 새 의존은 아니다. 이 설정을 바꾸면 어빌리티가 끝나지 않는다.
+- **서버 애니메이션 틱에 의존한다.** 서버에서 몽타주가 진행돼야 이벤트가 온다. 트레이스·종료 노티파이도 같은 전제라 새 의존은 아니다. 메시의 `VisibilityBasedAnimTickOption` 이 몽타주를 멈추는 값(`OnlyTickPoseWhenRendered`)이면 어빌리티가 끝나지 않는다. 현재 설정은 아래와 같다.
+
+  | 메시 | 설정 | 렌더링 안 될 때 |
+  |---|---|---|
+  | `ACharacter` 기본 (Chaser 본체) | `AlwaysTickPose` (엔진 `Character.cpp`) | 포즈·몽타주는 진행, **본 트랜스폼은 갱신 안 함** |
+  | Chaser 리더 메시를 숨길 때 | `AlwaysTickPoseAndRefreshBones` (`UCBModularMeshComponent`) | 전부 갱신 |
+  | AI (`ACBAICharacter`) | `OnlyTickMontagesAndRefreshBonesWhenPlayingMontages` | 몽타주 중에만 몽타주 진행 + 본 갱신, 그 외엔 애님 그래프 업데이트 생략 |
+
+- **함정 — 노티파이는 오는데 소켓은 멈춰 있다.** 엔진 기본 `AlwaysTickPose` 는 본 트랜스폼을 **렌더링될 때만** 갱신한다(`USkinnedMeshComponent::ShouldUpdateTransform` — `bRecentlyRendered`). 서버가 그 캐릭터를 화면에 그리지 않으면(클라 창에서 테스트, 호스트 카메라가 다른 곳을 봄) 몽타주·노티파이·루트모션(모션 워핑 회전 포함)은 정상인데 **`GetSocketLocation` 은 마지막으로 그린 포즈를 돌려준다.** 몸이 도는 만큼은 따라가지만 몸 기준 위치는 고정이라, 투사체가 늘 첫 발 자리에서 나가고 근접 트레이스가 멈춘 팔로 훑는다.
+  - AI 는 공격 판정(무기 트레이스·영역·투사체 발사)을 **서버에서** 하므로 `ACBAICharacter` 생성자에서 위 설정으로 바꿨다. 공격은 전부 몽타주라 몽타주 중 갱신이면 충분하고, `AlwaysTickPoseAndRefreshBones` 와 달리 대기·이동 중인 보이지 않는 잡몹에게는 비용을 쓰지 않는다.
+  - Chaser 는 무기 트레이스를 **소유 클라**(자기 캐릭터가 렌더링됨)에서 하므로 해당 없다. 서버가 Chaser 소켓을 읽는 판정을 새로 만들면 같은 문제를 다시 볼 것.
 
 > **Simulated Proxy에는 어빌리티가 없다** — 정지 큐가 유실되면(`ExecuteGameplayCue` 멀티캐스트는 unreliable) 그 화면에서만 몽타주가 끝까지 재생된다. 위치는 복제로 오므로 시각적 문제에 그친다.
 
@@ -281,6 +317,94 @@ UCBGCN_PlayAction: Location 이 0 이 아니면
 **대안이었던 방식**: 클립에 전진 루트모션을 조금 베이크하면 warp 경로로 전환돼 엔진의 `MaxSpeedClampRatio` 가 살아난다(코드 0). 다만 상한이 "원본 애님 속도의 배수"라 간접적이고 클립마다 작업이 필요해, cm 로 직접 제한하는 쪽을 택했다.
 - 큐 경로라 서버·소유 클라·Simulated Proxy 가 **동일한 워프 타겟**을 받는다. 각자 계산하지 않는다.
 - `Location` 을 안 채우는 액션은 그냥 건너뛴다(무해). 새 액션에 워프를 붙이려면 그 어빌리티가 `BuildActionCueParameters()` 만 채우면 되고 큐는 손댈 필요 없다.
+
+### 일정 속도 돌진 — `UCBRootMotionModifier_ConstantSpeedWarp`
+
+Skew Warp 는 **"구간이 끝날 때 타겟에 도착"**하도록 매 프레임 속도를 정한다(남은 거리 ÷ 남은 시간). 시간이 고정이고 속도가 결과라 **타겟이 멀수록 빨라진다.** 거리 상한(`ClampedSkewWarp`)·속도 배수 상한(`MaxSpeedClampRatio`)을 걸어도 가까운 타겟엔 구간 끝에 맞춰 **느리게 기어가고**, 도착·충돌로 일찍 멈출 수도 없다. 돌진·전진 공격은 반대로 **속도가 고정이고 거리가 결과**여야 하므로 모디파이어를 따로 뒀다.
+
+| | 동작 |
+|---|---|
+| 방향 | 구간이 활성화된 뒤 첫 프레임에 **워프 타겟 위치를 향해 고정** (A안). 이후 타겟이 움직여도 직진 — 옆으로 피할 수 있다 |
+| 이동 | 매 프레임 `Speed`(cm/s) × 시간만큼 수평 이동. 애니메이션 자체 이동은 쓰지 않는다(제자리 클립 전제) |
+| 정지 | ① 고정한 도착 지점 도달 ② **막힘** — 지난 프레임 요청 이동량 대비 실제 이동이 30% 미만이면(정면 충돌) 구간이 남아도 멈춘다. 비스듬히 스치는 벽·경사로는 그 이상 움직이므로 계속 간다 |
+| 회전 | 고정한 방향을 바라본다. 엔진 `WarpMaxRotationRate`(도/초) > 0 이면 그 속도로, 0 이면 즉시 |
+| 정지 거리 | 새 값 없음 — 도착 지점이 워프 타겟 위치 그대로라, AI 공격의 `WarpStopDistance`(큐의 `VectorFromTargetToOwner` 오프셋)가 이미 타겟 앞 정지 거리다 |
+| 정지 섹션 | `StopSectionName` 이 있으면 멈춘 순간(구간당 1회) **서버에서** 그 섹션으로 점프 요청 → 위 "섹션 점프". None 이면 이동만 멈추고 몽타주는 그대로 진행 |
+
+- **이동 파라미터는 `Speed` 하나**(+ 연출용 `StopSectionName`). 도착 거리는 워프 타겟이, 최대 거리는 "속도 × 구간 길이"가 정한다. 막힘 비율(0.3)은 튜닝 대상이 아니라 판정 기준이라 상수로 뒀다.
+- **속도는 재생 속도(`PlayRate`)와 무관한 실제 시간 기준이다.** `ProcessRootMotion` 의 `DeltaSeconds` 는 CMC 이동 틱의 실제 시간이고(`ConvertLocalRootMotionToWorld` 가 그대로 넘김), 모디파이어는 `PlayRate` 를 곱하지 않는다. 회전 제한도 같다(엔진 워프 회전은 `DeltaSeconds * PlayRate` 라 여기만 다르다).
+  - ⚠️ **공격 속도 적용 액션에는 쓰지 않는다.** 몽타주 데이터 항목의 `bAffectedByAttackSpeed` 가 켜져 있으면 `UCBActionComponent` 가 `PlayRate = AttackSpeed` 를 준다. 속도는 그대로인데 구간만 실제 시간으로 짧아져(1.5 배속이면 2/3) **버프를 받을 때만 돌진 거리가 조용히 줄어든다.** 돌진·전진 워프를 넣은 액션은 이 값을 끈 채로 둔다.
+  - 몽타주 에셋의 `Rate Scale` 도 같은 원리로 구간을 줄이지만 저작 시점에 고정되는 값이라, 그 배속을 감안해 `Speed`·구간 길이를 맞추면 된다.
+  - **`PlayRate` 를 곱하지 않은 이유**: 곱하면 배속과 무관하게 도달 거리가 유지되지만(루트모션을 구운 클립과 같은 동작), **돌진이 공격 속도로 빨라진다.** 돌진 속도는 회피 가능성을 정하는 값이라 공격 속도 버프에 끌려가면 안 된다는 설계 판단으로 택하지 않았다.
+  - 런타임 경고(재생 속도 ≠ 1 이면 로그)도 검토했으나, `Rate Scale` 을 의도적으로 조정한 몽타주에서도 울려 넣지 않았다.
+- **방향은 첫 `ProcessRootMotion` 에서 고정한다.** 활성화 콜백(`OnStateChanged`)은 베이스 `Update` 가 타겟 위치를 캐시하기 **전에** 불려 `CachedTargetTransform` 이 비어 있다. 그래서 활성화 시에는 플래그만 리셋한다.
+- **막힘 판정은 각 머신이 따로 한다.** Simulated Proxy 는 복제 보정으로 위치가 튈 때 오판할 수 있지만, 이동의 권위는 서버(AI)라 다음 보정에서 맞춰진다 — 연출상 순간적인 차이뿐이다.
+- 워프 타겟 배선은 기존 AI 공격과 같다(`bWarpToTarget` → 추종 타겟 등록). 몽타주 노티파이의 Root Motion Modifier 만 이 클래스로 고르고 `Warp Target Name` 을 액션 태그로 맞춘다.
+
+**몽타주 구성 예 (돌진)**
+
+```
+[예비동작]  Clamped Skew Warp — Warp Translation 끔, 회전만 → 타겟을 향해 돈다
+[돌진 구간] Constant Speed Warp — Speed, StopSectionName 지정 → 고정 방향 직진, 도착·막힘 시 정지 + 정지 섹션으로 점프
+[정지 섹션] 워프 없음 (부딪히는 순간 피해는 영역 공격 노티파이 등)
+```
+
+이동 공격(한 걸음 베기)은 같은 모디파이어를 짧은 구간에 둔다.
+
+**루트모션 소스(GAS)가 아니라 워프 모디파이어인 이유** — 엔진 CMC 는 **애님 루트모션이 있으면 루트모션 소스를 적용하지 않는다**(`UCharacterMovementComponent::ApplyRootMotionToVelocity` — "Animation root motion ... takes precedence"). 제자리 클립이라도 `Enable Root Motion` 이 켜져 있으면 루트모션이 "있는" 것으로 판정된다(이동량 0 이어도 `FRootMotionMovementParams::Set` 이 `bHasRootMotion = true`). 그런데 예비동작의 회전 워프는 루트모션이 켜져 있어야 동작하므로, 같은 몽타주에서 루트모션 소스 돌진은 **통째로 무시된다.** 루트모션을 끄면 회전 워프를 잃고 회전을 따로 만들어야 한다 — 그래서 이동까지 워프 파이프라인 안에서 처리했다. (피격 넉백이 반대로 루트모션 소스를 택하고 피격 몽타주의 루트모션을 끄게 한 것도 같은 우선순위 때문이다 → [Abilities.md](Abilities.md) "피격 넉백")
+
+- **멈춘 뒤의 모션은 `StopSectionName` 이 정한다.** 비워 두면 모션은 구간 끝까지 계속되어, 달리는 루프 클립이면 제자리 뛰기가 남는다. 정지 섹션을 지정하면 멈추는 순간 그 섹션으로 넘어간다(위 "섹션 점프" — 서버 판정, 큐로 전 머신). 정지 섹션은 돌진 구간보다 **뒤에** 둔다.
+- 아래 "같은 몽타주를 다시 재생하면 워프가 죽는다" 함정이 그대로 적용된다(고정 방향·정지 플래그가 첫 재생 값으로 남음). AI 공격은 몽타주가 끝난 뒤 다음 공격이 시작되므로 현재는 해당 없다.
+
+### 고정 각도 회전 — `UCBRootMotionModifier_RotateBy`
+
+구간 동안 **정해진 각도만큼 몸을 돌린다.** 전방 휩쓸기 몽타주에 회전을 얹어 등 뒤까지 덮는 회전 베기로 만드는 용도다(회전 공격 모션이 따로 없는 보스의 등 뒤 대응 → [AI.md](AI.md) "등 뒤 판정").
+
+| | 동작 |
+|---|---|
+| 베이스 | `URootMotionModifier` — 워프 타겟이 필요 없어 `_Warp` 를 상속하지 않는다. `_Warp` 파생이면 노티파이가 "Warp Target Name 없음" 경고를 띄운다(`AnimNotifyState_MotionWarping.cpp`) |
+| 파라미터 | `YawAngle`(도) 하나. + = 위에서 볼 때 시계 방향(오른쪽). 180° 이상·한 바퀴 이상도 된다 |
+| 회전 | 구간 진행도(몽타주 위치)에 비례해 선형으로 돈다. 끝나는 방향 = 시작 방향 + `YawAngle` |
+| 이동 | 애니메이션 원래 이동을 그대로 둔다 — 회전만 교체 |
+
+**매 프레임 각도를 더하지 않고 목표 각을 계산한다.** `목표 = 활성화 시점 방향 + YawAngle × 진행도` 로 두고, 현재 방향과의 차이만큼만 돌린다.
+
+- **구간 진입 첫 프레임이 처리되지 않는다.** 엔진은 이전 프레임 위치가 구간 안에 들어온 뒤에야 모디파이어를 활성화한다(`URootMotionModifier::Update` — `PreviousPosition >= StartTime`). 더하는 방식이면 그 프레임만큼(짧은 구간·낮은 프레임에선 수십 도) 모자라고 머신마다 모자란 양이 다르다. 목표 방식은 다음 프레임에 따라잡아 항상 정확한 각도에서 끝난다.
+- **보정을 받아도 같은 목표로 수렴한다.** Simulated Proxy 가 서버 보정으로 방향이 튀거나, 플레이어에게 쓸 때 예측 이동이 재생(saved move replay)돼도 다음 프레임에 같은 목표를 다시 향한다. 더하는 방식은 재생 때 지난 진행분을 되돌리거나 빠뜨린다.
+- **상태 변수가 없다.** 시작 방향은 엔진이 활성화 시점에 채우는 `StartTransform` 을 그대로 쓴다 — `OnStateChanged` 오버라이드가 필요 없다.
+
+**네트워크**: 서버 전용이 아니다. 몽타주가 큐로 전 머신에서 재생되고 모디파이어는 CMC 루트모션 처리 안에서 돌므로(Simulated Proxy 는 `SimulatedTick` → `SimulateRootMotion` → `ConvertLocalRootMotionToWorld` 의 워핑 훅) **각 머신이 몽타주 위치만 보고 같은 회전을 계산**한다. 권위는 서버(AI)이고 어긋남은 `RepRootMotion` 보정이 맞춘다. 노티파이 스테이트로 액터 회전을 직접 덮어쓰지 않는 이유가 이것이다 — 이동 파이프라인 밖의 회전은 복제·보정이 모르는 값이라 서로 덮어쓴다.
+
+- **배속과 무관하게 총 각도가 같다.** 몽타주 위치 기준이라 `PlayRate` 가 바뀌면 도는 속도만 바뀐다. `ConstantSpeedWarp` 의 "공격 속도 적용 액션에 쓰지 말 것" 제약이 없다.
+- **구간 안에서는 애니메이션 자체의 회전을 덮어쓴다.** 다른 워프와 같은 제자리 클립 전제다.
+- **같은 몽타주의 다른 회전 워프와 구간을 겹치지 말 것.** 둘 다 회전을 교체하므로 뒤에 처리된 쪽만 남는다. 조준 워프 → 회전 구간 순서로 둔다.
+- 공격이 끊기면(블렌드 아웃) 루트모션이 0 이 되어(위 "정지하는 순간 그 인스턴스는 루트 모션 몽타주에서 빠진다") 회전도 그 자리에서 멈춘다.
+- 한계: 회전량은 최단 각(`FindDeltaAngleDegrees`)으로 구하므로 **한 프레임에 180° 넘게 돌 만큼 짧은 구간**이면 반대로 돈다. 현실적인 값(0.3 초에 360° = 30fps 에서 프레임당 40°)에서는 해당 없다.
+- 아래 "같은 몽타주를 다시 재생하면 워프가 죽는다" 함정도 적용된다(`StartTransform` 이 첫 재생 값으로 남아 그 방향 기준으로 돈다). AI 공격은 현재 해당 없다.
+
+**몽타주 구성 예 (휩쓸기 → 회전 베기)**
+
+```
+[선딜]    Clamped Skew Warp — Warp Translation 끔, 회전만 → 타겟 조준
+[꼬기]    Rotate By −30    (선택: 반대로 살짝 꼬는 예고)
+[휘두름]  Rotate By +210   ← 무기 트레이스 구간과 겹치게
+[후딜]    워프 없음
+```
+
+- **회전 방향은 스윙 방향과 같게** 둔다. 덮는 범위 ≈ 애니메이션이 휩쓰는 각 + `YawAngle`. 반대로 돌면 오히려 줄어든다.
+- **회전 구간은 판정 구간과 겹치게** 둔다. 선딜·후딜에서 돌리면 판정 없이 돌기만 하고, 느리게 돌수록 발 미끄러짐이 드러난다.
+- 무기 트레이스는 지난 프레임 → 이번 프레임 경로를 스윕하므로 빨리 돌아도 판정이 비지 않는다(→ [Combat.md](Combat.md)).
+
+**채택하지 않은 것**
+
+| 안 | 이유 |
+|---|---|
+| 노티파이 스테이트로 액터 회전 직접 설정 | 이동 파이프라인 밖이라 복제·보정과 충돌 (위 "네트워크") |
+| 엔진 워프 + `AdditionalRotationOffset`(5.8) | 회전이 최단 경로 보간이라 180° 미만으로 제한되고, 기준이 될 워프 타겟이 필요하다 |
+| 이징 커브 | 구간 위치·여러 구간 분할로 속도 변화를 줄 수 있다. 선형이 어색하다는 근거가 생기면 추가 |
+| 최대 회전 속도 제한 | 속도는 각도 ÷ 구간 길이가 정한다. 상한을 걸면 목표 각에 못 미치고 끝난다 |
+| 애니메이션 자체 회전 보존 | 제자리 클립 전제. 회전이 구워진 클립을 쓰게 되면 그때 구간 내 애님 회전을 추출해 더한다 |
+| 뒤에 있는 대상 쪽으로 방향 자동 선택 | 타겟 데이터가 필요해 워프가 된다. 고정 각도로 충분히 덮는다 |
 
 ### ⚠️ `CueParams.Normal` 은 회전 워프로 들어간다
 

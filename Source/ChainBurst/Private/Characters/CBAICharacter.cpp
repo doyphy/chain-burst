@@ -7,6 +7,7 @@
 #include "AssetManager/CBAssetManager.h"
 
 // engine
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "AIController.h"
 #include "BrainComponent.h"
@@ -46,6 +47,10 @@ ACBAICharacter::ACBAICharacter()
 	{
 		NavMovementProps->bUseAccelerationForPaths = true;
 	}
+
+	// 몽타주 재생 중에는 본 트랜스폼을 갱신.
+	// 기본 값은 몽타주 재생 중에 모션워핑으로 액터가 회전해도 뼈와 소켓의 위치는 회전하지 않고 고정됨.
+	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickMontagesAndRefreshBonesWhenPlayingMontages;
 }
 
 // [공용] 게임 시작 시 호출되는 함수.

@@ -21,7 +21,7 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
   - 소켓 타입은 **무기 BP(`ACBBaseWeapon`, 소켓 오버라이드 베이킹용)와 무기 데이터(`UCBWeaponData`, 슬롯 선언용) 두 곳에 존재** — 등록 시 둘이 다르면 경고 로그로 설정 실수를 감지한다(등록은 계속 진행).
   - **외부 조회는 `GetEquippedWeaponInstances()`**(BlueprintPure) — 유효한 무기 액터만 담아 돌려준다. 목록이 복제되므로 서버·클라 어디서나 쓸 수 있고, 클라에서 목록이 무기 액터보다 먼저 도착해 참조가 비어 있는 항목은 거른다. 게임플레이 큐 같은 연출이 캐릭터에서 `Get Component by Class(CBCombatComponent)`로 컴포넌트를 찾아 호출한다(→ [Burst.md](Burst.md) "연출").
 - 무기 트레이스: `StartWeaponTrace()` → `TickWeaponTrace()` → `StopWeaponTrace()`
-  - 트레이스는 애님노티파이 `CBANS_WeaponTraceWindow`가 구간을 제어
+  - 트레이스는 노티파이 스테이트 `CBANS_GameplayEventWindow`(기본 태그 `Event.Combat.TraceStart/End`, 옛 이름 `CBANS_WeaponTraceWindow`)가 구간을 제어
   - **채널은 전용 `Weapon`**(`CBCollisionChannels::Weapon`, 아래 별도 절 참조). 캐릭터는 캡슐=`Ignore` / 메시=`Overlap`이라 판정이 피직스 애셋 실루엣으로 이뤄지고, 일직선의 여러 적을 관통해서 벤다
   - **무기별 root/tip을 순회 트레이스**(쌍수는 양손 블레이드 모두). `AlreadyHitActors`는 무기 간 **공유**하여 한 스윙에 같은 대상이 두 블레이드로 이중 히트되는 것을 방지
   - **판정 형태는 구체가 아니라 세로로 선 캡슐이다** (아래 「세로 판정 밴드」 절 참조)
@@ -31,15 +31,18 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
     - `bIsTracing` 가드를 두는 이유: `EndAbility`의 안전장치 호출 등으로 이미 종료된 뒤 다시 불리면, stale한 `PrevRootLocs`/`PrevTipLocs`로 엉뚱한 구간을 중복 트레이스한다
   - **진영 필터**: 트레이스에 걸린 액터는 적대(`Hostile`)일 때만 배칭 목록에 담긴다(`IsHostileTarget()`). 아군·중립은 히트에서 제외 → 서버 RPC도 나가지 않는다
     - `AlreadyHitActors`에는 **적대 여부와 무관하게** 기록한다. 같은 대상을 트레이스 등분마다 다시 판정하지 않기 위함
+  - **벽 검사**: 걸린 적대 대상은 **공격자 중심 → 대상 중심** 한 줄이 벽에 막혔는지 한 번 더 본다(`UCBAbilitySystemLibrary::IsBlockedByWall()`, 영역 공격과 같은 함수·같은 `Weapon` 채널 기준). 막혔으면 히트에서 뺀다 → 아래 "벽 너머 히트 — 스윕이 놓치는 경우"
 - 히트 배칭: 첫 타는 즉시 전송하고, 뒤따라 걸리는 대상만 `HitBatchInterval`(0.1초) 창으로 묶어 RPC를 줄인다 (아래 별도 절)
 - 히트 검증: 로컬에서 감지 → `Server_NotifyAttackHit()` RPC → 서버에서 **진영 → 거리** 순으로 재검증. 쌍수는 무기 중 **가장 먼 tip 거리**를 허용 거리 기준으로 사용 (`HitValidationTolerance`)
   - **왜 서버가 직접 훑지 않는가(= 왜 로컬 감지인가).** 몽타주 재생 위치는 머신마다 미세하게 어긋난다. 서버가 직접 트레이스하면 **레이턴시만큼 늦은 자세로 판정**해, 때린 쪽 화면에서 분명히 맞은 스윙이 빗나간다. 그래서 보이는 화면(`IsLocallyControlled`, AI는 서버가 곧 로컬)에서 판정하고 서버는 결과만 다시 잰다
   - **클라 필터만으로는 부족하다.** 트레이스는 로컬에서 돌고 결과만 RPC로 올라오므로, 조작된 클라가 아군 타겟을 실어 보낼 수 있다. 서버가 같은 기준으로 한 번 더 판정한다
   - **클라가 보내는 것은 "누구를 맞췄는가"뿐이다.** 데미지 값·계수는 전부 서버가 스펙을 만들어 적용하므로 RPC 페이로드를 조작해도 피해량은 바뀌지 않는다
+  - **벽 검사는 서버 검증에 넣지 않았다.** AI 는 감지 자체가 서버에서 돌아 이미 권위 판정이고, 정직한 플레이어 클라는 벽 너머 히트를 보내지 않는다. 서버가 다시 재면 **지연만큼 다른 위치**로 판정해, 클라 화면에서 열려 있던 사이 AI 가 기둥 뒤로 들어간 경우 "맞았는데 거부"가 난다. 협동(PvE)에서는 이 손해가 부정행위 방지 이득보다 크다 — **조작된 클라는 벽 너머 히트를 보낼 수 있다(수용).** 경쟁 규칙이 되면 거리 검증처럼 허용 오차를 둔 서버 벽 검사를 추가한다
 - **진영 판정 기준은 한 곳**: `FGenericTeamId::GetAttitude(공격자, 대상) == Hostile`. `ACBAIController::IsValidTarget()`·퍼셉션 소속 필터와 같은 전역 attitude solver를 탄다 → [Teams.md](../Foundation/Teams.md)
   - ⚠️ **중립은 때릴 수 없다.** solver는 한쪽이라도 Neutral이면 Neutral을 반환한다. `ACBBaseCharacter`의 팀 기본값이 Neutral이므로, **팀 지정이 빠진 캐릭터는 조용히 무적이 된다**
   - ⚠️ **`IGenericTeamAgentInterface`를 구현하지 않은 액터도 걸러진다**(엔진 구현상 Neutral). 파괴 가능한 오브젝트를 무기로 때리려면 그때 별도 경로가 필요하다 — 오브젝트가 `Weapon` 채널에 응답하게 만드는 것만으로는 진영 필터에서 걸린다
 - **데미지 적용은 히트마다 타겟 하나씩.** 히트가 배칭되어 한 이벤트에 여러 피격자가 실려 오므로(`FGameplayAbilityTargetDataHandle`), 무기 트레이스 기능(`UCBFragment_WeaponTrace::OnAttackHit`)은 타겟을 하나씩 돌며 **그 회차의 HitResult 하나만 담은 타겟 데이터**(`FGameplayAbilityTargetData_SingleTargetHit`)로 적용한다. 공격 어빌리티(`UCBChaserAttackAbility`/`UCBAIAttackAbility`)는 이 기능을 소유해 호출만 한다 → [Abilities.md](Abilities.md) "기능 조각"
+  - 타겟 하나에 대한 적용 코드는 `UCBAbilitySystemLibrary::Auth_ApplyDamageToTarget()`에 있고, 아래 영역 판정과 공유한다. 아래 두 주의 사항도 그 함수 안의 이야기다.
   - ⚠️ **핸들 전체를 넘기면 안 된다.** `ApplyGameplayEffectSpecToTarget`은 넘긴 핸들의 *모든* 타겟에 적용하므로, 타겟 수만큼 도는 루프에서 전체 핸들을 넘기면 N² 번 적용되어 **각자 N 배 데미지**를 받는다(한 명만 때리면 1×1이라 증상이 안 보인다).
   - **타겟은 오직 `TargetData`가 정한다.** 앞의 `CurrentSpecHandle`/`CurrentActorInfo`/`CurrentActivationInfo`는 `HasAuthorityOrPredictionKey()` 게이트(권한·예측키 검사)에만 쓰이며 적용 대상과 무관하다. 실제 대상은 `FGameplayAbilityTargetData_SingleTargetHit::GetActors()` = HitResult의 액터이고, 소스는 스펙 컨텍스트의 시전자 ASC다.
   - **HitResult는 스펙을 만든 뒤 컨텍스트에 붙인다** (`SpecHandle.Data->GetContext().AddHitResult()`). `MakeOutgoingGameplayEffectSpec()`이 컨텍스트를 자체 생성하므로, 미리 만든 `FGameplayEffectContextHandle`을 넘길 자리가 없다 — 따로 만들어두면 조용히 버려진다.
@@ -101,7 +104,25 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
 
 - **캡슐을 판정에서 뺀 이유**: 캡슐 반지름이 실루엣보다 뚱뚱해 **눈에 띄게 빗나간 공격이 맞는다.** 메시는 피직스 애셋 바디로 판정되므로 실루엣에 가깝고, `FHitResult::BoneName`이 들어와 부위별 처리도 열린다.
   - 참고로 엔진 기본 `CharacterMesh` 프리셋은 `Pawn: Ignore`라, 전환 전에는 판정이 **전부 캡슐**에서 이뤄지고 있었다.
-- **메시가 `Block`이 아니라 `Overlap`인 이유**: 블로킹 히트는 트레이스를 거기서 끊는다. `Overlap`이어야 일직선으로 선 여러 적을 관통해서 벨 수 있다. 채널 기본 응답이 `Block`이라 **벽·지형은 여전히 트레이스를 끊으므로** 벽 너머 히트는 생기지 않는다.
+- **메시가 `Block`이 아니라 `Overlap`인 이유**: 블로킹 히트는 트레이스를 거기서 끊는다. `Overlap`이어야 일직선으로 선 여러 적을 관통해서 벨 수 있다. 채널 기본 응답이 `Block`이라 **벽·지형은 여전히 트레이스를 끊는다** — 다만 스윕이 벽을 **지날 때만**이다(아래 절).
+
+### 벽 너머 히트 — 스윕이 놓치는 경우
+
+트레이스는 칼날 위 샘플 지점이 **지난 프레임 → 이번 프레임**으로 움직인 경로를 스윕한다. 그래서 벽이 막는 것은 "칼날이 휘두르는 도중 벽을 가로지르는" 경우뿐이다.
+
+| 상황 | 스윕만으로 |
+|---|---|
+| 휘두르는 칼날이 벽을 가로질러 들어감 | ✅ 스윕이 벽에서 끊김 |
+| 칼날 일부가 **처음부터 벽 너머에 있는 채로** 휘둘러짐 (벽에 붙어 휘두름·얇은 벽·문·긴 무기) | ❌ 벽 너머 샘플은 벽 너머 공간 안에서만 움직여 스윕이 벽을 지나지 않음 → 뒤의 적이 맞음 |
+
+그래서 `TickWeaponTrace()` 가 걸린 적대 대상마다 **공격자 중심 → 대상 중심** 한 줄을 추가로 긋는다(`IsBlockedByWall()`).
+
+- **기준점이 손·칼날이 아니라 공격자 중심인 이유**: 손 기준이면 공격자의 팔이 벽을 뚫은 경우를 놓친다. 중심 기준은 몸 → 팔 → 칼날을 대략 한 번에 본다.
+- **새 오판정이 생기지 않는다.** 판정 밴드가 이미 오너 캡슐 바닥~머리끝으로 서 있어, 공격자와 대상 사이의 낮은 턱·난간은 지금도 스윕을 끊는다. 중심선이 추가로 막는 것은 사실상 "칼날이 벽을 뚫은" 경우뿐이다.
+- **막힌 대상은 `AlreadyHitActors` 에 기록하지 않는다.** 기록하면 같은 스윙 안에서 대상이 벽 밖으로 나와도 다시 맞을 수 없다. 대신 같은 틱 안에서는 위치가 같으므로 틱 단위 집합(`WallBlockedActors`)으로 바디·샘플마다 다시 긋지 않는다. 비용은 "벽 너머에 걸린 적대 대상 수 × 틱"이다.
+- **영역 공격과 같은 한계** — 대상 중심 한 줄만 보므로 몸 일부가 벽 밖으로 나와 있어도 중심이 벽 뒤면 맞지 않는다.
+- 디버그는 `bShowDebugTrace` 를 따른다 — 막힌 대상에게 공격자 중심에서 빨간 선을 그린다.
+- 서버 검증에는 넣지 않았다 → 위 "히트 검증".
 - ⚠️ **`CapsuleTraceMulti`의 반환값을 쓰면 안 된다.** 이 함수는 **블로킹 히트가 있을 때만** `true`를 돌려준다(`SweepMultiByChannel`). 대상이 `Overlap`이면 적을 맞혀도 `false`가 나오고, 오버랩 결과는 `bHit`와 무관하게 `HitResults`에만 담긴다. 그래서 `TickWeaponTrace()`는 반환값을 무시하고 배열을 그대로 순회한다. (`SphereTraceMulti`에서 바꿔 왔지만 주의 내용은 그대로 유효하다 — 스윕 계열 전부가 같다)
 - ⚠️ **채널은 이름이 아니라 인덱스(`ECC_GameTraceChannelN`)로 에셋에 저장된다.** ini에서 순서를 바꾸거나 지우면 저장된 콜리전 설정이 다른 채널로 밀린다. 추가만 하고 제거·재배치는 하지 말 것.
 
@@ -142,6 +163,66 @@ UCBCombatComponent (Abstract, UCBExtensionComponent 상속)
 - **협동(PvE)이라면 공정성 문제가 성립하지 않는다.** 맞는 쪽이 AI고 반응도 서버가 만든다. 0.1초는 몬스터의 피격 반응이 조금 늦게 시작되는 것으로 끝나며, 누구도 손해를 보지 않는다. ChainBurst는 여기에 해당하므로 **넣는다.**
 
 경쟁 규칙으로 방향이 바뀌면 `HitBatchInterval`을 **0으로** 두면 된다. 창이 매 틱 차면서 프레임 단위 전송이 되어 배칭이 사실상 꺼지고, 나머지 코드는 손댈 것이 없다.
+
+## 영역 판정 — 오버랩 쿼리
+
+무기가 닿은 대상이 아니라 **범위 안의 대상**을 때리는 공격(내려찍기·충격파)은 무기 트레이스 대신 **판정 순간에 오버랩 쿼리를 한 번** 던진다. 구현은 기능 조각 `UCBFragment_AreaAttack` → [Abilities.md](Abilities.md) "기능 조각 — 영역 공격".
+
+| | 무기 트레이스 | 영역 판정 |
+|---|---|---|
+| 쿼리 | 스윕 (칼날 구간이 프레임 사이에 쓸고 간 면) | 오버랩 (한 자리에 놓은 박스, 시전자 방향으로 회전) |
+| 시점 | 구간 (`CBANS_GameplayEventWindow`) | 순간 (`CBAN_SendGameplayEventToOwner`, `Event.Combat.AreaAttack`) |
+| 감지 머신 | 로컬 → 서버 검증 | 서버 (현재 AI 전용) |
+| 결과 | `FHitResult` | `FOverlapResult` → `FHitResult`를 직접 구성 |
+| 벽 | 채널이 Block 이라 스윕이 끊김 | 끊길 경로가 없어 **라인 트레이스로 따로 검사** |
+| 적용 | `Auth_ApplyDamageToTarget()` 공유 | 〃 |
+
+- **콜리전 컴포넌트를 스폰해 `BeginOverlap`을 받는 방식은 쓰지 않는다.** 결과가 다음 물리 갱신 이후에 오고, 생성 시점에 이미 겹쳐 있던 대상은 이벤트가 오지 않을 수 있어 따로 처리해야 한다. 한 순간 터지는 공격에는 호출 즉시 결과가 나오는 쿼리가 맞다. 일정 시간 남는 장판이 생겨도 타이머로 주기마다 쿼리하는 쪽을 먼저 검토한다.
+- **채널은 무기 트레이스와 같은 `Weapon`이다.** 캐릭터 메시가 이 채널에 `Overlap`이라 같은 기준(피직스 애셋 바디)으로 걸리고, 회피 무적 등으로 판정 응답을 끄면 두 판정에 함께 적용된다(위 "히트 판정 채널").
+- **진영 필터도 같다** — `FGenericTeamId::GetAttitude(시전자, 대상) == Hostile`. 컴뱃 컴포넌트의 `IsHostileTarget()`과 같은 한 줄을 조각이 직접 부른다(컴포넌트에 의존하지 않기 위해).
+- **벽 차단 트레이스도 `Weapon` 채널이다.** 캐릭터가 이 채널을 막지 않으므로 대상 자신이나 사이에 선 다른 적은 트레이스를 끊지 않고, 벽·지형(채널 기본 Block)만 끊는다. 무기 메시는 콜리전이 꺼져 있다(`ACBBaseWeapon`). 무기 트레이스의 벽 검사와 같은 함수(`UCBAbilitySystemLibrary::IsBlockedByWall()`)를 쓴다.
+  - **시작점은 공격마다 고른다** — 판정 중심(기본, 터진 자리에서 퍼지는 공격) 또는 시전자 소켓(`WallCheckSocketName`, 입·손에서 전방으로 뿜는 공격). 전방으로 길게 뻗은 박스는 중심이 벽 너머에 있을 수 있어, 중심에서 그으면 시전자와 대상 사이의 벽을 못 본다 → [Abilities.md](Abilities.md) "벽 검사 시작점".
+  - 대가: 시작점→대상 **한 줄**만 보므로, 대상 몸의 일부가 벽 밖으로 나와 있어도 캡슐 중심이 벽 뒤면 맞지 않는다. 무기 트레이스와 달리 벽 모서리에서 관대하지 않다.
+
+## 투사체 판정 — `ACBProjectile`
+
+날아가는 물체가 맞히는 공격. 발사(몇 발·어디서·데미지)는 기능 조각 `UCBFragment_Projectile` → [Abilities.md](Abilities.md) "기능 조각 — 투사체", **비행과 명중은 투사체 액터**가 맡는다.
+
+```
+[서버] 조각이 스폰 → Auth_Launch(조준점, 유도 대상, 데미지 스펙, 피격 큐)
+         │ 발사 속도·유도 대상만 최초 1회 복제 (COND_InitialOnly)
+         ▼
+[전 머신] ProjectileMovement 가 각자 시뮬레이션 ─ 서버 이동 복제로 보정 (PostNetReceiveVelocity)
+[서버]   매 틱: 지난 위치 → 현재 위치를 Weapon 채널로 스윕
+           ├ 적대 + ASC → 데미지 스펙 적용 + 피격 큐 → 소멸   (단일 명중)
+           ├ 아군·중립   → 통과
+           └ 벽·지면(Block) → 소멸
+```
+
+| | 무기 트레이스 | 영역 판정 | 투사체 |
+|---|---|---|---|
+| 쿼리 | 스윕 (칼날 구간) | 오버랩 (박스) | **스윕 (루트 모양, 지난 위치 → 현재 위치)** |
+| 시점 | 구간 노티파이 | 순간 노티파이 | 발사 노티파이 이후 매 틱 |
+| 감지 머신 | 로컬 → 서버 검증 | 서버 | 서버 |
+| 벽 | 스윕이 끊김 | 라인 트레이스로 따로 | 스윕이 끊김 → 소멸 |
+| 적용 | `Auth_ApplyDamageToTarget()` | 〃 | **발사 때 만든 스펙을 `Auth_ApplyDamageSpecToTarget()`** |
+
+- **채널·진영 필터는 다른 판정과 같다** — `Weapon` 채널(캐릭터는 메시 실루엣으로 Overlap, 벽·지형 Block), `GetAttitude(시전자, 대상) == Hostile`. 회피 무적처럼 판정 응답을 끄는 처리가 생기면 투사체에도 함께 적용된다.
+- **판정 모양 = 루트 컴포넌트의 모양.** BP 에서 루트를 Sphere/Box/Capsule 로 교체하면 `GetCollisionShape()` 로 모양·크기·스케일을 그대로 읽어 스윕한다. 회전은 액터 회전을 쓰므로 박스처럼 방향이 있는 모양은 `bRotationFollowsVelocity`(기본 켜짐)로 진행 방향을 향하게 한다. 캡슐은 루트 기준 세로축이라 **진행 방향으로 긴 판정은 박스로** 만든다. 루트가 모양 컴포넌트가 아니면 경고 후 굵기 없는 선으로 판정한다.
+- **투사체의 모든 콜리전은 런타임에 끈다**(`PostInitializeComponents`). 판정은 위 스윕 하나뿐이다.
+  - 루트 콜리전이 켜져 있으면 ProjectileMovement 가 그것으로 따로 부딪혀 멈추거나 튕긴다(엔진 이동 컴포넌트는 루트를 스윕 이동시킨다).
+  - 연출 메시의 기본 프리셋 `BlockAllDynamic` 은 `Weapon` 채널도 막는다 — 날아가는 투사체가 **플레이어의 무기 트레이스·스프링암 카메라·영역 공격 벽 검사를 가로막는다.** BP 마다 NoCollision 으로 바꾸는 것을 잊기 쉬워 코드가 일괄로 끈다.
+- **명중 판정은 이동이 끝난 뒤에 돈다.** 액터 틱을 ProjectileMovement 틱의 후행으로 걸어(`AddTickPrerequisiteComponent`), 이번 틱에 실제로 지나간 구간을 스윕한다. 빠른 투사체가 얇은 대상을 건너뛰지 않는다.
+- **시전자가 먼저 파괴되면**: 진영 판정이 중립(시전자 null)이 되고 스펙의 시전자 ASC 도 사라지므로 아무도 맞지 않는다. 시전자가 죽었지만 시체가 남아 있으면 그대로 맞는다.
+- **복제**: 서버가 스폰하는 복제 액터. 클라에는 **발사 조건(속도·유도 대상)만 최초 1회** 보내고 각자 시뮬레이션한다 — 직선·포물선은 결정적이라 서버와 같은 궤적이 나온다. 유도는 타겟의 복제 위치 차이로 갈라질 수 있어 이동 복제(`SetReplicatingMovement`)로 보정한다. 엔진 `AActor::PostNetReceiveVelocity` 는 비어 있어, 받은 속도를 이동 컴포넌트에 넣도록 오버라이드했다. 소멸은 액터 파괴 복제로 전 클라에 반영된다.
+- **발사 방식**(`LaunchMode`, 투사체 BP)
+  - `Direct` — 조준점을 향해 `InitialSpeed`(기본 1500) 로. 중력 기본 0.
+  - `Arc` — 엔진 `SuggestProjectileVelocity_CustomArc` 로 조준점에 떨어지는 속도를 푼다. `ArcParam`(0.1 높게 ~ 0.9 낮게). **이 투사체에 걸리는 실제 중력**(`ProjectileMovement->GetGravityZ()`)으로 풀어야 조준점에 떨어진다.
+    - ⚠️ 엔진 함수는 중력 0 을 "월드 중력 사용"으로 해석한다. 중력 스케일 0 인 투사체를 그대로 넘기면 월드 중력 기준 속도로 쏜 뒤 중력 없이 날아가 **하늘로 사라진다.** 그래서 중력이 없거나 해가 없으면(조준점이 너무 높음) 경고 후 직선으로 쏜다.
+    - `MaxSpeed` 를 걸면 계산된 속도가 잘려 짧게 떨어진다 — Arc 는 0 권장.
+  - **유도** — 엔진 `bIsHomingProjectile`·`HomingAccelerationMagnitude` 를 BP 에서 켠다. 유도 대상은 발사 때 받은 타겟. 유도 가속은 속도를 계속 키우므로 `MaxSpeed` 로 상한을 거는 편이 좋다.
+- **수명** `InitialLifeSpan` 기본 5초 — 빗나간 직선 투사체가 끝없이 날아가지 않게. BP 에서 조정한다.
+- **미구현**: 착탄(벽·지면) 이펙트, 소멸 시 트레일이 끊기지 않게 떼어내는 처리, 관통·폭발(범위 피해). 지금은 소멸과 함께 붙은 Niagara 도 즉시 사라진다.
 
 ## 본체 무기 (맨손 몬스터) — `ACBBodyWeapon`
 

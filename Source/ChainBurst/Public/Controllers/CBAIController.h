@@ -12,14 +12,16 @@ class UAbilitySystemComponent;
 class UAIPerceptionComponent;
 class UAISenseConfig_Sight;
 class UAISenseConfig_Hearing;
+class UAISenseConfig_Damage;
 struct FGameplayEventData;
 
 /**
  * AI 컨트롤러 공통 베이스 (Outlaw·Rogue 등).
- * AI 두뇌(BT/StateTree 등)의 시작 타이밍을 캐릭터의 준비 완료(SystemReady) 신호에 맞춰 게이트.
- * 시야·청각 퍼셉션으로 적(진영이 다른 대상)을 감지하고, 후보들을 점수화해 블랙보드 타겟을 선정·갱신.
+ * 로드아웃이 주입한 비헤이비어 트리를 캐릭터의 준비 완료(SystemReady) 신호 이후에 구동.
+ * 시야·청각·피해 퍼셉션으로 적(진영이 다른 대상)을 감지하고, 후보들을 점수화해 블랙보드 타겟을 선정·갱신.
+ * 현재 타겟을 들고 있을 때 교체할지는 ReevaluateTarget()이 정함 (베이스 = 점수 배수 비교, 등급별 오버라이드).
  * 경로 추종은 군중 회피(Detour Crowd)를 사용해 여러 AI 가 서로 겹치지 않게 이동.
- * 실제 실행할 두뇌는 자식이 StartAILogic()을 오버라이드해 지정. 직접 스폰하지 않는 추상 클래스.
+ * BT가 아닌 다른 두뇌가 필요한 자식은 StartAILogic()을 오버라이드. 직접 스폰하지 않는 추상 클래스.
  */
 UCLASS(Abstract)
 class CHAINBURST_API ACBAIController : public AAIController
@@ -45,7 +47,8 @@ protected:
 
 	/**
 	 * AI 두뇌 시작 진입점. 캐릭터가 준비 완료(SystemReady)된 뒤 1회 호출.
-	 * 베이스는 위협 판정용 피격 이벤트 구독만 수행하므로, 자식은 반드시 Super를 호출한 뒤 자기 두뇌(BT/StateTree 등)를 구동할 것.
+	 * 베이스는 폰 ASC 구독(위협 판정·경직) 후 주입된 BT를 구동함 (BT가 없으면 두뇌 없이 대기).
+	 * 다른 두뇌로 오버라이드할 때도 ASC 구독을 위해 반드시 Super를 호출할 것 (로드아웃 BT를 비우면 BT 구동은 건너뜀).
 	 */
 	virtual void StartAILogic();
 
@@ -55,7 +58,7 @@ protected:
 
 	FORCEINLINE ACBAICharacter* GetCachedAICharacter() const { return CachedAICharacter.Get(); }
 
-	/** [서버] 로드아웃에서 주입된 비헤이비어 트리 (하드 참조로 생존 보장). 자식이 StartAILogic에서 구동. */
+	/** [서버] 로드아웃에서 주입된 비헤이비어 트리 (하드 참조로 생존 보장). StartAILogic에서 구동. */
 	UPROPERTY(Transient)
 	TObjectPtr<UBehaviorTree> BehaviorTree = nullptr;
 
@@ -69,7 +72,7 @@ private:
 	TWeakObjectPtr<UAbilitySystemComponent> CachedPawnASC;
 
 #pragma region Perception
-	/** 시야·청각 퍼셉션으로 적을 감지 → 타겟 재선정 요청. */
+	/** 시야·청각·피해 퍼셉션으로 적을 감지 → 타겟 재선정 요청. */
 protected:
 	/** 감지 결과가 갱신될 때 호출 (감지/상실 상태 변화 시). */
 	UFUNCTION()
@@ -78,7 +81,11 @@ protected:
 	/** 이 액터를 타겟으로 삼을지 판정. (적 판정) */
 	virtual bool IsValidTarget(AActor* InActor) const;
 
-	/** 블랙보드 TargetActor 키에 값을 쓰거나(감지) 지움(상실/무효). 블랙보드 미준비 시 무시. */
+	/**
+	 * 블랙보드 TargetActor 키에 값을 쓰거나(감지) 지움(상실/무효). 블랙보드 미준비 시 무시.
+	 * 타겟을 쓸 때마다 지정 시각(TargetAssignedTime)을 기록함 - 같은 대상을 다시 써도 갱신 (집중 재시작).
+	 * 첫 타겟을 쓰는 순간 폰 ASC 에 교전 개시 태그(Status.Combat.Engaged, 복제)를 붙여 사망까지 유지.
+	 */
 	void UpdateTargetInBlackboard(AActor* InTarget);
 
 	/** 시야 감각(Sight) 설정. 전방 부채꼴 + 시야 차단(LOS) 적용. */
@@ -91,6 +98,13 @@ protected:
 	 */
 	UPROPERTY(VisibleAnywhere, Category = "ChainBurst|AI|Perception")
 	TObjectPtr<UAISenseConfig_Hearing> HearingConfig = nullptr;
+
+	/**
+	 * 피해(Damage) 설정. 맞으면 가해자를 인지 - 등 뒤에서 가만히 서서 때리는 대상도 후보가 됨.
+	 * 피격 이벤트에서 ReportDamageEvent 로 보고하며, 자극 유지 시간은 RecentDamageMemoryTime (빙의 시 적용).
+	 */
+	UPROPERTY(VisibleAnywhere, Category = "ChainBurst|AI|Perception")
+	TObjectPtr<UAISenseConfig_Damage> DamageConfig = nullptr;
 
 public:
 	/**
@@ -118,6 +132,30 @@ protected:
 	virtual float ScoreTarget(AActor* InActor) const;
 
 	/**
+	 * 현재 타겟을 들고 있을 때 교체할지 판단하고, 교체하면 블랙보드에 씀 (전환 금지 구간을 통과한 뒤 호출).
+	 * 베이스: 최고 점수 후보가 현재 타겟 점수의 SwitchScoreRatio 배를 넘으면 교체 (히스테리시스).
+	 * 등급별 교체 규칙은 이 함수를 오버라이드 (예: Outlaw 는 집중 시간 규칙).
+	 * @param InCurrentTarget 유효성 검사를 통과한 현재 타겟
+	 */
+	virtual void ReevaluateTarget(AActor* InCurrentTarget);
+
+	/**
+	 * 인지 중인 후보 중 최고 점수 대상을 찾음 (적 판정 + 생존).
+	 * @param InExclude 후보에서 뺄 대상 (없으면 nullptr)
+	 * @return 최고 점수 후보. 없으면 nullptr
+	 */
+	AActor* FindBestTarget(const AActor* InExclude = nullptr) const;
+
+	/**
+	 * 대상이 최근(RecentDamageMemoryTime 안)에 자신을 때렸는지 판정 (피해 감각 자극이 살아 있는지).
+	 * @param InActor 검사할 대상
+	 */
+	bool HasRecentlyDamagedMe(const AActor* InActor) const;
+
+	/** 현재 타겟을 블랙보드에 마지막으로 쓴 시각(초). 같은 대상을 다시 써도 갱신됨. 음수면 기록 없음 */
+	FORCEINLINE float GetTargetAssignedTime() const { return TargetAssignedTime; }
+
+	/**
 	 * 지금 타겟을 교체해도 되는지 판정 (전환 금지 구간).
 	 * @return 교체 가능하면 true
 	 */
@@ -125,10 +163,11 @@ protected:
 
 	/**
 	 * 현재 타겟을 계속 들고 있어도 되는지 판정 (적 판정 + 생존 + 인지 유지).
+	 * 등급별로 유지 조건을 바꾸려면 오버라이드 (예: Outlaw는 인지 유지 조건을 뺌).
 	 * @param InActor 검사할 현재 타겟
 	 * @return 유지 가능하면 true
 	 */
-	bool IsTargetStillValid(AActor* InActor) const;
+	virtual bool IsTargetStillValid(AActor* InActor) const;
 
 	/**
 	 * 대상이 살아 있는지 판정 (CurrentHealth 어트리뷰트).
@@ -158,13 +197,18 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|AI|Targeting", meta = (ClampMin = "0.0"))
 	float RecentDamageBonus = 1.f;
 
-	/** 피격을 위협으로 기억하는 시간(초). 지나면 가산점 소멸. */
-	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|AI|Targeting", meta = (ClampMin = "0.0"))
+	/**
+	 * 피격을 기억하는 시간(초). 피해 감각의 자극 유지 시간으로 적용됨 (빙의 시).
+	 * 지나면 가산점이 사라지고, 다른 감각으로 인지 중이 아니면 인지에서도 빠짐.
+	 * 0 은 엔진에서 "만료 없음"이라 막아 둠.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|AI|Targeting", meta = (ClampMin = "0.1"))
 	float RecentDamageMemoryTime = 5.f;
 
 	/**
 	 * 타겟 교체 문턱 (히스테리시스). 새 후보가 현재 타겟 점수의 이 배수를 넘어야 교체.
 	 * 1.0이면 문턱이 없어져 점수가 엎치락뒤치락할 때마다 타겟이 튐.
+	 * 베이스 ReevaluateTarget 에서만 씀 (Outlaw 는 집중 시간 규칙이라 쓰지 않음).
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|AI|Targeting", meta = (ClampMin = "1.0"))
 	float SwitchScoreRatio = 1.25f;
@@ -182,17 +226,14 @@ private:
 	void BindHitReactEvent(UAbilitySystemComponent& InASC);
 	void UnbindHitReactEvent(UAbilitySystemComponent& InASC);
 
-	/** 피격 반응 이벤트 콜백. 가해자를 폰으로 정규화해 최근 피격 정보로 기록. */
+	/** 피격 반응 이벤트 콜백. 가해자를 폰으로 정규화해 피해 감각에 보고 (가해자별로 인지·기억됨). */
 	void HandleHitReactEvent(const FGameplayEventData* Payload);
 
 	/** 피격 이벤트 구독 핸들. */
 	FDelegateHandle HitReactEventHandle;
 
-	/** 마지막으로 자신을 때린 대상 (폰 기준). */
-	TWeakObjectPtr<const AActor> LastDamageInstigator;
-
-	/** 마지막 피격 시각(초). 음수면 피격 기록 없음. */
-	float LastDamageTime = -1.f;
+	/** 현재 타겟을 블랙보드에 마지막으로 쓴 시각(초). 음수면 기록 없음. */
+	float TargetAssignedTime = -1.f;
 #pragma endregion
 
 #pragma region Stagger

@@ -20,6 +20,7 @@ class UCBActionComponent;
 class UCBNoiseEmitterComponent;
 class UCBUIComponent;
 class UMotionWarpingComponent;
+class UAnimMontage;
 
 DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCBTeamChanged, ECBTeam /* NewTeam */);
@@ -124,6 +125,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Action")
 	void RequestStopMontage(float BlendOutTime = 0.f);
+
+	/**
+	 * 외부(게임플레이 큐)에서 재생 중인 몽타주의 섹션 점프를 요청하는 함수
+	 * @param InMontage       점프할 몽타주 (이 머신에서 재생 중이 아니면 무시)
+	 * @param InSectionIndex  점프할 섹션 인덱스
+	 */
+	void RequestJumpToSection(const UAnimMontage* InMontage, int32 InSectionIndex);
 
 	//~ Begin ICBCombatInterface Interface.
 	virtual UCBCombatComponent* GetCBCombatComponent() const override;

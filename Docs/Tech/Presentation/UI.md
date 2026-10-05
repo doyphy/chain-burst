@@ -1,4 +1,4 @@
-# 캐릭터 UI (체력바·이름표·플레이어 목록)
+# 캐릭터 UI (체력바·이름표·플레이어 목록·보스 바)
 
 > 캐릭터 부착형 UI(HUD 체력·머리 위 체력바)의 구조와 규칙. **UI는 각 클라이언트 로컬이며, 값 동기화는 어트리뷰트 리플리케이션이 전담한다 — UI를 위한 RPC/복제 코드를 만들지 않는다.**
 
@@ -34,7 +34,8 @@
 
 - Global Config는 "어떤 클래스를 쓸지"의 **등록소**이지 띄우는 주체가 아니다. 스택 삽입은 언제나 HUD 인터페이스(`BPI_EGUI_HUDInterface`) 호출로 일어난다.
 - `UWidgetComponent` 경로는 **스택 밖**이라 오클루전·포커스·입력 관리가 적용되지 않는다. 숨김이 필요하면 직접 처리한다(`SetOverheadBarVisible`) — 숨기면 위젯이 파괴된다는 함정이 있다(→ 아래 "숨김의 함정 — 숨기면 위젯이 파괴된다").
-- HUD 스택에 올릴 **캐릭터 종속 위젯이 2개 이상** 되면 생성 주체를 `UCBUIComponent`에서 HUD로 옮기는 것을 재검토한다. 로드아웃 → HUD 전달 경로를 한 번 만들면 여러 위젯이 공유하므로 그 시점에 비용 대비 이득이 역전된다.
+- HUD 스택에 올릴 **로컬 플레이어 자신의 캐릭터 종속 위젯이 2개 이상** 되면 생성 주체를 `UCBUIComponent`에서 HUD로 옮기는 것을 재검토한다. 로드아웃 → HUD 전달 경로를 한 번 만들면 여러 위젯이 공유하므로 그 시점에 비용 대비 이득이 역전된다.
+  - **보스 바는 이 셈에 들어가지 않는다.** 데이터(보스 ASC·위젯 클래스)가 로컬 플레이어가 아니라 **다른 액터(보스)** 에 있어, 보스의 UI 컴포넌트가 만드는 것이 위 판단 기준 그대로다. HUD가 만들게 하면 HUD가 보스를 찾아내는 경로가 따로 필요하다 (아래 "보스 바").
 
 ### 머리 위 배치 레시피 (스택 위젯 + 월드 투영)
 
@@ -76,10 +77,12 @@
 | `UCBHealthBarWidget` | 체력 위젯 공용 베이스(UUserWidget). `InitializeWithASC()`(`BlueprintCallable`)로 대상 ASC를 캐싱하고 구독 + 초기값 반영. **구독은 슬레이트가 있는 동안만, 대상 캐시는 대상 수명을 따른다** — 슬레이트 없이 초기화되면 캐시만 하고, `NativeDestruct`는 구독만 끊고 대상 캐시는 남기며, `NativeConstruct`에서 스스로 (재)구독한다(아래 함정 둘 참조). 비주얼은 `OnHealthChanged(Current, Max)` BP 이벤트로 WBP에 위임. 머리 위 바 WBP가 직접 상속하고, HUD에서는 이 위젯을 **자식으로 담는** HUD 컨테이너 WBP가 뜬다 |
 | `UCBSkillSlotWidget` | HUD 스킬 슬롯 하나의 공용 베이스(UUserWidget). `EditDefaultsOnly` 쿨다운 태그 하나를 대상으로 카운트 변화를 구독해 쿨다운 시작·종료를 감지하고, 쿨다운 중에는 매 틱 활성 GE에서 남은 시간·전체 길이를 조회해 진행률을 계산. 비주얼은 `OnCooldownStarted` / `OnCooldownProgress(Progress, RemainingTime)` / `OnCooldownEnded` BP 이벤트로 WBP에 위임하므로 C++는 위젯 구성(서드파티 프로그레스바 등)을 알지 않는다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
 | `UCBBurstGaugeWidget` | HUD **버스트 게이지**의 공용 베이스(UUserWidget). 한 바가 두 모드로 동작 — 충전 중에는 `BurstGauge` 어트리뷰트를 구독해 `OnBurstGaugeChanged(Current, Max)`, 버스트 중에는 `Status.Combat.Burst` 태그로 시작·종료를 감지하고 매 틱 버스트 GE 남은 시간으로 `OnBurstProgress(RemainingRatio, RemainingTime)`. 두 모드의 이벤트는 섞이지 않는다(아래 "버스트 게이지 표시"). 발동 가능 여부가 바뀌면 `OnBurstReadyChanged(bIsReady)`(BlueprintAssignable)를 방송해 HUD 등 외부 위젯이 구독한다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
+| `UCBStunGaugeWidget` | **기절 게이지**의 공용 베이스(UUserWidget). `StunGauge` 어트리뷰트를 구독해 `OnStunGaugeChanged(Current, Max)` BP 이벤트로 위임. 최대값은 어트리뷰트가 아니라 상수 `UCBAttributeSet::MaxStunGauge`(→ [Stun.md](../Gameplay/Stun.md)). 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
+| `UCBBossBarWidget` | **화면 상단 보스 바**의 컨테이너 베이스(UUserWidget). `InitializeWithASC()` 하나로 자식 `HealthBarWidget`(`UCBHealthBarWidget`)·`StunGaugeWidget`(`UCBStunGaugeWidget`)을 배선한다(`BindWidgetOptional` — 플레이어 목록 행과 같은 패턴). 값 구독은 자식이 각자 한다 |
 | `UCBNamePlateWidget` | **로비 발밑 이름표**의 공용 베이스(UUserWidget). `InitializeWithPlayerState()`(`BlueprintCallable`)로 대상 PlayerState를 캐싱하고 `OnPlayerNicknameChanged` 구독 + 현재 이름 반영. 비주얼은 `OnNicknameChanged(Nickname)` BP 이벤트로 WBP에 위임. `IsLocalPlayerTarget()`로 자기 이름표만 다르게 꾸밀 수 있다. **구독 수명 계약은 `UCBHealthBarWidget`과 동일** |
 | `UCBPlayerListWidget` | **HUD 플레이어 목록**의 공용 베이스(UUserWidget). `ACBGameStateBase::OnPlayerListChanged`를 구독해 행을 다시 만들고, 자기 자신과 봇은 제외한다. 행을 담을 패널은 WBP에서 `EntryContainer` 이름으로 배치(`BindWidget`). 게임 스테이트 복제가 위젯보다 늦으면 `UWorld::GameStateSetEvent`로 기다렸다 다시 구독하고, 로컬 PlayerState 확정은 `ACBChaserController::OnLocalPlayerStateSet`으로 기다린다(아래 "자기 자신 제외") |
 | `UCBPlayerListEntryWidget` | 목록의 **행 하나**. `InitializeWithPlayerState()` 하나로 이름표·체력바 자식을 배선한다. 자식은 `BindWidgetOptional`이라 WBP에 같은 이름으로 두면 자동 연결되고 없으면 그 부분만 생략 |
-| `UCBUIComponent` | 캐릭터 부착형 UI의 공용 관리자(`UCBExtensionComponent` 상속, `ACBBaseCharacter`가 소유 — 전 캐릭터 공통). 준비 완료 훅에서 오너 유형별로 위젯을 생성·소유하고, 머리 위 바의 표시 정책(피격 표시·유지 시간·거리 숨김)도 이 컴포넌트가 쥔다. HUD 위젯 캐시는 `TSubclassOf<UUserWidget>`(체력바만이 아닌 임의 HUD 컨테이너 허용), 머리 위 바 캐시는 `UCBHealthBarWidget`로 좁게 유지 |
+| `UCBUIComponent` | 캐릭터 부착형 UI의 공용 관리자(`UCBExtensionComponent` 상속, `ACBBaseCharacter`가 소유 — 전 캐릭터 공통). 준비 완료 훅에서 오너 유형별로 위젯을 생성·소유하고, 머리 위 바의 표시 정책(피격 표시·유지 시간·거리 숨김)도 이 컴포넌트가 쥔다. 보스면 교전 개시 태그를 구독해 보스 바를 로컬 HUD 스택에 올린다. HUD 위젯 캐시는 `TSubclassOf<UUserWidget>`(체력바만이 아닌 임의 HUD 컨테이너 허용), 머리 위 바 캐시는 `UCBHealthBarWidget`로 좁게 유지 |
 | `ICBUIInterface` | UI 접근 인터페이스. `GetCBUIComponent()` 하나만 가진 얇은 형태(`ICBCombatInterface` 선례). `ACBBaseCharacter`가 구현하며, 캐릭터가 아닌 액터(파괴 가능 오브젝트 등)에 체력바가 필요해지면 그쪽도 구현 |
 | `ACBHUD` | 프로젝트 공용 HUD 베이스. **EasyGameUI 팩 HUD(`BP_EasyMainGameHUD`)의 C++ 부모**로 리페어런팅되어 있다. 팩의 스택 조작은 BP 인터페이스로만 가능하므로 `PushGameLayerWidget` / `PopWidgetFromStack`(`BlueprintImplementableEvent`)만 선언한 다리다 (→ [EasyGameUI.md](EasyGameUI.md)) |
 
@@ -94,11 +97,12 @@
 		- `Event Construct` → `Get Owning Player Pawn` → `Get Ability System Component`(폰이 `IAbilitySystemInterface` 구현) → `Cast To CBAbilitySystemComponent` → 자식 체력바의 `Initialize With ASC`.
 		- 타이밍: 컴포넌트는 `OnCharacterSystemReady()`에서만 HUD 위젯을 만들므로 `Event Construct` 시점엔 PlayerState ASC가 캐싱·초기화 완료 상태. 폴링 불필요.
 	- 머리 위 바는 종전대로 컴포넌트(`CreateOverheadWidget`)가 `InitializeWithASC()`를 호출한다 — 그쪽은 World outer라 `Get Owning Player Pawn`이 소유자가 아닌 관전자 폰을 반환하므로 자기 초기화로 통일하면 안 된다.
-	- 삽입·제거는 `Local_PushHUDWidgetToStack()` / `Local_RemoveHUDWidgetFromStack()`가 담당한다. **`AddToViewport` / `RemoveFromParent`를 쓰면 안 된다** — 스택 배열에 항목이 남아 위젯이 화면에 그대로 남는다.
+	- 삽입·제거는 `Local_PushWidgetToStack(PC, Widget)` / `Local_RemoveWidgetFromStack(HUD, Widget)`가 담당한다(HUD 위젯·보스 바 공용). **`AddToViewport` / `RemoveFromParent`를 쓰면 안 된다** — 스택 배열에 항목이 남아 위젯이 화면에 그대로 남는다.
 	- 제거 시점엔 컨트롤러 연결이 이미 끊겼을 수 있어(사망 후 파괴 등) **삽입 시점의 HUD를 `CachedHUD`에 캐싱**해 제거에 쓴다.
 	- **`EndPlay`에서 스택 제거는 `EEndPlayReason::Destroyed`일 때만** 한다. 폰만 사라지고 HUD는 남는 경우(사망·무기 변경 재스폰)가 유일하게 정리가 필요한 상황이고, 월드가 통째로 끝나는 경우(맵 전환·PIE 종료)엔 HUD도 함께 파괴돼 정리가 무의미하다. 가드가 없으면 **2인 PIE 종료 시** 클라이언트 쪽 PlayerController가 먼저 정리된 뒤 pop이 불려, 팩의 스택 재계산이 PC 조회에 실패한다(`Unregister Input Listener`의 `RemoveMappingContext`에서 Accessed None). 1인 PIE는 클라이언트 월드가 없어 재현되지 않는다.
 	- HUD 캐스팅이 실패하면(리페어런팅 누락·HUD Class 오지정) 경고 로그를 남기고 생성을 건너뛴다.
 - **그 외 (AI 전부 + 원격 캐릭터)**: `UWidgetComponent`(Screen 모드, DrawAtDesiredSize)를 런타임 생성해 루트에 부착. 부착 높이는 `캡슐 상단 + OverheadZMargin` 자동 계산(로드아웃 바디 셋업 적용 후 시점이라 캡슐 크기 확정 상태). 원격 팀원(다른 Chaser)도 머리 위 바가 뜨며, `bShowOverheadBar`로 끌 수 있다. 생성 직후 표시 여부는 아래 "표시 정책"을 따른다.
+	- **보스 바 위젯 클래스가 주입돼 있으면(보스)** 교전 개시 태그 구독도 건다 → 아래 "보스 바".
 
 ## 머리 위 바 표시 정책 (평소 숨김)
 
@@ -390,6 +394,80 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
 - `WBP_CB_HUD`에 배치하고 `Is Variable`을 켠다. `Event Construct`의 기존 ASC 캐스트 결과로 `Initialize With ASC`를 호출한다(체력바·스킬 슬롯과 같은 자리).
 - 발동 안내 버튼: 같은 `Event Construct`에서 **`Initialize With ASC`보다 먼저** 게이지 위젯의 `OnBurstReadyChanged`에 바인딩하고, `bIsReady`로 버튼 Visibility를 전환한다. 버튼의 기본 Visibility는 숨김으로 둔다.
 
+## 보스 바 (화면 상단 체력·기절 게이지)
+
+보스가 **처음 플레이어를 발견하는 순간** 모든 플레이어 화면 상단에 보스의 체력과 기절 게이지(→ [Stun.md](../Gameplay/Stun.md))를 띄운다. 새 네트워크 코드는 없다 — 신호는 ASC 태그 복제, 값은 어트리뷰트 복제다.
+
+```
+[서버] ACBAIController::UpdateTargetInBlackboard — 첫 타겟을 쓰는 순간 1회
+   └ 보스 ASC 에 Status.Combat.Engaged (TagOnly 복제, 사망까지 유지)
+        ▼ ASC 태그 복제
+[각 클라] 보스의 UCBUIComponent — 준비 완료 때 태그 구독 (이미 붙어 있으면 즉시)
+   └ UCBBossBarWidget 생성 (소유자 = 로컬 플레이어 컨트롤러)
+        → InitializeWithASC(보스 ASC) → 자식 체력바·기절 게이지 배선
+        → 로컬 플레이어 HUD 스택 Game 레이어에 삽입
+   └ 보스 액터 파괴(EndPlay, Destroyed) 시 스택에서 제거
+```
+
+### "등장" = 첫 발견인 이유
+
+보스(`BP_Outlaw_Hulk`)는 게임플레이 맵에 **처음부터 배치**돼 있다. "스폰·준비 완료"를 기준으로 삼으면 레벨 시작부터 모든 화면에 바가 떠 있게 된다. 첫 타겟 획득은 보스가 스폰되는 방식(배치·스포너)과 무관하게 "싸움이 시작됐다"는 같은 뜻이다.
+
+### 생성 주체 — 보스의 UI 컴포넌트
+
+"새 UI는 어디로" 기준 그대로다 — **화면 + 캐릭터 데이터(보스 ASC·위젯 클래스) 필요 → `UCBUIComponent`**. 보스는 모든 클라이언트에 시뮬 프록시로 존재하므로, 각 클라의 보스 UI 컴포넌트가 **자기 화면의 로컬 플레이어 컨트롤러**(`GetFirstLocalPlayerController` — 호스트는 호스트, 클라는 자기)로 위젯을 만들어 그 HUD에 넣는다. HUD가 생성 주체였다면 HUD가 보스를 찾아내는 경로가 따로 필요했다.
+
+- **위젯 클래스는 `UCBOutlawLoadout::BossBarWidgetClass`.** 전 클라이언트에 필요하므로 `ApplyToCharacter()`(공용 경로)로 주입한다. **비우면 보스 바가 없다** — 엘리트 등급 Outlaw 는 비워 둔다. 클래스 유무가 곧 "보스인가"이므로 별도 플래그를 두지 않는다.
+- **HUD 위젯과 같은 스택 함수**(`Local_PushWidgetToStack` / `Local_RemoveWidgetFromStack`)를 쓴다. Game 레이어는 오클루더가 아니라 플레이어 HUD 와 함께 보인다(→ [EasyGameUI.md](EasyGameUI.md)).
+- **플레이어의 사망·리스폰과 무관하다.** 바는 보스가 소유하고 HUD(맵 단위)에 꽂혀 있어, 로컬 플레이어 폰이 바뀌어도 그대로 남는다.
+
+### 표시 규칙 — 교전 개시 후 보스가 사라질 때까지
+
+| 상황 | 결과 | 이유 |
+|---|---|---|
+| 보스가 첫 타겟을 잡음 | 전 클라에 표시 | 태그 복제 → 각 클라 구독 콜백 |
+| 보스 타겟이 죽거나 잠시 비어도 | **유지** | 태그를 떼지 않는다. 남은 플레이어가 인지 밖이면 타겟이 잠깐 비는데, 그때마다 꺼졌다 켜지면 안 된다. 스택에서 빠지는 중인 위젯을 다시 넣는 함정(→ [EasyGameUI.md](EasyGameUI.md) "지연 제거")도 피한다 |
+| 보스 사망 | 0 인 채로 남음 | 마지막 타격으로 0 이 되는 순간이 보인다 |
+| 보스 파괴 (`DespawnDelay` 뒤 디스폰) | 제거 | `EndPlay(Destroyed)` — 시체와 함께 사라진다 |
+| 교전 중에 이 클라에 보스가 복제돼 들어옴 | 즉시 표시 | 준비 완료 때 태그가 이미 있으면 바로 띄운다 |
+
+- **사망 즉시 숨기려면** 머리 위 바처럼 `OnCharacterDiedDelegate`를 구독하면 된다. 지금은 0 을 보여 주는 쪽을 택했다.
+- **보스 리셋(전멸 시 회복·원위치)** 이 생기면 리셋 지점이 태그를 떼고, 컴포넌트가 태그 제거(`NewCount == 0`)에서 바를 빼도록 넓힌다. 지금은 붙는 경우만 처리한다.
+- **보스가 동시에 둘 이상이면 바가 겹친다.** 지금은 보스가 하나라 다루지 않는다.
+
+### ⚠️ 연관성 — 멀리 있는 플레이어에게도 띄우려면
+
+클라이언트 화면의 보스는 **넷 연관성(Net Cull Distance) 안에 있을 때만 존재**한다. 캐릭터 기본 컬 거리(150m) 밖의 플레이어에게는 보스 액터가 없거나 파괴되어(→ `EndPlay(Destroyed)`) **바도 없다.** "모든 플레이어 화면"이 되려면 보스 BP 에서 **`Always Relevant`** 를 켠다. 보스는 하나뿐이라 비용이 문제되지 않는다.
+
+### 기절 게이지 — 최대값은 상수
+
+`MaxStunGauge` 는 어트리뷰트가 아니라 `UCBAttributeSet` 의 상수다(차는 속도는 적립량으로 조절 → [Stun.md](../Gameplay/Stun.md)). 그래서 `UCBStunGaugeWidget` 은 `StunGauge` 하나만 구독하고 Max 는 상수를 실어 보낸다. 기절이 시작되면 게이지가 비워지므로 바는 0 으로 떨어진다. **"기절 중" 상태 표시는 없다** — `Status.Combat.Stunned` 는 서버 전용(경로 ②)이라 클라가 알 수 없고, 표시하려면 복제를 추가해야 한다.
+
+### 슬레이트 전 초기화
+
+보스 바는 **스택에 올리기 전에** `InitializeWithASC()` 를 부른다(슬레이트 없음). 자식 체력바·기절 게이지는 둘 다 "슬레이트가 없으면 캐시만 하고 구독은 `NativeConstruct` 에서" 계약이라(위 "첫 표시의 함정") 첫 값이 삼켜지지 않는다. 기절 게이지 위젯을 새로 만들 때 이 계약을 그대로 옮긴 이유다.
+
+### 검토했지만 채택하지 않은 것
+
+| 안 | 이유 |
+|---|---|
+| 스폰(준비 완료) 시 표시 | 보스가 맵에 처음부터 배치돼 있어 레벨 시작부터 뜬다 |
+| 첫 피격 시 표시 | 보스가 먼저 공격해도 바가 뜨지 않는다 |
+| 아레나 진입 볼륨 | 레벨마다 배치해야 하고, 들어간 사람에게만 뜬다 |
+| GameState 에 "현재 보스" 복제 프로퍼티 | UI 때문에 복제 코드가 생긴다. ASC 태그 복제가 이미 있다 |
+| HUD 가 보스 바 생성 | HUD 가 보스를 찾아내야 한다. 데이터를 가진 쪽(보스)이 만드는 게 배치 기준과 맞다 |
+| 교전 종료(타겟 상실) 시 숨김 | 위 "표시 규칙" — 깜빡임과 스택 재삽입 함정 |
+| 체력바를 범용 어트리뷰트 바로 일반화 | 세 곳(HUD·머리 위·플레이어 목록)에서 쓰는, 잘 동작하는 위젯을 고쳐야 한다. 버스트 게이지처럼 게이지별 베이스를 둔다 |
+| 보스 이름을 C++ 데이터로 | 위젯 클래스가 보스별로 로드아웃에 등록되므로 WBP 에 직접 둔다 |
+
+### 에디터 작업
+
+- `WBP_CB_StunGauge` — `UCBStunGaugeWidget` 자식. 프로그레스 바 하나에 `OnStunGaugeChanged`(Current / Max) 연결.
+- `WBP_CB_BossBar` — `UCBBossBarWidget` 자식. 화면 상단 중앙 배치. 자식 위젯을 **`HealthBarWidget` / `StunGaugeWidget` 이름으로** 두고 `Is Variable` 을 켠다(이름이 다르면 배선되지 않고 그 부분만 조용히 빈다). 보스 이름 텍스트는 여기에 직접.
+- `DA_Loadout_Outlaw_Hulk` — `BossBarWidgetClass = WBP_CB_BossBar`.
+- `BP_Outlaw_Hulk` — **`Always Relevant` 켜기**(위 ⚠️), UI 컴포넌트의 `bShowOverheadBar` 끄기(머리 위 바와 중복).
+- 새 `UCLASS`·`UPROPERTY` 가 있으므로 코드 반영 후 **에디터를 재시작**해야 BP 에서 보인다.
+
 ## 위젯 클래스 등록 — 로드아웃
 
 위젯 클래스도 에셋이므로 로드아웃 원칙(→ [Loadout.md](../Foundation/Loadout.md))대로 로드아웃에 등록하고, 컴포넌트 멤버는 런타임 캐시(세터 주입)다. 주입은 모두 Ready 방송 **전**에 실행되므로 준비 완료 훅 시점엔 클래스가 확정돼 있다.
@@ -398,6 +476,7 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
 |---|---|---|
 | `OverheadHealthBarWidgetClass` | `UCBCharacterLoadout`(베이스) | `ApplyToCharacter()` — 전 인스턴스 공용 (시뮬 프록시 포함 전 클라 필요) |
 | `bShowNamePlate`<br>`NamePlateWidgetClass`<br>`NamePlateZMargin` | `UCBCharacterLoadout`(베이스) | `ApplyToCharacter()` — 전 인스턴스 공용 (남의 이름표도 보여야 하므로). 부착 높이 여유값을 클래스와 같은 자리에 둔 이유는 **캡슐 크기가 캐릭터마다 다르기 때문** |
+| `BossBarWidgetClass` | `UCBOutlawLoadout` | `ApplyToCharacter()` — 전 인스턴스 공용 (모든 클라 화면에 뜨므로). 비우면 보스 바 없음 |
 | `HUDWidgetClass` | `UCBChaserLoadout` | `Local_ApplyToCharacter()` — 소유 클라이언트 전용 (InputConfig와 동일 경로). 타입은 `TSubclassOf<UUserWidget>` — 체력바가 아닌 임의 HUD 컨테이너 WBP를 지정. 구 필드명 `HUDHealthWidgetClass`는 `[CoreRedirects]` PropertyRedirect로 승계 |
 
 ## 외부에서 UI 접근 (설계 규칙)

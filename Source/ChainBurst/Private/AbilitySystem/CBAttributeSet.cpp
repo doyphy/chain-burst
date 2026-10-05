@@ -110,6 +110,7 @@ void UCBAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME_CONDITION_NOTIFY(UCBAttributeSet, AttackSpeed, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UCBAttributeSet, BurstGauge, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UCBAttributeSet, LifeOnHit, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UCBAttributeSet, StunGauge, COND_None, REPNOTIFY_Always);
 }
 
 void UCBAttributeSet::OnRep_MovementSpeed(const FGameplayAttributeData& OldMovementSpeed)
@@ -150,6 +151,11 @@ void UCBAttributeSet::OnRep_BurstGauge(const FGameplayAttributeData& OldBurstGau
 void UCBAttributeSet::OnRep_LifeOnHit(const FGameplayAttributeData& OldLifeOnHit)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UCBAttributeSet, LifeOnHit, OldLifeOnHit);
+}
+
+void UCBAttributeSet::OnRep_StunGauge(const FGameplayAttributeData& OldStunGauge)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UCBAttributeSet, StunGauge, OldStunGauge);
 }
 
 void UCBAttributeSet::UpdateMovementSpeed(float NewValue)

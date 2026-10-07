@@ -38,6 +38,7 @@ ASC를 누가 소유하느냐에 따라 복제 모드를 다르게 설정해 복
 
 - **로드아웃이 `GiveAbility`/`ApplyGameplayEffectSpecToSelf`를 직접 부르지 않는다.** 직접 부르면 기록에서 빠져 회수되지 않는다 (`UCBCharacterLoadout`·`UCBChaserLoadout` 양쪽 모두 이 경로를 쓴다).
 - **회수 대상은 로드아웃이 준 것뿐이다.** 전투 중 붙은 버프 등 로드아웃 밖의 것은 건드리지 않으므로 `ClearAllAbilities()`로 대체하지 않는다.
+- **레벨업 카드 효과는 일부러 이 경로를 타지 않는다.** 기록 밖이라 무기 변경·리스폰을 지나도 매치 끝까지 남는다 (→ [LevelUp.md](../Gameplay/LevelUp.md)).
 
 ## 공용 라이브러리 (`UCBAbilitySystemLibrary`)
 

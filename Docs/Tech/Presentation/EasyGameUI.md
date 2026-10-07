@@ -70,11 +70,12 @@
 | C++ 이벤트 | BP 구현 |
 |---|---|
 | `PushGameLayerWidget(UUserWidget*)` | `Insert Widget Instance in Stack` (Layer = `Game`) |
+| `PushMenuLayerWidget(UUserWidget*)` | `Insert Widget Instance in Stack` (Layer = `Menu`) |
 | `PopWidgetFromStack(UUserWidget*)` | `Remove Widget Instance from Stack` |
 
 구현은 **각각 노드 하나**다. 복잡한 처리는 전부 팩 함수 안에 있으므로 여기서 재구현하지 않는다. **이 이벤트가 복잡해지면 팩 기능을 중복 구현하고 있다는 신호다.**
 
-**제약: 이 다리는 `Game` 레이어 전용이다.** `PushGameLayerWidget`의 BP 구현이 Layer=`Game`으로 고정되어 있다. 따라서 **C++에서 `Menu`/`Modals` 레이어에 위젯을 올릴 수 없다.** 지금은 체력바(=`Game`)만 이 경로를 쓰므로 문제가 없지만, C++에서 메뉴 계열 위젯을 띄워야 하는 순간이 오면 **레이어를 인자로 받는 이벤트를 추가**해야 한다(기존 이벤트를 레이어 인자 형태로 통합할지, 별도로 둘지는 그때 판단). BP에서만 띄운다면 `BPI_EGUI_HUDInterface`를 직접 호출하면 되므로 이 제약과 무관하다.
+**레이어마다 이벤트를 따로 둔다.** C++에서 처음 메뉴 계열 위젯(레벨업 카드 선택 → [LevelUp.md](../Gameplay/LevelUp.md))을 띄우게 되면서 `PushMenuLayerWidget`을 추가했다. 레이어를 인자로 받는 이벤트로 통합하지 않은 이유는, 레이어 열거형 `E_WidgetLayers`가 **BP 열거형이라 C++이 이름으로 가리킬 수 없기** 때문이다 — 숫자로 넘기면 BP 쪽에서 다시 매핑해야 하고, 아래 "확인 필요"처럼 내부명과 표시 순서가 어긋날 위험까지 떠안는다. `Modals`가 필요해지면 같은 형태로 하나 더 둔다. BP에서만 띄운다면 `BPI_EGUI_HUDInterface`를 직접 호출하면 되므로 이 다리와 무관하다.
 
 ## 팩 에셋 수정 정책
 
@@ -91,7 +92,7 @@
 **단, 자식 위젯 BP로는 커스터마이징할 수 없다.** UMG는 상속받은 위젯 트리를 디자이너에서 수정할 수 없어 버튼 추가·순서 변경이 불가능하다. 위젯은 복제만이 선택지다.
 
 **불가피한 팩 에셋 수정** (업데이트마다 재적용 필요):
-- `BP_EasyMainGameHUD` — 부모를 `ACBHUD`로 리페어런팅 + `Push Game Layer Widget` / `Pop Widget From Stack` 이벤트 구현
+- `BP_EasyMainGameHUD` — 부모를 `ACBHUD`로 리페어런팅 + `Push Game Layer Widget` / `Push Menu Layer Widget` / `Pop Widget From Stack` 이벤트 구현
 - `GI_EasyMainGameInstance` — 부모를 `UCBGameInstance`로 리페어런팅
 - `BP_EGUI_GlobalConfigSelector` — `Global Config Data Asset`을 우리 에셋으로 지정해야 하는데, 이 BP 자체가 팩 소속이다.
 
@@ -200,6 +201,7 @@
 | 위젯 | Input Config | Focus Handler | Global Occluder | Remove Gameplay IMCs |
 |---|---|---|---|---|
 | 체력바 (`Game`) | ❌ | ❌ | ❌ | ❌ |
+| **레벨업 카드 선택 (`Menu`)** | ✅ | ✅ | ❌ | ✅ |
 | 메인 메뉴 / 일시정지 / 옵션 (`Menu`) | ✅ | ✅ | ❌ | ✅ |
 | **로비 (`WBP_CB_Lobby_Main`, `Menu`)** | ✅ | ✅ | ❌ | ✅ |
 | 확인창·경고 (`Modals`) | ✅ | ✅ | ❌ (뒤 메뉴가 보여야 함) | ✅ |
@@ -344,7 +346,7 @@ PlayerController → Get HUD → (BPI_EGUI_HUDInterface 메시지) Add Widget of
 
 팩을 갱신하면 `/Game/EasyGameUI` 원본이 덮어써진다. 아래는 **매번 다시 확인**한다.
 
-- [ ] `BP_EasyMainGameHUD` → Parent Class = `ACBHUD`, 이벤트 2개 구현 **(누락 시 체력바가 안 뜨고 경고 로그만 남는다)**
+- [ ] `BP_EasyMainGameHUD` → Parent Class = `ACBHUD`, 이벤트 3개 구현 **(누락 시 체력바·레벨업 카드가 안 뜨고 경고 로그만 남는다)**
 - [ ] `GI_EasyMainGameInstance` → Parent Class = `UCBGameInstance`
 - [ ] `BP_EGUI_GlobalConfigSelector` → `Global Config Data Asset` = `DA_CB_GlobalConfig`
 - [ ] 복제본(`WBP_CB_MainMenu` 등)에 팩 버그픽스·개선 수동 반영 여부 판단

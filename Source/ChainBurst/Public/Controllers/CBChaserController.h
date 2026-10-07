@@ -9,11 +9,14 @@
 
 class ACameraActor;
 class ACBBaseCharacter;
+class ACBHUD;
 class ACBLobbyCamera;
+class UCBLevelUpWidget;
 
 /**
  * 플레이어의 컨트롤러.
  * 로컬 플레이어의 입력을 처리하고, 서버와 통신하며, 뷰 타겟과 오디오 감쇠 기준점을 관리함.
+ * 레벨업 카드를 서버와 주고받고 카드 선택 위젯을 띄움 (폰과 무관하게 살아 있어 리스폰 중에도 카드를 받음).
  */
 UCLASS()
 class CHAINBURST_API ACBChaserController : public APlayerController
@@ -89,6 +92,44 @@ private:
 	 * @param bInReady 준비 상태 (true = 무기 장착, false = 무기 해제)
 	 */
 	void Auth_PlayReadyAbility(bool bInReady);
+#pragma endregion
+
+#pragma region LevelUp
+public:
+	/**
+	 * [서버 → 본인] 레벨업 카드 제시. 카드 위젯을 띄우고(이미 떠 있으면 내용만 바꿈) 남은 시간을 새로 셈.
+	 * 월드 정지 중에는 속성 복제가 멈추므로 RPC 로 받음.
+	 * @param InCardIndices 서버가 이 플레이어에게 뽑아 준 카드 인덱스 (레벨업 데이터의 카드 배열 기준)
+	 */
+	UFUNCTION(Client, Reliable)
+	void Client_OfferLevelUpCards(const TArray<int32>& InCardIndices);
+
+	/** [서버 → 본인] 레벨업 종료. 카드 위젯을 스택에서 내림. */
+	UFUNCTION(Client, Reliable)
+	void Client_EndLevelUp();
+
+	/**
+	 * [클라 → 서버] 레벨업 카드 선택. (서버에서만 실행)
+	 * 제시받은 카드인지·이미 골랐는지 검증은 게임플레이 게임모드가 함.
+	 * @param InSlot 제시받은 카드 중 몇 번째인지 (0부터)
+	 */
+	UFUNCTION(Server, Reliable)
+	void Server_SelectLevelUpCard(int32 InSlot);
+
+private:
+	/**
+	 * [로컬] 카드를 위젯에 표시하는 함수. 위젯이 없으면 만들어 카드를 채운 뒤 HUD 스택의 Menu 레이어에 올림.
+	 * 위젯 클래스나 HUD 가 없으면 경고만 남김 (고르지 못해도 서버 타임아웃이 대신 고름).
+	 * @param InCardIndices 표시할 카드 인덱스
+	 */
+	void Local_ShowLevelUpCards(const TArray<int32>& InCardIndices);
+
+	/** 떠 있는 카드 위젯. 레벨업이 이어지면 재사용하고, 끝나면 스택에서 내리고 비움 */
+	UPROPERTY()
+	TObjectPtr<UCBLevelUpWidget> LevelUpWidget = nullptr;
+
+	/** 카드 위젯을 올린 HUD. 내릴 때 같은 HUD 에 요청함 */
+	TWeakObjectPtr<ACBHUD> LevelUpWidgetHUD;
 #pragma endregion
 
 #pragma region Camera

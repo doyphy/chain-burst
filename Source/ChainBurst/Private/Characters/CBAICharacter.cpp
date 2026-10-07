@@ -5,6 +5,7 @@
 #include "Components/Combat/CBCombatComponent.h"
 #include "DataAssets/Loadout/CBAILoadout.h"
 #include "AssetManager/CBAssetManager.h"
+#include "GameModes/CBGameplayGameMode.h"
 
 // engine
 #include "Components/SkeletalMeshComponent.h"
@@ -119,6 +120,9 @@ void ACBAICharacter::InitializeAISystem()
 
 				// [서버] AI 두뇌(BT)를 컨트롤러에 주입. 컨트롤러가 서버 전용이라 서버에서만 필요.
 				LoadedLoadout->Auth_ApplyBehaviorTreeToController(GetController());
+
+				// [서버] 처치 경험치 보상 캐싱. 사망 처리(게임모드 통지)가 서버에서만 일어남.
+				ExperienceReward = LoadedLoadout->GetExperienceReward();
 			}
 		}
 		else
@@ -145,10 +149,16 @@ void ACBAICharacter::InitializeAISystem()
 	});
 }
 
-// [서버] 사망 시 호출되는 함수 (자식 확장 훅) AI 두뇌를 멈춤.
+// [서버] 사망 시 호출되는 함수 (자식 확장 훅) 처치 경험치를 게임모드에 넘기고 AI 두뇌를 멈춤.
 void ACBAICharacter::Auth_OnDeath()
 {
 	Super::Auth_OnDeath();
+
+	// 경험치는 전 플레이어가 공유하므로 누가 처치했는지는 넘기지 않음. 게임플레이 레벨이 아니면 경험치 규칙이 없음
+	if (ACBGameplayGameMode* GameplayGameMode = GetWorld()->GetAuthGameMode<ACBGameplayGameMode>())
+	{
+		GameplayGameMode->Auth_AddExperience(ExperienceReward);
+	}
 
 	AAIController* AIController = Cast<AAIController>(GetController());
 	if (!AIController) return;

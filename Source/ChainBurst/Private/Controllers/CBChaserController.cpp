@@ -5,10 +5,15 @@
 #include "Characters/CBChaserCharacter.h"
 #include "Components/Input/CBInputManagerComponent.h"
 #include "Components/Mesh/CBModularMeshComponent.h"
+#include "Core/CBGameInstance.h"
 #include "Core/CBLocalReadySubsystem.h"
 #include "CBGameplayTags.h"
+#include "DataAssets/LevelUp/CBLevelUpData.h"
+#include "GameModes/CBGameplayGameMode.h"
 #include "GameModes/CBLobbyGameMode.h"
 #include "PlayerState/CBPlayerState.h"
+#include "UI/CBHUD.h"
+#include "UI/Widgets/CBLevelUpWidget.h"
 
 // engine
 #include "AbilitySystemComponent.h"
@@ -193,6 +198,70 @@ void ACBChaserController::Auth_PlayReadyAbility(bool bInReady)
 
 	// 어빌리티 실행
 	ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(AbilityTag));
+}
+
+// [본인] 서버가 뽑아 준 레벨업 카드 수신 (본인 클라이언트에서 실행)
+void ACBChaserController::Client_OfferLevelUpCards_Implementation(const TArray<int32>& InCardIndices)
+{
+	Local_ShowLevelUpCards(InCardIndices);
+}
+
+// [본인] 레벨업 종료 수신. 카드 위젯을 내림 (본인 클라이언트에서 실행)
+void ACBChaserController::Client_EndLevelUp_Implementation()
+{
+	if (!LevelUpWidget) return;
+
+	// 위젯을 스택에서 내림.
+	if (ACBHUD* CBHUD = LevelUpWidgetHUD.Get())
+	{
+		CBHUD->PopWidgetFromStack(LevelUpWidget);
+	}
+
+	LevelUpWidget = nullptr;
+	LevelUpWidgetHUD.Reset();
+}
+
+// [서버] 카드 위젯에서 카드를 고르면 호출 (서버에서 실행)
+void ACBChaserController::Server_SelectLevelUpCard_Implementation(int32 InSlot)
+{
+	// 검증은 전부 게임모드가 함 (이번 레벨업에서 받은 카드인지·이미 골랐는지)
+	if (ACBGameplayGameMode* GameplayGameMode = GetWorld()->GetAuthGameMode<ACBGameplayGameMode>())
+	{
+		GameplayGameMode->Auth_SelectLevelUpCard(this, InSlot);
+	}
+}
+
+// [로컬] 카드 표시. 위젯이 없으면 만들어 Menu 레이어에 올림
+void ACBChaserController::Local_ShowLevelUpCards(const TArray<int32>& InCardIndices)
+{
+	// 레벨업이 이어지는 경우. 이미 떠 있으므로 내용만 바꿈
+	if (LevelUpWidget)
+	{
+		LevelUpWidget->Local_ShowOfferedCards(InCardIndices);
+		return;
+	}
+
+	const UCBGameInstance* CBGameInstance = GetGameInstance<UCBGameInstance>();
+	const UCBLevelUpData* LevelUpData = CBGameInstance ? CBGameInstance->GetLevelUpData() : nullptr;
+	const TSubclassOf<UCBLevelUpWidget> WidgetClass = LevelUpData ? LevelUpData->GetLevelUpWidgetClass() : nullptr;
+
+	// 화면 배치는 HUD 의 내비게이션 스택이 전담함 (AddToViewport 금지)
+	ACBHUD* CBHUD = Cast<ACBHUD>(GetHUD());
+	if (!WidgetClass || !CBHUD)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 레벨업 카드 위젯을 띄우지 못함 (위젯 클래스: %s, HUD: %s)"),
+			*GetName(), *GetNameSafe(WidgetClass), *GetNameSafe(GetHUD()));
+		return;
+	}
+
+	// 위젯 생성.
+	LevelUpWidget = CreateWidget<UCBLevelUpWidget>(this, WidgetClass);
+	if (!LevelUpWidget) return;
+
+	// 위젯에 카드 내용 채우기 + HUD 스택에 올리기
+	LevelUpWidget->Local_ShowOfferedCards(InCardIndices);
+	CBHUD->PushMenuLayerWidget(LevelUpWidget);
+	LevelUpWidgetHUD = CBHUD;
 }
 
 // 뷰포트/넷 커넥션이 연결된 직후. 화면을 그리기 시작하는 시점. 빙의보다 확실히 앞서므로 여기서 화면을 검게 덮음

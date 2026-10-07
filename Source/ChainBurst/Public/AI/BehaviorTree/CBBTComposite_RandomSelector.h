@@ -31,8 +31,10 @@ protected:
 	//~ Begin UBTCompositeNode Interface
 	/** 아직 시도하지 않은 자식 중 하나를 무작위로 고름 (성공이 나오면 부모로 복귀) */
 	virtual int32 GetNextChildHandler(FBehaviorTreeSearchData& SearchData, int32 PrevChild, EBTNodeResult::Type LastResult) const override;
+#if WITH_EDITOR
 	/** 실행 순서가 무작위라 낮은 우선순위 중단은 의미가 없음 → 에디터에서 고를 수 없게 막음 */
 	virtual bool CanAbortLowerPriority() const override;
+#endif
 	//~ End UBTCompositeNode Interface
 
 	//~ Begin UBTNode Interface

@@ -66,3 +66,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCBOnLoginStateChanged, ECBLoginSta
 /** [로컬] 버스트 발동 가능 여부가 바뀌었음. (게이지 가득 참 && 버스트 중 아님) */
 UDELEGATE()
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCBOnBurstReadyChanged, bool, bIsReady);
+
+/** 전 플레이어가 공유하는 레벨·경험치가 바뀌었음. (현재 레벨 / 현재 레벨에서 쌓인 경험치) */
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCBOnExperienceChanged, int32, Level, int32, Experience);

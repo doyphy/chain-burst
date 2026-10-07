@@ -5,12 +5,13 @@
 #include "CBGameInstance.generated.h"
 
 class UCBCharacterCatalog;
+class UCBLevelUpData;
 
 /**
  * 프로젝트 공용 게임 인스턴스 클래스.
  * 맵을 넘어 유지돼야 하는 게임 전역 로직·데이터를 여기에 둠.
  * 접속 실패 시 엔진의 자동 기본 맵 복귀를 통제하기 위해 온라인 세션 클래스를 갈아끼우고,
- * 고를 수 있는 캐릭터(무기) 카탈로그를 보유해 서버와 전 클라이언트가 같은 목록을 보게 함.
+ * 고를 수 있는 캐릭터(무기) 카탈로그와 레벨업 데이터를 보유해 서버와 전 클라이언트가 폰 없이 같은 데이터를 보게 함.
  * 또한 진영 판정 규칙(attitude solver)을 엔진에 등록해 전 시스템이 같은 적/아군 판정 규칙을 쓰게 함.
  */
 UCLASS()
@@ -35,6 +36,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|Character")
 	FORCEINLINE UCBCharacterCatalog* GetCharacterCatalog() const { return CharacterCatalog; }
 
+	/** [Getter] 레벨업 데이터 (경험치 곡선·카드 목록). 등록하지 않았으면 nullptr. */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|LevelUp")
+	FORCEINLINE UCBLevelUpData* GetLevelUpData() const { return LevelUpData; }
+
 protected:
 	/**
 	 * 고를 수 있는 캐릭터(무기) 목록.
@@ -43,4 +48,12 @@ protected:
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Character")
 	TObjectPtr<UCBCharacterCatalog> CharacterCatalog = nullptr;
+
+	/**
+	 * 레벨업 데이터.
+	 * 서버는 경험치 판정·카드 뽑기·검증·적용에, 클라이언트는 카드 표시와 경험치 바 필요량 계산에 읽음.
+	 * 카드를 배열 인덱스로 주고받으므로 양쪽이 같은 에셋을 봐야 함. 카드 아이콘은 소프트 참조임.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|LevelUp")
+	TObjectPtr<UCBLevelUpData> LevelUpData = nullptr;
 };

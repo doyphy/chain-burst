@@ -9,6 +9,7 @@ class UCBAILoadout;
 /**
  * AI 캐릭터 공통 베이스 (Outlaw·Rogue 등).
  * ASC·AttributeSet을 캐릭터 자체가 소유하며, AI 공통 초기화 흐름을 담는다.
+ * 사망하면 두뇌를 멈추고 처치 경험치를 게임모드에 넘김 (경험치는 전 플레이어 공유라 처치자는 따지지 않음).
  * 공격 판정이 서버에서 소켓을 읽으므로, 렌더링되지 않아도 몽타주 중에는 본을 갱신하도록 메시 애님 틱을 설정.
  * 직접 스폰하지 않는 추상 클래스.
  */
@@ -30,7 +31,7 @@ protected:
 	//~ End APawn Interface
 
 	//~ Begin ACBBaseCharacter Interface
-	/* [서버] 사망 시 호출되는 함수 (자식 확장 훅) AI 두뇌를 멈춤. */
+	/* [서버] 사망 시 호출되는 함수 (자식 확장 훅) 처치 경험치를 게임모드에 넘기고 AI 두뇌를 멈춤. */
 	virtual void Auth_OnDeath() override;
 	//~ End ACBBaseCharacter Interface
 
@@ -42,4 +43,8 @@ protected:
 
 	/** 이 AI가 사용할 로드아웃 소프트 참조를 반환. 서브클래스가 자신의 타입 멤버를 반환하도록 구현. */
 	virtual TSoftObjectPtr<UCBAILoadout> GetAILoadout() const PURE_VIRTUAL(ACBAICharacter::GetAILoadout, return nullptr;);
+
+private:
+	/** [서버] 처치 경험치 보상. 로드아웃 로드 완료 시 주입되는 런타임 캐시 (로드아웃은 소프트 참조라 사망 시점에 다시 읽지 않음) */
+	int32 ExperienceReward = 0;
 };

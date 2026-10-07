@@ -27,6 +27,15 @@ public:
 	void PushGameLayerWidget(UUserWidget* Widget);
 
 	/**
+	 * 위젯을 HUD 스택의 Menu 레이어에 삽입하도록 요청하는 이벤트.
+	 * (BP가 Insert Widget Instance in Stack으로 구현, Layer = Menu)
+	 * 버튼·포커스가 있는 화면 위젯(레벨업 카드 선택 등)을 C++에서 띄울 때 사용함.
+	 * @param Widget 삽입할 위젯 인스턴스
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "ChainBurst|UI")
+	void PushMenuLayerWidget(UUserWidget* Widget);
+
+	/**
 	 * 위젯을 HUD 스택에서 제거하도록 요청하는 이벤트.
 	 * (BP가 Remove Widget Instance from Stack으로 구현)
 	 * @param Widget 제거할 위젯 인스턴스

@@ -23,7 +23,7 @@
 ```
 UCBCharacterLoadout
 ├── UCBChaserLoadout            ← 플레이어
-└── UCBAILoadout (Abstract)     ← AI 공통 (AI 전용 데이터의 홈) — BehaviorTree 등록
+└── UCBAILoadout (Abstract)     ← AI 공통 (AI 전용 데이터의 홈) — BehaviorTree, 처치 경험치(ExperienceReward) 등록
     ├── UCBRogueLoadout
     └── UCBOutlawLoadout
 ```

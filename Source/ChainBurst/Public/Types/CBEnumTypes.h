@@ -144,3 +144,24 @@ enum class ECBOnlineMode : uint8
 	// EOS. Device ID 익명 로그인 후 P2P 로 붙음. 인터넷 너머로 접속 가능
 	EOS		UMETA(DisplayName = "EOS")
 };
+
+/**
+ * 레벨업 카드 등급
+ * 카드 데이터(FCBLevelUpCard)에 지정하고, 카드 위젯이 등급별 겉모습(UCBLevelUpData 의 GradeStyles)을 골라 씀.
+ * 값이 클수록 높은 등급.
+ */
+UENUM(BlueprintType)
+enum class ECBLevelUpCardGrade : uint8
+{
+	// 일반
+	Common		= 0		UMETA(DisplayName = "Common"),
+
+	// 희귀
+	Rare		= 1		UMETA(DisplayName = "Rare"),
+
+	// 영웅
+	Epic		= 2		UMETA(DisplayName = "Epic"),
+
+	// 전설
+	Legendary	= 3		UMETA(DisplayName = "Legendary")
+};

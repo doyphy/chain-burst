@@ -89,7 +89,7 @@
 | `Input.*` | 식별 | InputAction과 바인딩되는 태그. `Input.Action.*`(액션 입력), `Input.UI.*`(예정) |
 | `Item.*` | 식별 | 아이템/무기 식별 (`Item.Weapon.Sword`), 의상 파츠 식별 (`Item.Cosmetic.*` — 아래 구조) |
 | ↳ `Item.Weapon.*` | 식별 | **무기 종류가 곧 캐릭터 종류**라 캐릭터 선택 키를 겸한다 (`UCBCharacterCatalog` 조회 → 스폰할 캐릭터 클래스) → [GameFlow.md](../Flow/GameFlow.md) |
-| `Data.*` | 식별 | SetByCaller 전용 키 (Damage, Speed, AttackPower, Heal 등) |
+| `Data.*` | 식별 | SetByCaller 전용 키 (Damage, Speed, AttackPower, Heal, LevelUp 등). `Data.LevelUp`은 레벨업 카드 수치 — 카드 GE와 그 추가 효과(회복 GE)가 같은 키를 읽음 → [LevelUp.md](../Gameplay/LevelUp.md) |
 | `Ability.*` | 식별 | 어빌리티 식별 태그 (AssetTags) |
 | `Action.*` | 식별 | 몽타주 식별 태그 (UCBActionComponent에서 몽타주 선택) |
 | `GameplayCue.*` | 식별 | 게임플레이 큐 라우팅 |

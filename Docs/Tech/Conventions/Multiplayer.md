@@ -59,6 +59,18 @@
   - AI는 ASC가 Character 소유라 `APawn` 기본값 100Hz를 타므로 이 문제가 없다. **같은 코드인데 플레이어만 느린 증상**이 나오면 여기를 의심할 것.
 - **RPC는 이 주기와 무관하다.** 호출 즉시 채널로 나간다. 그래서 게임플레이 큐(몽타주 재생·정지)는 즉시 도착하는데 같은 ASC의 루스 태그는 늦는 상황이 생긴다. **"왜 늦게 오나"를 볼 때는 그 값이 속성 복제인지 RPC인지 먼저 구분하고, 속성이면 컴포넌트가 아니라 소유 액터의 주기를 확인한다.**
 - 전환 순간의 지연까지 없애야 하면 상태 변경 직후 `ASC->ForceReplication()`으로 다음 네트 틱에 강제 송출한다(현재는 30Hz만으로 충분해 미적용).
+- **호스트에서는 RPC가 호출한 줄에서 바로 실행된다.** 리슨 서버 호스트의 `Server_` RPC, 자기 자신에게 오는 `Client_` RPC는 네트워크를 거치지 않으므로, 응답(이어지는 `Client_` RPC)이 같은 호출 안에서 돌아올 수 있다. **RPC를 보내는 쪽의 로컬 상태 변경은 RPC 호출보다 먼저** 한다. 원격 클라에선 재현되지 않아 혼자 테스트할 때만 드러난다 → 실제 사례: [LevelUp.md](../Gameplay/LevelUp.md) "호스트에서는 RPC가 그 자리에서 실행된다"
+
+## 월드 정지 중에는 속성 복제가 멈춘다
+
+`SetPause`로 월드를 정지하면 **서버의 `TimeSeconds`가 멈추고**(`LevelTick.cpp`), 복제 대상 선정은 그 시간과 액터의 다음 갱신 시각을 비교한다(`NetDriver.cpp` `ServerReplicateActors_BuildConsiderList`). 그래서 정지 중에는 **`ForceNetUpdate()`한 액터만** 한 번 나가고 나머지 속성 복제는 사실상 멈춘다. 네트 송수신 자체는 정지와 무관하게 돌므로 **RPC는 정상**이다.
+
+- 정지 중에 주고받아야 하는 것은 **RPC**로 보낸다.
+- 정지 중에 바꾼 속성을 보여야 하면 바꾼 직후 그 액터를 `ForceNetUpdate()`한다.
+- 정지는 **`APlayerController::SetPause`** 로 건다. 이 경로가 WorldSettings를 즉시 송출한다 — `AGameModeBase::SetPause`만 부르면 정지 신호 자체가 클라이언트로 못 나갈 수 있다.
+- 월드 타이머(`SetTimer`)도 멈춘다. 정지 중에 시간을 재야 하면 코어 티커(`FTSTicker`)를 쓴다.
+
+실제 적용과 상세: [LevelUp.md](../Gameplay/LevelUp.md) "정지 — 엔진이 정한 제약"
 
 ## 관련 문서
 - 어빌리티 베이스별 NetExecutionPolicy 기본값: [Abilities.md](../Gameplay/Abilities.md)

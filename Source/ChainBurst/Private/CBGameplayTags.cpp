@@ -66,6 +66,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Damage_Coefficient, "Data.Damage.Coefficient", "데미지 계수 (SetByCaller 전용)")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Weapon_AttackPower, "Data.Weapon.AttackPower", "무기 공격력 (SetByCaller 전용)")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Heal, "Data.Heal", "회복량 (SetByCaller 전용)")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_LevelUp, "Data.LevelUp", "레벨업 카드 수치 (SetByCaller 전용)")
 
 	/** Ability Tags. */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Attack, "Ability.Combat.Attack", "공격 어빌리티 부모 태그 (하위 공격 전체를 한 번에 매칭할 때 사용)")

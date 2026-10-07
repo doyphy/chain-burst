@@ -52,10 +52,12 @@ int32 UCBBTComposite_RandomSelector::GetNextChildHandler(FBehaviorTreeSearchData
 	return PickedChildIdx;
 }
 
+#if WITH_EDITOR
 bool UCBBTComposite_RandomSelector::CanAbortLowerPriority() const
 {
 	return false;
 }
+#endif
 
 uint16 UCBBTComposite_RandomSelector::GetInstanceMemorySize() const
 {

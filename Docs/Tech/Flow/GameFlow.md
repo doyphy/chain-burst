@@ -22,7 +22,7 @@
 |---|---|---|
 | `L_CB_MainMenu` | `GM_CB_MainMenu` (BP만) | 메뉴 표시. **Default Pawn = None**, 규칙 없음 |
 | `L_CB_Lobby` | `ACBLobbyGameMode` | 외형 커스터마이징 대기, 준비 완료 판정, `ServerTravel` |
-| 게임플레이 | `ACBGameplayGameMode` | 매치 규칙 (승패·리스폰) |
+| 게임플레이 | `ACBGameplayGameMode` | 매치 규칙 (승패·리스폰·레벨업 → [LevelUp.md](../Gameplay/LevelUp.md)) |
 
 메인 메뉴만 C++ 클래스가 없다 — 담을 규칙이 없어 BP 설정(HUD·Default Pawn)만으로 충분하다. → [EasyGameUI.md](../Presentation/EasyGameUI.md)
 
@@ -30,10 +30,11 @@
 
 ```
 ACBGameStateBase (AGameStateBase)   ← 플레이어 목록 변경 신호(OnPlayerListChanged)
- └─ ACBLobbyGameState               ← 준비 인원 집계
+ ├─ ACBLobbyGameState               ← 준비 인원 집계
+ └─ ACBGameplayGameState            ← 전 플레이어 공유 레벨·경험치
 ```
 
-`ACBGameModeBase` 생성자가 `GameStateClass`를 `ACBGameStateBase`로 고정하고, 로비 게임모드만 자기 것으로 덮는다. 목록 신호는 HUD 플레이어 목록이 쓴다 → [UI.md](../Presentation/UI.md)
+`ACBGameModeBase` 생성자가 `GameStateClass`를 `ACBGameStateBase`로 고정하고, 로비·게임플레이 게임모드가 각자 자기 것으로 덮는다. 목록 신호는 HUD 플레이어 목록이 쓴다 → [UI.md](../Presentation/UI.md). 레벨·경험치는 → [LevelUp.md](../Gameplay/LevelUp.md)
 
 ### 게임모드 계층
 
@@ -213,7 +214,7 @@ ProcessServerTravel: Seamless travel is disabled in PIE, set net.AllowPIESeamles
 
 그래서 스폰 **전에** 두 가지를 걷어낸다. 사망 GE는 클래스가 아니라 **부여 태그(`Status.Dead`)로 제거**한다 — 어떤 GE를 쓸지는 사망 어빌리티 BP가 정하므로 게임모드가 클래스를 알 수 없다. 로드아웃 부여분 회수는 로비의 캐릭터 변경과 같은 `UCBAbilitySystemComponent::Auth_ClearLoadoutGrants()`를 쓴다.
 
-**체력은 따로 되돌리지 않는다.** 새 폰이 초기화되면서 로드아웃의 `StartupEffects`(`GE_Chaser_Sword_Init` 등, `CurrentHealth`/`MaxHealth`를 Override)를 다시 적용하므로 자동으로 원복된다.
+**체력은 따로 되돌리지 않는다.** 새 폰이 초기화되면서 로드아웃의 `StartupEffects`(`GE_Chaser_Sword_Init` 등, `CurrentHealth`/`MaxHealth`를 Override)를 다시 적용하므로 자동으로 원복된다. 레벨업 카드로 오른 최대 체력은 사망 정리에 걸리지 않고 남으므로, Init 다음의 `GE_Chaser_FullHeal`이 현재 체력을 보너스 포함 최대치로 채운다 (→ [LevelUp.md](../Gameplay/LevelUp.md) "리스폰 체력").
 
 ### 타이머는 게임모드가 든다
 

@@ -1,4 +1,4 @@
-# 캐릭터 UI (체력바·이름표·플레이어 목록·보스 바)
+# 캐릭터 UI (체력바·이름표·플레이어 목록·보스 바·상태창)
 
 > 캐릭터 부착형 UI(HUD 체력·머리 위 체력바)의 구조와 규칙. **UI는 각 클라이언트 로컬이며, 값 동기화는 어트리뷰트 리플리케이션이 전담한다 — UI를 위한 RPC/복제 코드를 만들지 않는다.**
 
@@ -8,7 +8,7 @@
 
 | 위젯 성격 | 생성 주체 | 배치·관리 |
 |---|---|---|
-| **화면 + 캐릭터 데이터 필요**<br>(체력바, 추후 쿨타임·버프) | `UCBUIComponent` | 만들어서 **HUD 스택에 넘김** |
+| **화면 + 캐릭터 데이터 필요**<br>(체력바, 상태창, 추후 쿨타임·버프) | `UCBUIComponent` | 만들어서 **HUD 스택에 넘김** |
 | **화면 + 캐릭터 무관**<br>(메뉴·옵션·확인창·로딩) | 요청자 또는 HUD<br>(클래스는 Global Config에 등록) | **HUD 스택** |
 | **월드 + 조작 없음**<br>(머리 위 바, 오브젝트 체력바, 상호작용 프롬프트) | **그 UI가 따라다닐 액터** | `UWidgetComponent` — **스택 밖** |
 | **월드 + 조작 필요**<br>(로비 머리 위 메뉴) | 그 위젯을 담은 화면 위젯 | **HUD 스택** + 위치만 월드 투영 |
@@ -78,6 +78,8 @@
 | `UCBSkillSlotWidget` | HUD 스킬 슬롯 하나의 공용 베이스(UUserWidget). `EditDefaultsOnly` 쿨다운 태그 하나를 대상으로 카운트 변화를 구독해 쿨다운 시작·종료를 감지하고, 쿨다운 중에는 매 틱 활성 GE에서 남은 시간·전체 길이를 조회해 진행률을 계산. 비주얼은 `OnCooldownStarted` / `OnCooldownProgress(Progress, RemainingTime)` / `OnCooldownEnded` BP 이벤트로 WBP에 위임하므로 C++는 위젯 구성(서드파티 프로그레스바 등)을 알지 않는다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
 | `UCBBurstGaugeWidget` | HUD **버스트 게이지**의 공용 베이스(UUserWidget). 한 바가 두 모드로 동작 — 충전 중에는 `BurstGauge` 어트리뷰트를 구독해 `OnBurstGaugeChanged(Current, Max)`, 버스트 중에는 `Status.Combat.Burst` 태그로 시작·종료를 감지하고 매 틱 버스트 GE 남은 시간으로 `OnBurstProgress(RemainingRatio, RemainingTime)`. 두 모드의 이벤트는 섞이지 않는다(아래 "버스트 게이지 표시"). 발동 가능 여부가 바뀌면 `OnBurstReadyChanged(bIsReady)`(BlueprintAssignable)를 방송해 HUD 등 외부 위젯이 구독한다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
 | `UCBStunGaugeWidget` | **기절 게이지**의 공용 베이스(UUserWidget). `StunGauge` 어트리뷰트를 구독해 `OnStunGaugeChanged(Current, Max)` BP 이벤트로 위임. 최대값은 어트리뷰트가 아니라 상수 `UCBAttributeSet::MaxStunGauge`(→ [Stun.md](../Gameplay/Stun.md)). 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
+| `UCBStatusWindowWidget` | **키로 여닫는 상태창**(자기 능력치 표시 전용 패널)의 공용 베이스(UUserWidget). HUD 컨테이너 WBP의 자식. 위젯 트리에 배치된 `UCBAttributeTextBlock`을 모아 **배치된 어트리뷰트만** 구독해 해당 텍스트를 갱신하고, 상태창 어빌리티가 활성 동안 붙이는 `Status.UI.StatusWindow` 태그를 구독해 `OnStatusWindowOpened` / `OnStatusWindowClosed`(바뀔 때만)로 슬라이드 연출을 WBP에 위임 (아래 "상태창"). 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
+| `UCBAttributeTextBlock` | 상태창의 **어트리뷰트 텍스트 하나**(`UTextBlock` 상속, 팔레트 이름 "Attribute Text"). 디테일 패널에서 어트리뷰트(`FGameplayAttribute`)와 소수점 자릿수를 고르고, 값은 상태창이 넣어 준다 — 스스로 구독하지 않음 |
 | `UCBExperienceBarWidget` | **HUD 경험치 바**의 공용 베이스(UUserWidget). `ACBGameplayGameState::OnExperienceChanged`를 구독해 `OnExperienceChanged(Level, Current, Required)` BP 이벤트로 위임. 필요량은 복제하지 않고 게임 인스턴스의 레벨업 데이터에서 계산(데이터가 없으면 0). 게임 스테이트가 늦게 오면 `GameStateSetEvent`로 기다렸다 구독(`UCBPlayerListWidget`과 같은 방식), 게임플레이 레벨이 아니면 아무것도 안 함. HUD 컨테이너 WBP 안에 배치 → [LevelUp.md](../Gameplay/LevelUp.md) |
 | `UCBLevelUpWidget` | **레벨업 카드 선택 창**의 공용 베이스(UUserWidget). 캐릭터 데이터가 필요 없어 `UCBUIComponent`가 아니라 **소유 컨트롤러(`ACBChaserController`)가 생성**해 `Menu` 레이어에 올린다 — 폰이 바뀌어도 살아 있어야 리스폰 중에도 카드를 받는다. 위젯은 표시(`OnCardsOffered`)와 선택 전송(`Local_SelectCard` → 서버 RPC)만 하고, 남은 시간은 월드 정지 중에도 흐르는 실제 시간으로 센다 → [LevelUp.md](../Gameplay/LevelUp.md) |
 | `UCBBossBarWidget` | **화면 상단 보스 바**의 컨테이너 베이스(UUserWidget). `InitializeWithASC()` 하나로 자식 `HealthBarWidget`(`UCBHealthBarWidget`)·`StunGaugeWidget`(`UCBStunGaugeWidget`)을 배선한다(`BindWidgetOptional` — 플레이어 목록 행과 같은 패턴). 값 구독은 자식이 각자 한다 |
@@ -469,6 +471,61 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
 - `DA_Loadout_Outlaw_Hulk` — `BossBarWidgetClass = WBP_CB_BossBar`.
 - `BP_Outlaw_Hulk` — **`Always Relevant` 켜기**(위 ⚠️), UI 컴포넌트의 `bShowOverheadBar` 끄기(머리 위 바와 중복).
 - 새 `UCLASS`·`UPROPERTY` 가 있으므로 코드 반영 후 **에디터를 재시작**해야 BP 에서 보인다.
+
+## 상태창 (자기 능력치)
+
+상태창 키를 누르면 화면 옆에서 미끄러져 나와 자기 능력치(어트리뷰트)를 보여 주는 **표시 전용** 패널이다. 조작이 없으므로 메뉴(`Menu` 레이어)가 아니라 **HUD 컨테이너(`WBP_CB_HUD`)의 자식**이고, 열려 있어도 이동·공격이 그대로 된다. 새 네트워크 코드는 없다.
+
+```
+[키] Input.Action.StatusWindow
+   └ GA_Chaser_Local_ToggleStatusWindow 활성 (LocalOnly)
+        └ ActivationOwnedTags: Status.UI.StatusWindow — 자기 화면 ASC 에만
+             ▼ 태그 구독
+          UCBStatusWindowWidget → OnStatusWindowOpened (WBP 슬라이드인)
+[같은 키] 활성 중 입력 → Wait Input Press → End Ability → 태그 제거 → OnStatusWindowClosed (슬라이드아웃)
+```
+
+### 열림 상태 = 어빌리티 활성
+
+- **어빌리티와 위젯은 서로를 모른다 — 태그 하나로만 이어진다.** 어빌리티는 위젯이나 UI 컴포넌트를 찾을 필요가 없고, 위젯은 여닫는 규칙을 모른다. 누르는 동안만 보이게 하려면 어빌리티의 `Wait Input Press`를 `Wait Input Release`로 바꾸기만 하면 된다.
+- 이미 활성인 어빌리티에 같은 키가 들어오면 `UCBAbilitySystemComponent::OnAbilityInputPressed`가 `InvokeReplicatedEvent(InputPressed)`로 넘겨 `Wait Input Press`가 받는다.
+- `LocalOnly`라 태그는 ActivationOwnedTags 경로로 **자기 화면의 ASC에만** 붙고 복제되지 않는다. 연출 전용이므로 판정에 쓰지 않는다 (→ [GameplayTags.md](../Foundation/GameplayTags.md)).
+- **죽으면 저절로 닫힌다.** 사망 어빌리티(`ServerInitiated`)가 소유 클라이언트에서도 `CancelAllAbilities`를 부르기 때문이다. `bActivatableWhileDead`가 꺼져 있어 죽은 동안에는 열리지 않는다.
+- **같은 키로 닫을 수 있는 건 Game 레이어이기 때문이다.** `Menu` 레이어 위젯은 게임플레이 IMC를 걷어내므로(→ [EasyGameUI.md](EasyGameUI.md)) 상태창 키 자체가 들어오지 않는다.
+
+### 표시 대상 고르기 — 배치가 곧 설정
+
+- `UCBAttributeTextBlock`("Attribute Text")은 `UTextBlock` 자식이라 일반 텍스트처럼 놓고 꾸민다. 디테일 패널에서 **어트리뷰트를 드롭다운으로 고른다.** "공격력" 같은 이름표는 옆에 일반 텍스트로 둔다.
+- 상태창은 `NativeOnInitialized`에서 위젯 트리를 훑어 텍스트를 모으고 **배치된 어트리뷰트만** 구독한다(같은 어트리뷰트를 여러 텍스트가 골라도 구독은 하나). 어트리뷰트를 새로 추가하면 드롭다운에 자동으로 나타나므로 C++ 수정이 없다.
+- **구독은 텍스트가 아니라 상태창이 한다.** `UTextBlock`에는 `NativeConstruct`/`NativeDestruct` 같은 수명 훅이 없어, 구독 수명 계약을 컨테이너 한 곳에 둔다.
+- `MaximumFractionalDigits`(기본 0)는 텍스트마다 정한다. 데미지가 `공격력 × 계수 − 방어력`이라 체력이 소수로 남을 수 있고, AttackSpeed 같은 배율은 정수로 보이면 안 되기 때문이다.
+- ⚠️ **텍스트는 상태창 WBP에 직접 둔다**(패널 안은 괜찮다). 위젯 트리 탐색은 중첩된 다른 유저 위젯 안으로 들어가지 않아, 그 안의 텍스트는 찾지 못한다. 어트리뷰트를 비워 둔 텍스트도 건너뛰어 디자이너에 적은 텍스트가 그대로 남는다.
+
+### 열림 이벤트는 바뀔 때만 — 디자이너 기본 모습은 닫힘
+
+- 처음 구독할 때 닫힌 상태면 **닫힘 이벤트를 보내지 않는다.** `Play Animation Reverse`는 멈춰 있을 때 끝 지점(열린 모습)부터 재생하므로, 보내면 HUD가 뜨자마자 상태창이 한 번 열렸다 닫히는 것처럼 보인다. 그래서 `bIsOpen`(기본 false)과 비교해 바뀔 때만 발화한다.
+- 그 대가로 **디자이너의 기본 모습이 닫힌 상태(화면 밖)여야 한다.** 구독 시점에 이미 태그가 있으면 열림 이벤트가 간다.
+- 구독 수명 계약은 체력바와 같다. 슬레이트가 없으면 구독·반영을 함께 미뤄, 화면에 없는 위젯에 연출 이벤트가 가지 않는다.
+
+### 검토했지만 채택하지 않은 것
+
+| 안 | 이유 |
+|---|---|
+| `Menu` 레이어 위젯 (일시정지 메뉴처럼) | 조작이 없는 패널이다. IMC가 빠져 이동이 멈추고 같은 키로 닫을 수도 없다 |
+| 어빌리티가 위젯을 생성·소유 | 로드아웃 회수·리스폰으로 어빌리티 인스턴스가 바뀌면 위젯이 스택에 고아로 남는다. HUD 자식이면 생성·제거가 기존 경로로 해결된다 |
+| 어빌리티가 UI 컴포넌트를 거쳐 직접 여닫기 | 컴포넌트는 HUD 컨테이너 안의 자식을 모른다. 태그는 연결 지점이 하나다 |
+| 어트리뷰트 텍스트가 스스로 구독 | 수명 훅이 없다 (위) |
+| ASC의 모든 어트리뷰트 구독 | 표시하지 않는 어트리뷰트(이동 상태마다 바뀌는 `MovementSpeed` 등)의 콜백만 는다. 고를 수 있는 범위는 이미 전부다 |
+| 닫혀 있는 동안 구독 해제 | 어트리뷰트 몇 개의 콜백이라 다시 구독하는 비용과 차이가 없다 |
+| 서식 패턴(`"공격력: {Value}"`)·반올림 방식 선택 | 이름표는 옆 텍스트로 충분하다. 반올림은 체력 0.x 같은 경계에서만 차이가 나므로 겪으면 추가한다 |
+
+### 에디터 작업
+
+- `WBP_CB_StatusWindow` — `UCBStatusWindowWidget` 자식. Attribute Text를 배치하고 어트리뷰트를 고른다. 슬라이드 애니메이션 하나를 만들어 `OnStatusWindowOpened` → `Play Animation Forward`, `OnStatusWindowClosed` → `Play Animation Reverse`로 연결한다(재생 중에 다시 눌러도 그 자리에서 방향만 바뀐다). **디자이너 기본 모습은 닫힌 상태**, 루트 Visibility는 `Not Hit-Testable`.
+- `WBP_CB_HUD`에 배치하고 `Is Variable`을 켠다. `Event Construct`의 기존 ASC 캐스트 결과로 `Initialize With ASC`를 호출한다(체력바·스킬 슬롯과 같은 자리).
+- `GA_Chaser_Local_ToggleStatusWindow` — 부모 `UCBGameplayAbility`, `NetExecutionPolicy = LocalOnly`, `ActivationOwnedTags = Status.UI.StatusWindow`. 그래프는 `ActivateAbility → Wait Input Press → End Ability`.
+- 입력 — `IA_StatusWindow` 생성 → `IMC_Default`에 키 매핑 → InputConfig `AbilityInputActions`에 `Input.Action.StatusWindow` → Chaser 로드아웃 어빌리티 목록에 추가.
+- 새 `UCLASS`가 있으므로 코드 반영 후 **에디터를 재시작**해야 한다.
 
 ## 위젯 클래스 등록 — 로드아웃
 

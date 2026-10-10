@@ -48,6 +48,9 @@ public:
 	 */
 	void Auth_HandlePlayerDeath(AController* InController);
 
+	/** [Getter] 사망 후 다시 스폰하기까지의 지연(초). 플레이어 시체가 사라지는 시점이기도 함 (소멸 연출이 이 시점에 끝나도록 맞춤) */
+	FORCEINLINE float GetRespawnDelay() const { return RespawnDelay; }
+
 protected:
 	/**
 	 * [서버] 실제로 다시 스폰시키는 함수. (예약 타이머가 만료되면 호출)

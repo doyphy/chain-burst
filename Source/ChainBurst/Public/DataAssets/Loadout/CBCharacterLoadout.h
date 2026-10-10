@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "GameplayTagContainer.h"
 #include "CBCharacterLoadout.generated.h"
 
 class UCBGameplayAbility;
@@ -59,7 +60,7 @@ class CHAINBURST_API UCBCharacterLoadout : public UPrimaryDataAsset
 public:
 	/**
 	 * [공용] 전 인스턴스(서버·클라)에서 필요한 데이터를 캐릭터에 일괄 적용하는 함수
-	 * 바디 셋업(캡슐·메시 트랜스폼), 스켈레탈 메쉬·애님BP, 이동 데이터, 액션 몽타주 데이터를 적용한다.
+	 * 바디 셋업(캡슐·메시 트랜스폼), 스켈레탈 메쉬·애님BP, 이동 데이터, 액션 몽타주 데이터, 생성·소멸 연출을 적용한다.
 	 * 로드아웃 내부 에셋은 모두 하드 참조라 로드아웃 로드 시점에 함께 resolve되므로 이 함수는 동기 실행된다.
 	 * 파생 로드아웃은 이 함수를 오버라이드해 역할별 공용 데이터를 추가로 적용한다 (Super 호출 필수).
 	 */
@@ -68,7 +69,7 @@ public:
 	/**
 	 * [공용] 로드아웃이 가진 소프트 참조를 로드해 적용하는 함수 (ApplyToCharacter 의 비동기 꼬리).
 	 *
-	 * 로드아웃에 소프트 참조가 생기면 여기에 모은다 — "무엇을 더 로드해야 하는지"는 로드아웃이 알고,
+	 * 로드아웃에 소프트 참조가 생기면 여기에 모은다 - "무엇을 더 로드해야 하는지"는 로드아웃이 알고,
 	 * "언제 준비 완료인지"는 캐릭터가 정하게 하기 위함이다. 캐릭터는 완료 콜백만 기다리면 된다.
 	 *
 	 * 어떤 경로로 끝나든 OnComplete 를 반드시 호출할 것. 빠뜨리면 캐릭터가 영구히 준비 완료되지 않고, 화면이 검은 채로 멈춤.
@@ -140,6 +141,20 @@ protected:
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals")
 	FCBBodySetup BodySetup;
+
+	/**
+	 * 생성 연출 GameplayCue 태그. 런타임에 생성된 캐릭터가 각 머신에서 준비 완료(메시가 처음 보이는 순간)될 때 그 머신에서만 실행함.
+	 * 레벨 배치 캐릭터와, 이미 있던 캐릭터를 나중에 받은 클라이언트(관련 거리 진입 등)에서는 실행하지 않음. 비우면 연출 없이 나타남.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals", meta = (Categories = "GameplayCue"))
+	FGameplayTag SpawnCueTag;
+
+	/**
+	 * 소멸 연출 GE (고정 기간 GE + GameplayCue). 시체가 사라지는 시점(AI = DespawnDelay, 플레이어 = 리스폰)에 끝나도록 기간만큼 먼저 서버가 적용함.
+	 * 비우면 연출 없이 사라짐. 기간은 큐의 연출 길이와 같게 둘 것 (짧으면 연출이 잘림).
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Loadout|Visuals")
+	TSubclassOf<UGameplayEffect> DespawnEffectClass;
 
 	// =========================================================
 	// 캐릭터 데이터 (Data) - 전 인스턴스에서 필요한 데이터 에셋

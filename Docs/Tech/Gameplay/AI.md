@@ -344,7 +344,7 @@ AI 쪽에서 눈여겨볼 두 가지:
 | **이동 중 거리 변화로 끊기** | **커스텀** — `UCBBTService_UpdateTargetDistance` (아래) + 내장 `Blackboard` 데코레이터 |
 | 타겟 바라보기 | `BTTask_RotateToFaceBBEntry` — 내장 |
 | 타겟 보유 여부 | `BTDecorator_Blackboard` (`Is Set`) — 내장 |
-| 어빌리티 재생 중 다른 행동 차단 | `BTDecorator_CheckGameplayTagsOnActor` — 내장 |
+| 어빌리티 재생 중 다른 행동 차단 | `BTDecorator_CheckGameplayTagsOnActor` — 내장 (캐릭터가 `IGameplayTagAssetInterface` 로 ASC 태그를 넘겨줘야 동작 → [GameplayTags.md](../Foundation/GameplayTags.md)) |
 | **어빌리티 활성화** | **커스텀** — `UCBBTTask_ActivateAbility(AndWait)` (아래) |
 | **후퇴·경계 지점 계산** | **EQS** — `BTTask_RunEQSQuery`(내장) + 쿼리 에셋 (아래) |
 | **경계 중 타겟 주시 + 스트레이프 회전** | **커스텀** — `UCBBTService_StrafeFocus` (아래) |

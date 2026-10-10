@@ -3,7 +3,9 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "GameplayTagAssetInterface.h"
 #include "GenericTeamAgentInterface.h"
+#include "ActiveGameplayEffectHandle.h"
 #include "Interfaces/CBCombatInterface.h"
 #include "Interfaces/CBUIInterface.h"
 #include "Types/CBEnumTypes.h"
@@ -21,6 +23,7 @@ class UCBNoiseEmitterComponent;
 class UCBUIComponent;
 class UMotionWarpingComponent;
 class UAnimMontage;
+class UGameplayEffect;
 
 DECLARE_MULTICAST_DELEGATE(FOnCharacterSystemReady);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCBTeamChanged, ECBTeam /* NewTeam */);
@@ -36,7 +39,7 @@ enum class ECBSystemState : uint8
 };
 
 UCLASS()
-class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface, public ICBCombatInterface, public ICBUIInterface, public IGenericTeamAgentInterface
+class CHAINBURST_API ACBBaseCharacter : public ACharacter, public IAbilitySystemInterface, public IGameplayTagAssetInterface, public ICBCombatInterface, public ICBUIInterface, public IGenericTeamAgentInterface
 {
 	GENERATED_BODY()
 
@@ -47,7 +50,9 @@ public:
 
 	//~ Begin AActor Interface.
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	/** 사망 태그 구독과 디스폰 타이머를 정리. */
+	/** [서버] 런타임에 생성된 캐릭터면 생성 창을 엶 (생성 프레임 안이라 첫 복제와 함께 나감). */
+	virtual void BeginPlay() override;
+	/** 사망 태그 구독과 디스폰·연출 타이머를 정리하고, 남은 소멸 연출 GE 를 걷어냄. */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	//~ End AActor Interface.
 
@@ -78,6 +83,14 @@ public:
 	//~ Begin IAbilitySystemInterface Interface.
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 	//~ End IAbilitySystemInterface Interface.
+
+	//~ Begin IGameplayTagAssetInterface Interface.
+	/**
+	 * ASC 가 가진 태그를 그대로 돌려주는 함수 (태그는 액터가 아니라 ASC 에 있음).
+	 * 액터에게 태그를 묻는 엔진 기능(BT 내장 데코레이터 Check Gameplay Tags on Actor 등)이 이 경로로 ASC 태그를 봄.
+	 */
+	virtual void GetOwnedGameplayTags(FGameplayTagContainer& TagContainer) const override;
+	//~ End IGameplayTagAssetInterface Interface.
 
 	FORCEINLINE UCBAbilitySystemComponent* GetCBAbilitySystemComponent() const { return CBASC.Get(); }
 	FORCEINLINE UCBAttributeSet* GetCBAttributeSet() const { return CBAttributeSet.Get(); }
@@ -233,7 +246,7 @@ protected:
 	virtual void Landed(const FHitResult& Hit) override;
 	//~ End ACharacter Interface.
 
-	/** [서버] 사망 시 권위 정리 (이동 정지·자식 훅·디스폰 예약) */
+	/** [서버] 사망 시 권위 정리 (이동 정지·자식 훅·소멸 연출 예약·디스폰 예약) */
 	virtual void Auth_HandleDeath();
 
 	/** [서버] 이동을 완전히 정지 (사망 확정 시점 또는 공중 사망 후 착지 시점) */
@@ -243,12 +256,12 @@ protected:
 	virtual void Auth_OnDeath() {}
 
 	/** [서버] 디스폰 타이머 만료 시 액터를 파괴 */
-	virtual void Auth_Despawn();
+	void Auth_Despawn();
 
 	/** 사망 로컬 정리 (전 인스턴스 각자 실행. 기본 구현은 ECC_Pawn 충돌 해제 + 델리게이트 방송) */
 	virtual void Local_HandleDeath();
 
-	/** 사망 후 액터를 파괴하기까지의 지연(초). 0 이하면 자동 파괴하지 않음 (리스폰이 있는 플레이어 등) */
+	/** 사망 후 액터를 스스로 파괴하기까지의 지연(초, 시체 유지 시간). 0 이하면 스스로 파괴하지 않음 (리스폰 때 게임모드가 폰을 교체하는 플레이어) */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Death")
 	float DespawnDelay = 5.f;
 
@@ -267,5 +280,64 @@ private:
 
 	/** 디스폰 타이머 핸들 */
 	FTimerHandle DespawnTimerHandle;
+#pragma endregion
+
+#pragma region Spawn Despawn FX
+	/**
+	 * 생성·소멸 연출 (로드아웃이 주입하고, 캐릭터가 재생 시점을 정함)
+	 * 생성: 런타임에 생성된 캐릭터가 각 머신에서 준비 완료될 때 그 머신에서만 큐를 실행 (메시가 처음 보이는 순간이 머신마다 달라 각자 시작).
+	 *       레벨 배치 캐릭터, 이미 있던 캐릭터를 나중에 받은 클라이언트는 하지 않음 - 서버가 생성 직후 잠깐 여는 '생성 창'을 첫 복제로만 보내 구분.
+	 * 소멸: 서버가 사망 시 예약해, 시체가 사라지는 시점에 끝나도록 기간 GE 를 적용 (큐가 상태로 복제되어 전 클라이언트가 재생).
+	 */
+public:
+	/**
+	 * 로드아웃이 생성·소멸 연출을 주입하는 세터 (전 인스턴스). 소멸 GE 는 서버만 검증·캐싱함.
+	 * @param InSpawnCueTag 생성 연출 GameplayCue 태그 (비우면 연출 없음)
+	 * @param InDespawnEffectClass 소멸 연출 GE (비우면 연출 없음. 고정 기간형이 아니면 경고 후 쓰지 않음)
+	 */
+	void SetLifecycleEffects(const FGameplayTag& InSpawnCueTag, TSubclassOf<UGameplayEffect> InDespawnEffectClass);
+
+protected:
+	/** [서버] 시체가 사라지기까지의 시간(초). 소멸 연출이 이 시점에 끝나도록 앞당겨 시작함. 기본 = DespawnDelay (스스로 파괴하는 AI). 0 이하면 소멸 연출 없음 */
+	virtual float GetCorpseLifetime() const { return DespawnDelay; }
+
+private:
+	/** [로컬] 생성 연출 큐를 이 머신에서만 실행하는 함수 (준비 완료 시점, 전 인스턴스). 방금 생성된 캐릭터일 때만 */
+	void Local_PlaySpawnEffect();
+
+	/** [서버] 생성 창을 닫는 함수. 이후 이 캐릭터를 처음 받는 클라이언트는 생성 연출을 하지 않음 */
+	void Auth_CloseSpawnEffectWindow();
+
+	/** [서버] 소멸 연출을 예약하는 함수 (사망 시점) */
+	void Auth_ScheduleDespawnEffect();
+
+	/** [서버] 소멸 연출 GE 를 적용하는 함수 (예약 타이머 만료) */
+	void Auth_ApplyDespawnEffect();
+
+	/** 생성 창 길이(초). 첫 복제가 몇 프레임 밀려도 생성으로 인정할 여유 (이 사이에 관련 거리 밖에서 안으로 들어오는 경우는 사실상 없음) */
+	static constexpr float SpawnEffectWindowDuration = 1.f;
+
+	/** 생성 연출 GameplayCue 태그 (로드아웃 주입) */
+	FGameplayTag SpawnCueTag;
+
+	/** [첫 복제만] 생성 창이 열려 있는지. 서버가 런타임 생성 직후 열고 잠시 뒤 닫음 → 창이 닫힌 뒤 이 캐릭터를 처음 받은 클라이언트는 false 를 받음 */
+	UPROPERTY(Replicated)
+	bool bInSpawnEffectWindow = false;
+
+	/** [서버] 소멸 연출 GE (로드아웃 주입, 고정 기간형만). UPROPERTY 로 클래스 참조 유지 */
+	UPROPERTY(Transient)
+	TSubclassOf<UGameplayEffect> DespawnEffectClass;
+
+	/** [서버] 소멸 연출 GE 의 기간(초). 연출 시작을 이만큼 앞당김 */
+	float DespawnEffectDuration = 0.f;
+
+	/** [서버] 적용한 소멸 연출 GE. ASC 가 폰보다 오래 사는 플레이어에서 폰이 사라질 때 걷어내는 용도 */
+	FActiveGameplayEffectHandle DespawnEffectHandle;
+
+	/** [서버] 생성 창 타이머 핸들 */
+	FTimerHandle SpawnEffectWindowTimerHandle;
+
+	/** [서버] 소멸 연출 예약 타이머 핸들 */
+	FTimerHandle DespawnEffectTimerHandle;
 #pragma endregion
 };

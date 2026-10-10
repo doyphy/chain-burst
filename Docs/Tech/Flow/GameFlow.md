@@ -222,6 +222,8 @@ ProcessServerTravel: Seamless travel is disabled in PIE, set net.AllowPIESeamles
 
 `ACBChaserCharacter::DespawnDelay = 0` 은 그대로다. **시체는 스스로 사라지지 않고 리스폰 시점에 게임모드가 폰을 교체하면서 파괴된다** — 폰을 먼저 없애면 컨트롤러가 폰을 잃어 화면·입력이 끊기기 때문. 파괴 시 `Pawn::EndPlay`가 돌면서 무기 액터와 HUD 위젯도 함께 정리된다.
 
+**소멸·생성 연출은 캐릭터가 스스로 한다.** 게임모드는 리스폰만 하고 연출을 모른다. 플레이어의 시체 유지 시간은 `GetCorpseLifetime()` 이 게임모드의 `RespawnDelay` 로 답하므로, 소멸 연출은 리스폰 지연에서 연출 길이만큼 먼저 시작해 **폰이 교체되는 순간 끝나고**, 새 폰은 런타임 생성이라 **생성 연출로 나타난다.** ASC 가 PlayerState 에 남으므로 폰이 사라질 때(`EndPlay`) 남은 소멸 GE 를 걷어낸다 → [SpawnFX.md](../Presentation/SpawnFX.md)
+
 AI(Rogue/Outlaw)는 이 경로를 타지 않는다. 기존대로 `DespawnDelay` 뒤 스스로 파괴되고, 다음 소환은 스포너가 전멸을 보고 결정한다 (→ [Spawner.md](../Gameplay/Spawner.md)).
 
 ### 아직 없는 것

@@ -91,6 +91,8 @@ protected:
 	//~ Begin ACBBaseCharacter Interface
 	/** [서버] 사망 시 게임모드에 리스폰을 요청함 (지연·스폰 지점 규칙은 게임모드가 소유). */
 	virtual void Auth_OnDeath() override;
+	/** [서버] 시체는 리스폰 때 게임모드가 폰을 교체하며 사라지므로 리스폰 지연을 돌려줌. 게임플레이 레벨이 아니면 0 (리스폰 없음) */
+	virtual float GetCorpseLifetime() const override;
 	//~ End ACBBaseCharacter Interface
 	
 public:

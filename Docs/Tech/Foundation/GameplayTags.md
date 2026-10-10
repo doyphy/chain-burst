@@ -82,6 +82,14 @@
 
 > 어빌리티가 부여 주체가 아니거나(BT 서비스·컴포넌트) 어빌리티 수명과 태그 구간이 어긋나면 ②가 성립하지 않는다. 그때는 ③·④로 간다 — `Status.Movement.Strafe`는 ABP가 직접 읽어야 해 복제가 필수인데 부여 주체가 BT 서비스라 ③이다.
 
+## 액터에게 태그 묻기 — `IGameplayTagAssetInterface`
+
+태그는 액터가 아니라 **ASC 에** 있다(플레이어는 PlayerState 의 ASC). 그런데 엔진 일부 기능은 ASC 를 찾지 않고 액터의 `IGameplayTagAssetInterface` 만 본다 — 대표가 BT 내장 데코레이터 **`Check Gameplay Tags on Actor`** 이며, 인터페이스가 없으면 **조용히 거짓**을 반환한다.
+
+그래서 `ACBBaseCharacter` 가 이 인터페이스를 구현해 `GetOwnedGameplayTags` 에서 **ASC 의 태그를 그대로 넘긴다**(ASC 캐싱 전이면 빈 컨테이너). 읽기 전용이고 상태·네트워크가 없다. 이 덕분에 BT 에서 경직 같은 상태 태그를 커스텀 데코레이터 없이 검사한다.
+
+- 판정은 **그 머신의 ASC 에 실제로 있는 태그** 기준이다. AI BT 는 서버에서 돌므로 서버 태그를 본다 — 위 복제 경로와 무관하게 서버에는 언제나 있다.
+
 ## 네임스페이스 인덱스
 
 | 네임스페이스 | 역할 | 용도 |
@@ -94,7 +102,7 @@
 | `Action.*` | 식별 | 몽타주 식별 태그 (UCBActionComponent에서 몽타주 선택) |
 | `GameplayCue.*` | 식별 | 게임플레이 큐 라우팅 |
 | `Effect.*` | 속성 | GE 동작 의도 선언 (Opt-in, 여러 GE 공유 가능) |
-| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`, `Staggered`, `Stunned`, `Burst`, `Engaged`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망) |
+| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`, `Staggered`, `Stunned`, `Burst`, `Engaged`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망), `Status.UI.*`(UI 연출 — `StatusWindow`. `LocalOnly` 어빌리티의 ActivationOwnedTags로 자기 화면 ASC에만 붙음, 판정 금지 → [UI.md](../Presentation/UI.md) "상태창") |
 | `Cooldown.*` | 상태 | 어빌리티 쿨다운 (쿨다운 GE의 GrantedTags — GAS가 자동 검사. 관례상 별도 루트 유지) |
 | `Event.*` | 이벤트 | 애님노티파이 등 이벤트 트리거 |
 

@@ -7,10 +7,13 @@
 #include "Components/Perception/CBNoiseEmitterComponent.h"
 #include "AbilitySystem/CBAttributeSet.h"
 #include "CBGameplayTags.h"
+#include "CBAbilitySystemLibrary.h"
 #include "Types/CBCollisionChannels.h"
 
 // engine
 #include "AbilitySystemBlueprintLibrary.h"
+#include "GameplayCueManager.h"
+#include "GameplayEffect.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "MotionWarpingComponent.h"
@@ -82,11 +85,39 @@ void ACBBaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 
 	// 진영은 AI 판정(서버)뿐 아니라 아군/적 표현(클라)에도 필요하므로 전 클라이언트에 복제.
 	DOREPLIFETIME(ACBBaseCharacter, Team);
+
+	// 생성 창은 첫 복제 값만 의미가 있음. 창이 닫힌 뒤 처음 받는 클라이언트에게만 닫힘이 가야 하므로 이후 변경은 보내지 않음
+	DOREPLIFETIME_CONDITION(ACBBaseCharacter, bInSpawnEffectWindow, COND_InitialOnly);
+}
+
+void ACBBaseCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// [서버] 런타임에 생성된 캐릭터만 생성 창을 엶. 레벨 배치 캐릭터는 생성 연출 없음
+	// 생성 프레임 안이라 이 값이 첫 복제와 함께 나감
+	if (HasAuthority() && !IsNetStartupActor())
+	{
+		bInSpawnEffectWindow = true;
+		GetWorldTimerManager().SetTimer(
+			SpawnEffectWindowTimerHandle, this, &ACBBaseCharacter::Auth_CloseSpawnEffectWindow, SpawnEffectWindowDuration, false);
+	}
 }
 
 UAbilitySystemComponent* ACBBaseCharacter::GetAbilitySystemComponent() const
 {
 	return Cast<UAbilitySystemComponent>(CBASC);
+}
+
+// 태그는 ASC 에 있으므로 ASC 의 태그를 그대로 돌려줌 (ASC 캐싱 전이면 빈 컨테이너)
+void ACBBaseCharacter::GetOwnedGameplayTags(FGameplayTagContainer& TagContainer) const
+{
+	TagContainer.Reset();
+
+	if (CBASC)
+	{
+		CBASC->GetOwnedGameplayTags(TagContainer);
+	}
 }
 
 // 필요할 때 Tick 설정
@@ -201,6 +232,9 @@ void ACBBaseCharacter::HandleCharacterSystemReady()
 	// 델리게이트 방송 (구독 중인 컴포넌트 및 애님 인스턴스에 알림)
 	OnCharacterSystemReadyDelegate.Broadcast();
 
+	// 생성 연출. 메시·머티리얼이 방금 붙어 이 머신에서 처음 보이는 순간이라 여기서 시작함
+	Local_PlaySpawnEffect();
+
 	// 어트리뷰트 초기화 (모든 비동기 로드 완료 후 실행되므로 MovementData 등 준비 완료 상태)
 	InitializeAttributes();
 
@@ -268,10 +302,13 @@ void ACBBaseCharacter::Auth_HandleDeath()
 		}
 	}
 
-	// 자식 확장 훅 (AI = 두뇌 정지 등)
+	// 자식 확장 훅 (AI = 두뇌 정지, 플레이어 = 리스폰 요청 등)
 	Auth_OnDeath();
 
-	// 디스폰 예약. 0 이하면 자동 파괴하지 않음 (폰이 사라지면 안 되는 플레이어 등)
+	// 소멸 연출 예약 (시체가 사라지는 시점에 끝나도록)
+	Auth_ScheduleDespawnEffect();
+
+	// 디스폰 예약. 0 이하면 스스로 파괴하지 않음 (리스폰 때 게임모드가 폰을 교체하는 플레이어 등)
 	if (DespawnDelay > 0.f)
 	{
 		GetWorldTimerManager().SetTimer(
@@ -336,10 +373,97 @@ void ACBBaseCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	DeadTagChangedHandle.Reset();
 
-	// 디스폰 타이머 정리
+	// 디스폰·연출 타이머 정리
 	GetWorldTimerManager().ClearTimer(DespawnTimerHandle);
+	GetWorldTimerManager().ClearTimer(SpawnEffectWindowTimerHandle);
+	GetWorldTimerManager().ClearTimer(DespawnEffectTimerHandle);
+
+	// 남은 소멸 연출 GE 회수. 플레이어는 ASC 가 PlayerState 소유라 폰보다 오래 살아남음
+	// (리스폰과 GE 만료가 같은 순간이라, 걷어내지 않으면 새 폰에 GE 가 넘어갈 수 있음)
+	if (CBASC && DespawnEffectHandle.IsValid())
+	{
+		CBASC->RemoveActiveGameplayEffect(DespawnEffectHandle);
+	}
+	DespawnEffectHandle.Invalidate();
 
 	Super::EndPlay(EndPlayReason);
+}
+#pragma endregion
+
+#pragma region Spawn Despawn FX
+// 로드아웃의 생성·소멸 연출 주입. 생성 태그는 전 인스턴스, 소멸 GE 는 서버만 캐싱.
+void ACBBaseCharacter::SetLifecycleEffects(const FGameplayTag& InSpawnCueTag, TSubclassOf<UGameplayEffect> InDespawnEffectClass)
+{
+	SpawnCueTag = InSpawnCueTag;
+
+	// 소멸 연출은 서버가 예약·적용함
+	if (!HasAuthority()) return;
+
+	DespawnEffectClass = nullptr;
+	DespawnEffectDuration = 0.f;
+
+	if (!InDespawnEffectClass) return;
+
+	// 기간만큼 연출 시작을 앞당겨야 하므로 고정 기간형만 받음 (무한형이나 기간을 미리 알 수 없으면 시작 시점을 정할 수 없음)
+	const UGameplayEffect* EffectCDO = InDespawnEffectClass->GetDefaultObject<UGameplayEffect>();
+	float Duration = 0.f;
+	if (EffectCDO->DurationPolicy != EGameplayEffectDurationType::HasDuration
+		|| !EffectCDO->DurationMagnitude.GetStaticMagnitudeIfPossible(1.f, Duration)
+		|| Duration <= 0.f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 소멸 연출 GE %s 가 고정 기간형이 아니라 쓰지 않음 (연출 없이 사라짐)"), *GetName(), *GetNameSafe(InDespawnEffectClass));
+		return;
+	}
+
+	DespawnEffectClass = InDespawnEffectClass;
+	DespawnEffectDuration = Duration;
+}
+
+// [로컬] 생성 연출 큐를 이 머신에서만 실행. 방금 생성된 캐릭터일 때만.
+void ACBBaseCharacter::Local_PlaySpawnEffect()
+{
+	if (!SpawnCueTag.IsValid()) return;
+
+	// 서버는 직접 생성했으므로 런타임 생성이면 항상, 클라이언트는 첫 복제 때 생성 창이 열려 있었을 때만
+	// (레벨 배치 캐릭터, 관련 거리 진입 등으로 나중에 받은 캐릭터는 연출 없이 바로 보임)
+	const bool bJustSpawned = HasAuthority() ? !IsNetStartupActor() : bInSpawnEffectWindow;
+	if (!bJustSpawned) return;
+
+	// 복제하지 않음. 메시가 보이는 순간이 머신마다 달라 각자 시작함
+	UGameplayCueManager::ExecuteGameplayCue_NonReplicated(this, SpawnCueTag, FGameplayCueParameters());
+}
+
+// [서버] 생성 창 닫기. 이후 이 캐릭터를 처음 받는 클라이언트에는 닫힘이 첫 복제로 감.
+void ACBBaseCharacter::Auth_CloseSpawnEffectWindow()
+{
+	bInSpawnEffectWindow = false;
+}
+
+// [서버] 소멸 연출 예약. 연출 길이만큼 먼저 시작해 시체가 사라지는 순간 끝나게 함.
+void ACBBaseCharacter::Auth_ScheduleDespawnEffect()
+{
+	const float CorpseLifetime = GetCorpseLifetime();
+	if (!DespawnEffectClass || CorpseLifetime <= 0.f) return;
+
+	// 연출이 시체 유지 시간보다 길면 바로 시작
+	const float StartDelay = CorpseLifetime - DespawnEffectDuration;
+	if (StartDelay > 0.f)
+	{
+		GetWorldTimerManager().SetTimer(
+			DespawnEffectTimerHandle, this, &ACBBaseCharacter::Auth_ApplyDespawnEffect, StartDelay, false);
+	}
+	else
+	{
+		// 0 이하로 타이머를 걸면 엔진이 타이머를 지워 버리므로 바로 호출
+		Auth_ApplyDespawnEffect();
+	}
+}
+
+// [서버] 소멸 연출 GE 적용. 기간 GE 의 큐는 상태로 복제되어 각 클라이언트가 소멸 연출을 재생함.
+void ACBBaseCharacter::Auth_ApplyDespawnEffect()
+{
+	const FGameplayEffectSpecHandle SpecHandle = UCBAbilitySystemLibrary::NativeMakeEffectSpecHandle(DespawnEffectClass, this);
+	DespawnEffectHandle = UCBAbilitySystemLibrary::NativeApplyEffectSpecHandleToTarget(this, SpecHandle);
 }
 #pragma endregion
 

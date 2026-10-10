@@ -55,6 +55,9 @@ void UCBCharacterLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 		InCharacter->CacheInitialMeshOffset(BodySetup.MeshRelativeLocation, BodySetup.MeshRelativeRotation);
 	}
 
+	// 생성·소멸 연출 주입 (재생 시점은 캐릭터가 정함 - 생성은 준비 완료, 소멸은 사망 후)
+	InCharacter->SetLifecycleEffects(SpawnCueTag, DespawnEffectClass);
+
 	// 스켈레탈 메시 유효성 검사 (하드 참조라 로드아웃 로드 시점에 이미 resolve됨)
 	if (!SkeletalMesh) return;
 

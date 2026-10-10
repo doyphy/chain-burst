@@ -90,16 +90,17 @@ UnrealBuildTool(UBT) 기반 프로젝트. 평소 작업은 Rider 또는 언리�
 | [Montage.md](Docs/Tech/Gameplay/Montage.md) | 액션 몽타주 조회·재생·동기화 — GameplayCue(`GameplayCue.PlayAction`)로 전 클라 동기화, 콤보 인덱스는 큐 파라미터로 전달. 정지·**섹션 점프**도 큐 경유(요청 머신은 요청자가 정함). **모션 워핑**(거리 상한 `ClampedSkewWarp`, 일정 속도 돌진 `ConstantSpeedWarp`, 고정 각도 회전 `RotateBy` — 애님 루트모션이 있으면 루트모션 소스는 무시됨)과 서버 본 갱신(애님 틱) 전제도 여기 |
 | [Locomotion.md](Docs/Tech/Gameplay/Locomotion.md) | 이동 기능을 다룰 때 — 개이트=ASC 태그(`Status.Movement.Gait.*`), 출발/정지=속도 비율 판정, 피벗=입력 잠금, Sprint는 전방 대시에 종속, 점프=GAS 어빌리티, 전이 블렌드=관성화 |
 | [AI.md](Docs/Tech/Gameplay/AI.md) | AI 컨트롤러 계층(Base/Outlaw/Rogue), 두뇌 시작 게이트(SystemReady), BT/StateTree·NavMesh·CMC 이동 책임 분리를 다룰 때. **감지**(시야·청각·피해 — 맞으면 가해자 인지)와 **타겟 선정**(점수 + 등급별 교체 규칙 `ReevaluateTarget` — 보스는 집중 시간: 조용하면 교체·최대 시간이면 순환)도 여기. BT 커스텀 노드(어빌리티 활성화·랜덤 셀렉터·시야 데코레이터·등 뒤 데코레이터·타겟 거리 서비스 등)와 등급별 전투 사이클 배선(이동만 끊고 공격은 끊지 않는 거리 판정, 구역보다 먼저 고르는 등 뒤 대응)도 여기 |
-| [Spawner.md](Docs/Tech/Gameplay/Spawner.md) | **적을 레벨에 소환할 때** — 범위 안 살아있는 플레이어 수 × N마리, 전멸 전에는 새 웨이브 없음, 집계는 스캔 폴링, 소환 지점은 내비메시 도달 가능 지점 |
+| [Spawner.md](Docs/Tech/Gameplay/Spawner.md) | **적을 레벨에 소환할 때** — 범위 안 살아있는 플레이어 수 × N마리, 전멸 전에는 새 웨이브 없음, 집계는 스캔 폴링, 소환 지점은 내비메시 도달 가능 지점. 소환만 하고 생성 연출은 캐릭터가 스스로 재생 |
 | [Input.md](Docs/Tech/Gameplay/Input.md) | 입력 바인딩·EnhancedInput·InputConfig를 다룰 때 — 매핑 컨텍스트 등록, UI가 게임 입력을 막는 방식(IMC 제거) |
 
 ### `Presentation/` — 애니메이션·UI·외형
 | 문서 | 언제 읽나 |
 |---|---|
 | [AnimInstance.md](Docs/Tech/Presentation/AnimInstance.md) | 애님 인스턴스 계층·로직 배치 — `Base → Character(공통) → Player/AI → Chaser/Outlaw`, 애니메이션은 상태 머신(모션 매칭 미사용) |
-| [UI.md](Docs/Tech/Presentation/UI.md) | 캐릭터 UI(HUD 체력·스킬 쿨다운·버스트 게이지·머리 위 체력바·**화면 상단 보스 바**)를 다룰 때 — `UCBUIComponent`가 준비 완료 후 생성, 위젯 클래스는 로드아웃 등록, 값 동기화는 어트리뷰트 복제(UI용 네트워크 코드 없음), 보스 바는 교전 개시 태그(`Status.Combat.Engaged`) 구독, 외부 접근은 `ICBUIInterface` |
+| [UI.md](Docs/Tech/Presentation/UI.md) | 캐릭터 UI(HUD 체력·스킬 쿨다운·버스트 게이지·머리 위 체력바·**화면 상단 보스 바**)를 다룰 때 — `UCBUIComponent`가 준비 완료 후 생성, 위젯 클래스는 로드아웃 등록, 값 동기화는 어트리뷰트 복제(UI용 네트워크 코드 없음), 보스 바는 교전 개시 태그(`Status.Combat.Engaged`) 구독, 외부 접근은 `ICBUIInterface`. **키로 여닫는 상태창**은 HUD 자식 — 표시할 어트리뷰트는 WBP에 텍스트(`UCBAttributeTextBlock`) 배치로 정하고, 열림은 LocalOnly 어빌리티가 붙이는 `Status.UI.StatusWindow` 태그 구독 |
 | [EasyGameUI.md](Docs/Tech/Presentation/EasyGameUI.md) | **시스템 UI(메인메뉴·일시정지·옵션)를 다룰 때 + 위젯을 새로 만들 때** — 팩 원본 수정 금지·복제 사용, 모든 위젯은 HUD 스택 경유(`AddToViewport` 금지), 시스템 UI 에셋은 Global Config에 등록 |
 | [Cosmetic.md](Docs/Tech/Presentation/Cosmetic.md) | **의상 커스터마이징을 다룰 때** — 부위 슬롯(`ECBCosmeticSlot`) × 파츠 태그(`Item.Cosmetic.*`), 기본 의상은 로드아웃(하드)·교체 목록은 카탈로그(소프트), **복제하는 건 조합 태그뿐이고 조립은 각 인스턴스 로컬** |
+| [SpawnFX.md](Docs/Tech/Presentation/SpawnFX.md) | **캐릭터 생성·소멸 연출을 다룰 때 (플레이어·AI 공통)** — 텔레포트 디졸브: 연출을 쓰는 메시의 **원본 마스터에 `MF_CB_TeleportDissolve`를 직접 연결**(평소 값이면 무효과, 엔진·플러그인 마스터는 복사본에 연결 후 MI 부모만 교체, 수정한 원본 목록은 문서에). **캐릭터가 스스로 재생**하고 로드아웃이 정함(`SpawnCueTag` / `DespawnEffectClass`). **생성**은 각 머신의 준비 완료에서 로컬 큐 실행 — 레벨에 생성될 때만(서버가 생성 직후 여는 "생성 창"을 첫 복제로만 보내 관련 거리 진입·배치 캐릭터와 구분). **소멸**은 서버가 사망 시 예약한 기간 GE(큐 상태 복제)로, 시체가 사라지는 시점(AI `DespawnDelay`, 플레이어 리스폰 지연)에 끝남. 큐 `ACBGCN_SpawnFX`는 캐릭터 전체 메시 + 붙은 무기에 값을 넣음 |
 | [SkeletonCompatibility.md](Docs/Tech/Presentation/SkeletonCompatibility.md) | **새 캐릭터 메시를 적용할 때** — 애니메이션 스켈레톤과의 호환 진단, 커스텀 본 추가, 리타게팅 모드 |
 
 ### `Flow/` — 레벨·접속·로비

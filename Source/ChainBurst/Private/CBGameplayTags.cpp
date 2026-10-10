@@ -19,6 +19,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_UnequipWeapon, "Input.Action.Combat.UnequipWeapon", "무기 해제 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_Combat_Burst, "Input.Action.Combat.Burst", "버스트 발동 입력")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_PauseMenu, "Input.Action.PauseMenu", "일시정지 메뉴 입력")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Action_StatusWindow, "Input.Action.StatusWindow", "상태창 여닫기 입력")
 
 	/** Item Tags. */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Weapon_Sword, "Item.Weapon.Sword", "무기 태그 - 검")
@@ -44,6 +45,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Gait_Sprint, "Status.Movement.Gait.Sprint", "전력 질주 개이트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Dead, "Status.Dead", "사망 상태")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Strafe, "Status.Movement.Strafe", "타겟을 주시한 채 이동하는 상태(스트레이프)")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_UI_StatusWindow, "Status.UI.StatusWindow", "상태창 열림 상태(상태창 어빌리티에서 사용)")
 
 	/** Event Tags. (애님노티파이 등 태그 이벤트) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_EquipWeapon, "Event.Combat.EquipWeapon", "무기 장착 이벤트")

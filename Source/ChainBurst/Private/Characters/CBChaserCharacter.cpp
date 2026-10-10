@@ -226,6 +226,13 @@ void ACBChaserCharacter::Auth_OnDeath()
 	}
 }
 
+// [서버] 시체가 사라지는 시점 = 게임모드가 리스폰하며 폰을 교체하는 시점.
+float ACBChaserCharacter::GetCorpseLifetime() const
+{
+	const ACBGameplayGameMode* GameplayGameMode = GetWorld()->GetAuthGameMode<ACBGameplayGameMode>();
+	return GameplayGameMode ? GameplayGameMode->GetRespawnDelay() : 0.f;
+}
+
 // [공용] ASC/AttributeSet 캐싱 및 ActorInfo 초기화 함수
 void ACBChaserCharacter::InitAbilitySystem()
 {

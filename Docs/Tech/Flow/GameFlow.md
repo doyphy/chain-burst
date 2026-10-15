@@ -202,8 +202,9 @@ ProcessServerTravel: Seamless travel is disabled in PIE, set net.AllowPIESeamles
 |---|---|
 | 사망 통지 | `ACBChaserCharacter::Auth_OnDeath` → 게임모드에 알리기만 함 |
 | 지연·스폰 지점 규칙 | **`ACBGameplayGameMode`** (`RespawnDelay`, `Auth_HandlePlayerDeath`) |
+| 보스전 중 사망자 부활 위치 | `ACBGameplayGameMode::Auth_FindBossFightRespawnTransform` → 보스 구역의 `RespawnPoint` (아래 "보스전 중 사망") |
 | 사망 상태 정리 | `ACBGameplayGameMode::Auth_ClearDeathState` |
-| 실제 재스폰 | `ACBGameplayGameMode::Auth_RespawnPlayer` → `RestartPlayer` |
+| 실제 재스폰 | `ACBGameplayGameMode::Auth_RespawnPlayer` → `RestartPlayer` (보스전 중 사망이면 `RestartPlayerAtTransform`) |
 
 ### ASC가 PlayerState 소유라 청소가 필수다
 
@@ -226,10 +227,18 @@ ProcessServerTravel: Seamless travel is disabled in PIE, set net.AllowPIESeamles
 
 AI(Rogue/Outlaw)는 이 경로를 타지 않는다. 기존대로 `DespawnDelay` 뒤 스스로 파괴되고, 다음 소환은 스포너가 전멸을 보고 결정한다 (→ [Spawner.md](../Gameplay/Spawner.md)).
 
+### 보스전 중 사망 — 구역 밖 부활 지점
+
+보스 구역이 보스전 중(입구 봉쇄)일 때 죽은 플레이어는 PlayerStart 가 아니라 **보스 구역의 `RespawnPoint`(구역 밖)** 에서 부활한다. 입구가 막혀 있으므로 보스전이 끝날 때까지 다시 들어가지 못한다 (→ [BossArena.md](../Gameplay/BossArena.md)).
+
+- **부활 위치는 죽은 순간 정한다.** `Auth_HandlePlayerDeath` 가 그 자리에서 `Auth_FindBossFightRespawnTransform` 으로 위치를 구해 리스폰 타이머 람다에 싣고, `Auth_RespawnPlayer` 는 받은 위치가 있으면 `RestartPlayerAtTransform`, 없으면 `RestartPlayer` 를 부른다. 부활 시점에 물으면 전멸 리셋(보스전 종료) 뒤에 부활하는 마지막 사망자들만 맵 시작 PlayerStart 로 가 버린다.
+- 게임모드는 구역을 **사망 시점에 레벨을 훑어** 찾는다. 구역이 등록·해제하지 않으므로 해제 누락이 없다.
+- 두 경로 모두 `SpawnDefaultPawnAtTransform` → `GetDefaultPawnClassForController` 를 거치므로 스폰 클래스 규칙(선택 캐릭터)은 같다.
+
 ### 아직 없는 것
 
 - **관전 화면 없음** — 죽은 뒤 리스폰까지 카메라가 시체 위치에 그대로 있다. 관전 카메라나 사망 UI는 매치 규칙과 함께 설계한다.
-- 스폰 지점은 엔진 기본 규칙(`ChoosePlayerStart`)에 맡긴다. 로비처럼 자리를 고정하지 않으므로, 적이 몰린 자리에 다시 나올 수 있다.
+- 스폰 지점은 엔진 기본 규칙(`ChoosePlayerStart`)에 맡긴다(보스전 중 사망만 예외 — 위). 로비처럼 자리를 고정하지 않으므로, 적이 몰린 자리에 다시 나올 수 있다.
 
 ## 진행 상황
 

@@ -268,6 +268,18 @@ void ACBAIController::UpdateTarget()
 	// 현재 타겟팅 액터 가져오기
 	AActor* CurrentTarget = Cast<AActor>(BB->GetValueAsObject(TargetActorKey));
 
+	// 지정 타겟이 살아 있는 동안은 인지·점수·교체 규칙을 거치지 않고 그 대상만 씀.
+	// 죽거나 사라지면 아래 평소 선정으로 넘어가 남은 적을 퍼셉션으로 고름
+	AActor* Assigned = AssignedTarget.Get();
+	if (Assigned && IsValidTarget(Assigned) && IsTargetAlive(Assigned))
+	{
+		if (CurrentTarget != Assigned)
+		{
+			UpdateTargetInBlackboard(Assigned);
+		}
+		return;
+	}
+
 	// 현재 타겟팅 액터가 유지 불가(사망·인지 상실·파괴)인지 판정. 유지 불가면 즉시 클리어.
 	if (CurrentTarget && !IsTargetStillValid(CurrentTarget))
 	{
@@ -286,6 +298,15 @@ void ACBAIController::UpdateTarget()
 
 	// 교체 여부는 등급별 규칙이 판단 (베이스 = 점수 배수 비교)
 	ReevaluateTarget(CurrentTarget);
+}
+
+// [서버] 소환한 쪽이 쫓을 대상을 지정. 블랙보드에 쓰는 경로는 UpdateTarget 하나로 유지
+void ACBAIController::Auth_AssignTarget(AActor* InTarget)
+{
+	AssignedTarget = InTarget;
+
+	// 블랙보드가 아직 없으면(BT 시작 전) 아무 일 없음 - StartAILogic 의 첫 선정이 반영함
+	UpdateTarget();
 }
 
 // 현재 타겟을 들고 있을 때 교체 판단 - 베이스는 점수 배수 비교 (히스테리시스)

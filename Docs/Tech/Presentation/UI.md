@@ -1,4 +1,4 @@
-# 캐릭터 UI (체력바·이름표·플레이어 목록·보스 바·상태창)
+# 캐릭터 UI (체력바·이름표·플레이어 목록·보스 바·상태창·보스 구역 대기 표시)
 
 > 캐릭터 부착형 UI(HUD 체력·머리 위 체력바)의 구조와 규칙. **UI는 각 클라이언트 로컬이며, 값 동기화는 어트리뷰트 리플리케이션이 전담한다 — UI를 위한 RPC/복제 코드를 만들지 않는다.**
 
@@ -77,10 +77,11 @@
 | `UCBHealthBarWidget` | 체력 위젯 공용 베이스(UUserWidget). `InitializeWithASC()`(`BlueprintCallable`)로 대상 ASC를 캐싱하고 구독 + 초기값 반영. **구독은 슬레이트가 있는 동안만, 대상 캐시는 대상 수명을 따른다** — 슬레이트 없이 초기화되면 캐시만 하고, `NativeDestruct`는 구독만 끊고 대상 캐시는 남기며, `NativeConstruct`에서 스스로 (재)구독한다(아래 함정 둘 참조). 비주얼은 `OnHealthChanged(Current, Max)` BP 이벤트로 WBP에 위임. 머리 위 바 WBP가 직접 상속하고, HUD에서는 이 위젯을 **자식으로 담는** HUD 컨테이너 WBP가 뜬다 |
 | `UCBSkillSlotWidget` | HUD 스킬 슬롯 하나의 공용 베이스(UUserWidget). `EditDefaultsOnly` 쿨다운 태그 하나를 대상으로 카운트 변화를 구독해 쿨다운 시작·종료를 감지하고, 쿨다운 중에는 매 틱 활성 GE에서 남은 시간·전체 길이를 조회해 진행률을 계산. 비주얼은 `OnCooldownStarted` / `OnCooldownProgress(Progress, RemainingTime)` / `OnCooldownEnded` BP 이벤트로 WBP에 위임하므로 C++는 위젯 구성(서드파티 프로그레스바 등)을 알지 않는다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
 | `UCBBurstGaugeWidget` | HUD **버스트 게이지**의 공용 베이스(UUserWidget). 한 바가 두 모드로 동작 — 충전 중에는 `BurstGauge` 어트리뷰트를 구독해 `OnBurstGaugeChanged(Current, Max)`, 버스트 중에는 `Status.Combat.Burst` 태그로 시작·종료를 감지하고 매 틱 버스트 GE 남은 시간으로 `OnBurstProgress(RemainingRatio, RemainingTime)`. 두 모드의 이벤트는 섞이지 않는다(아래 "버스트 게이지 표시"). 발동 가능 여부가 바뀌면 `OnBurstReadyChanged(bIsReady)`(BlueprintAssignable)를 방송해 HUD 등 외부 위젯이 구독한다. 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
-| `UCBStunGaugeWidget` | **기절 게이지**의 공용 베이스(UUserWidget). `StunGauge` 어트리뷰트를 구독해 `OnStunGaugeChanged(Current, Max)` BP 이벤트로 위임. 최대값은 어트리뷰트가 아니라 상수 `UCBAttributeSet::MaxStunGauge`(→ [Stun.md](../Gameplay/Stun.md)). 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
+| `UCBStunGaugeWidget` | **기절 게이지**의 공용 베이스(UUserWidget). `StunGauge` 어트리뷰트를 구독해 `OnStunGaugeChanged(Current, Max)` BP 이벤트로 위임. 최대값은 `MaxStunGauge` 어트리뷰트를 매번 읽음 — 보스전 인원만큼 늘어나 있을 수 있음(→ [Stun.md](../Gameplay/Stun.md)). 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
 | `UCBStatusWindowWidget` | **키로 여닫는 상태창**(자기 능력치 표시 전용 패널)의 공용 베이스(UUserWidget). HUD 컨테이너 WBP의 자식. 위젯 트리에 배치된 `UCBAttributeTextBlock`을 모아 **배치된 어트리뷰트만** 구독해 해당 텍스트를 갱신하고, 상태창 어빌리티가 활성 동안 붙이는 `Status.UI.StatusWindow` 태그를 구독해 `OnStatusWindowOpened` / `OnStatusWindowClosed`(바뀔 때만)로 슬라이드 연출을 WBP에 위임 (아래 "상태창"). 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
+| `UCBArenaWaitingWidget` | **보스 구역 "다른 플레이어 대기 중" + 보스 등장 카운트다운 표시**의 공용 베이스(UUserWidget). HUD 컨테이너 WBP의 자식. 보스 구역(서버)이 자기 ASC에 붙이는 `Status.Arena.Waiting` 태그를 구독해 `OnWaitingChanged(bool)`로 위임 — 구독할 때 현재 상태로 한 번, 이후 바뀔 때마다. 카운트다운은 보스 구역이 거는 기간 GE의 `Status.Arena.Countdown` 태그로 `OnCountdownStarted` / `OnCountdownEnded`(바뀔 때만), 그 사이 매 틱 GE 남은 시간으로 `OnCountdownProgress(RemainingTime)` — 버스트 게이지의 버스트 모드와 같은 방식 (아래 "보스 구역 대기 표시"). 구독 수명 계약은 `UCBHealthBarWidget`과 동일 |
 | `UCBAttributeTextBlock` | 상태창의 **어트리뷰트 텍스트 하나**(`UTextBlock` 상속, 팔레트 이름 "Attribute Text"). 디테일 패널에서 어트리뷰트(`FGameplayAttribute`)와 소수점 자릿수를 고르고, 값은 상태창이 넣어 준다 — 스스로 구독하지 않음 |
-| `UCBExperienceBarWidget` | **HUD 경험치 바**의 공용 베이스(UUserWidget). `ACBGameplayGameState::OnExperienceChanged`를 구독해 `OnExperienceChanged(Level, Current, Required)` BP 이벤트로 위임. 필요량은 복제하지 않고 게임 인스턴스의 레벨업 데이터에서 계산(데이터가 없으면 0). 게임 스테이트가 늦게 오면 `GameStateSetEvent`로 기다렸다 구독(`UCBPlayerListWidget`과 같은 방식), 게임플레이 레벨이 아니면 아무것도 안 함. HUD 컨테이너 WBP 안에 배치 → [LevelUp.md](../Gameplay/LevelUp.md) |
+| `UCBExperienceBarWidget` | **HUD 경험치 바**의 공용 베이스(UUserWidget). `ACBGameplayGameState::OnExperienceChanged`를 구독해 `OnExperienceChanged(Level, Current, Required)` BP 이벤트로 위임. 필요량은 복제하지 않고 게임 스테이트의 `GetRequiredExperience`(레벨업 데이터 × 접속 인원 — 서버 판정과 같은 함수)로 계산(데이터가 없으면 0). 필요량이 인원에 따라 바뀌므로 `OnPlayerListChanged`도 구독해 다시 반영하고, 인원이 줄어 넘친 경험치는 필요량으로 잘라 넘김. 게임 스테이트가 늦게 오면 `GameStateSetEvent`로 기다렸다 구독(`UCBPlayerListWidget`과 같은 방식), 게임플레이 레벨이 아니면 아무것도 안 함. HUD 컨테이너 WBP 안에 배치 → [LevelUp.md](../Gameplay/LevelUp.md) |
 | `UCBLevelUpWidget` | **레벨업 카드 선택 창**의 공용 베이스(UUserWidget). 캐릭터 데이터가 필요 없어 `UCBUIComponent`가 아니라 **소유 컨트롤러(`ACBChaserController`)가 생성**해 `Menu` 레이어에 올린다 — 폰이 바뀌어도 살아 있어야 리스폰 중에도 카드를 받는다. 위젯은 표시(`OnCardsOffered`)와 선택 전송(`Local_SelectCard` → 서버 RPC)만 하고, 남은 시간은 월드 정지 중에도 흐르는 실제 시간으로 센다 → [LevelUp.md](../Gameplay/LevelUp.md) |
 | `UCBBossBarWidget` | **화면 상단 보스 바**의 컨테이너 베이스(UUserWidget). `InitializeWithASC()` 하나로 자식 `HealthBarWidget`(`UCBHealthBarWidget`)·`StunGaugeWidget`(`UCBStunGaugeWidget`)을 배선한다(`BindWidgetOptional` — 플레이어 목록 행과 같은 패턴). 값 구독은 자식이 각자 한다 |
 | `UCBNamePlateWidget` | **로비 발밑 이름표**의 공용 베이스(UUserWidget). `InitializeWithPlayerState()`(`BlueprintCallable`)로 대상 PlayerState를 캐싱하고 `OnPlayerNicknameChanged` 구독 + 현재 이름 반영. 비주얼은 `OnNicknameChanged(Nickname)` BP 이벤트로 WBP에 위임. `IsLocalPlayerTarget()`로 자기 이름표만 다르게 꾸밀 수 있다. **구독 수명 계약은 `UCBHealthBarWidget`과 동일** |
@@ -415,7 +416,7 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
 
 ### "등장" = 첫 발견인 이유
 
-보스(`BP_Outlaw_Hulk`)는 게임플레이 맵에 **처음부터 배치**돼 있다. "스폰·준비 완료"를 기준으로 삼으면 레벨 시작부터 모든 화면에 바가 떠 있게 된다. 첫 타겟 획득은 보스가 스폰되는 방식(배치·스포너)과 무관하게 "싸움이 시작됐다"는 같은 뜻이다.
+보스(`BP_Outlaw_Hulk`)는 처음에 게임플레이 맵에 **배치**돼 있었고, "스폰·준비 완료"를 기준으로 삼으면 레벨 시작부터 모든 화면에 바가 떠 있게 됐다. 지금은 보스 구역이 전원 진입 후 **소환**하지만(→ [BossArena.md](../Gameplay/BossArena.md)) 기준은 그대로 둔다 — 첫 타겟 획득은 보스가 나타나는 방식(배치·스포너·보스 구역)과 무관하게 "싸움이 시작됐다"는 같은 뜻이다. 그래서 보스 구역의 보스 스폰 화살표는 플레이어 쪽을 보게 둔다(등을 돌린 채 나오면 발견이 늦어 바도 늦게 뜬다).
 
 ### 생성 주체 — 보스의 UI 컴포넌트
 
@@ -436,16 +437,16 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
 | 교전 중에 이 클라에 보스가 복제돼 들어옴 | 즉시 표시 | 준비 완료 때 태그가 이미 있으면 바로 띄운다 |
 
 - **사망 즉시 숨기려면** 머리 위 바처럼 `OnCharacterDiedDelegate`를 구독하면 된다. 지금은 0 을 보여 주는 쪽을 택했다.
-- **보스 리셋(전멸 시 회복·원위치)** 이 생기면 리셋 지점이 태그를 떼고, 컴포넌트가 태그 제거(`NewCount == 0`)에서 바를 빼도록 넓힌다. 지금은 붙는 경우만 처리한다.
+- **보스 구역의 전멸 리셋은 보스를 파괴**하므로 위 "보스 파괴" 행대로 바가 내려가고, 다시 소환된 보스가 새 바를 띄운다. 같은 보스를 살려 둔 채 회복·원위치시키는 리셋이 생기면 리셋 지점이 태그를 떼고, 컴포넌트가 태그 제거(`NewCount == 0`)에서 바를 빼도록 넓힌다. 지금은 붙는 경우만 처리한다.
 - **보스가 동시에 둘 이상이면 바가 겹친다.** 지금은 보스가 하나라 다루지 않는다.
 
 ### ⚠️ 연관성 — 멀리 있는 플레이어에게도 띄우려면
 
 클라이언트 화면의 보스는 **넷 연관성(Net Cull Distance) 안에 있을 때만 존재**한다. 캐릭터 기본 컬 거리(150m) 밖의 플레이어에게는 보스 액터가 없거나 파괴되어(→ `EndPlay(Destroyed)`) **바도 없다.** "모든 플레이어 화면"이 되려면 보스 BP 에서 **`Always Relevant`** 를 켠다. 보스는 하나뿐이라 비용이 문제되지 않는다.
 
-### 기절 게이지 — 최대값은 상수
+### 기절 게이지 — 최대값은 구독하지 않고 매번 읽음
 
-`MaxStunGauge` 는 어트리뷰트가 아니라 `UCBAttributeSet` 의 상수다(차는 속도는 적립량으로 조절 → [Stun.md](../Gameplay/Stun.md)). 그래서 `UCBStunGaugeWidget` 은 `StunGauge` 하나만 구독하고 Max 는 상수를 실어 보낸다. 기절이 시작되면 게이지가 비워지므로 바는 0 으로 떨어진다. **"기절 중" 상태 표시는 없다** — `Status.Combat.Stunned` 는 서버 전용(경로 ②)이라 클라가 알 수 없고, 표시하려면 복제를 추가해야 한다.
+`MaxStunGauge` 는 어트리뷰트다. 기본 100 이고 보스 구역이 보스 준비 때 보스전 인원만큼 곱한다(→ [Stun.md](../Gameplay/Stun.md) "최대값 — 보스전 인원만큼"). `UCBStunGaugeWidget` 은 `StunGauge` 하나만 구독하고, 이벤트를 보낼 때마다 `MaxStunGauge` 를 읽어 Max 로 싣는다. 최대값은 보스가 준비될 때 한 번만 바뀌고 그때 게이지는 0 이라 0/100 과 0/200 의 표시가 같다 — 다음 적립 때 새 최대값을 읽으므로 따로 구독하지 않는다(체력바가 `MaxHealth` 를 구독하는 것은 레벨업 카드로 전투 중에 바뀌기 때문이다). 기절이 시작되면 게이지가 비워지므로 바는 0 으로 떨어진다. **"기절 중" 상태 표시는 없다** — `Status.Combat.Stunned` 는 서버 전용(경로 ②)이라 클라가 알 수 없고, 표시하려면 복제를 추가해야 한다.
 
 ### 슬레이트 전 초기화
 
@@ -469,7 +470,7 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
 - `WBP_CB_StunGauge` — `UCBStunGaugeWidget` 자식. 프로그레스 바 하나에 `OnStunGaugeChanged`(Current / Max) 연결.
 - `WBP_CB_BossBar` — `UCBBossBarWidget` 자식. 화면 상단 중앙 배치. 자식 위젯을 **`HealthBarWidget` / `StunGaugeWidget` 이름으로** 두고 `Is Variable` 을 켠다(이름이 다르면 배선되지 않고 그 부분만 조용히 빈다). 보스 이름 텍스트는 여기에 직접.
 - `DA_Loadout_Outlaw_Hulk` — `BossBarWidgetClass = WBP_CB_BossBar`.
-- `BP_Outlaw_Hulk` — **`Always Relevant` 켜기**(위 ⚠️), UI 컴포넌트의 `bShowOverheadBar` 끄기(머리 위 바와 중복).
+- `BP_Outlaw_Hulk` — **`Always Relevant` 켜기**(위 ⚠️), UI 컴포넌트의 `bShowOverheadBar` 끄기(머리 위 바와 중복). 맵에 배치하지 않고 보스 구역의 `BossClass` 로 지정한다(→ [BossArena.md](../Gameplay/BossArena.md)).
 - 새 `UCLASS`·`UPROPERTY` 가 있으므로 코드 반영 후 **에디터를 재시작**해야 BP 에서 보인다.
 
 ## 상태창 (자기 능력치)
@@ -527,6 +528,39 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
 - 입력 — `IA_StatusWindow` 생성 → `IMC_Default`에 키 매핑 → InputConfig `AbilityInputActions`에 `Input.Action.StatusWindow` → Chaser 로드아웃 어빌리티 목록에 추가.
 - 새 `UCLASS`가 있으므로 코드 반영 후 **에디터를 재시작**해야 한다.
 
+## 보스 구역 대기 표시 ("다른 플레이어 대기 중" → 카운트다운)
+
+보스 구역에 들어왔지만 아직 전원이 모이지 않은 동안 **들어와 있는 플레이어 화면에만** 대기 문구를 띄우고, 전원이 모이면 같은 자리에서 보스 등장까지 남은 시간을 센다(규칙 → [BossArena.md](../Gameplay/BossArena.md)). 조작이 없는 표시라 상태창처럼 **HUD 컨테이너(`WBP_CB_HUD`)의 자식**이다. 새 네트워크 코드는 없다.
+
+```
+[서버] ACBBossArena 스캔 — 살아서 구역 안 + 아직 전원 아님
+   └ 그 플레이어 ASC(PlayerState) 에 Status.Arena.Waiting (TagOnly)
+        ▼ 태그 복제 (소유 클라 포함)
+[소유 클라] UCBArenaWaitingWidget — 태그 구독 → OnWaitingChanged(true/false)
+
+[서버] 전원 진입 → 대기 태그 전부 제거 + 카운트다운 기간 GE (부여 태그 Status.Arena.Countdown)
+        ▼ GE 복제 (Mixed — 소유 클라는 기간·시작 시각까지)
+[소유 클라] UCBArenaWaitingWidget
+   ├ 태그 붙음   → OnCountdownStarted → (같은 프레임) OnCountdownProgress
+   ├ 매 틱       → OnCountdownProgress(GE 남은 시간)
+   └ 태그 떨어짐 → OnCountdownEnded   (보스 등장 또는 누가 나가서 취소)
+```
+
+- **위젯은 판정을 하지 않는다.** "안에 있나·전원이 모였나·얼마 남았나"는 서버가 정하고, 위젯은 결과 태그와 GE 만 본다. 위젯이 직접 구역을 찾아 자기 폰 위치를 매 틱 검사하는 방식은 서버와 같은 판정을 클라에 한 벌 더 두는 셈이라 택하지 않았다.
+- **남은 시간은 GE 에서 읽는다.** 시간을 실을 수 없는 태그 대신 기간 GE 를 쓰는 이유이며, 버스트 게이지(`Status.Combat.Burst` GE)·스킬 쿨다운 슬롯과 같은 방식이다. 5초라는 값은 보스 구역의 `BossAppearDelay` 한 곳에만 있다.
+- **대기와 카운트다운은 서로 다른 신호다.** 카운트다운 시작 때 대기 태그 제거와 GE 적용이 함께 오지만 도착·콜백 순서는 정해져 있지 않다. 그래서 WBP 는 두 신호로 **각자의 요소**(대기 문구 / 카운트다운 숫자)만 켜고 끈다 — 한쪽 이벤트로 위젯 전체를 숨기면 순서에 따라 숫자가 사라진다. 취소되면 카운트다운이 내려가고 대기 문구가 다시 켜진다.
+- **대기는 구독할 때 현재 상태로 한 번 발화한다.** 켜고 끄는 표시라 같은 값을 다시 받아도 무해하고, 그 대가로 디자이너 기본 모습에 기댈 필요가 없다. 리스폰으로 HUD가 새로 생겨도 PlayerState ASC 의 태그를 그대로 읽는다.
+- **카운트다운은 바뀔 때만 발화한다**(버스트 모드와 같음). 평소(카운트다운 없음)에 종료 이벤트가 가지 않으므로 **디자이너 기본 모습에서 숫자는 숨김**으로 둔다.
+- 대기 인원("2/4")은 요청이 없어 표시하지 않는다. 필요해지면 구역이 복제할 정수 하나가 필요하다(태그로는 수를 실을 수 없다).
+
+### 에디터 작업
+
+- `WBP_CB_ArenaWaiting` — `UCBArenaWaitingWidget` 자식. 루트 Visibility 는 `Not Hit-Testable`. 자식 둘을 `Is Variable` 로 둔다.
+  - 대기 문구 텍스트 — `OnWaitingChanged` → `Set Visibility`(true = `Not Hit-Testable (Self & All Children)`, false = `Collapsed`).
+  - 카운트다운 숫자 텍스트 — **기본 `Collapsed`**. `OnCountdownStarted` → 보이기, `OnCountdownProgress` → `Ceil(RemainingTime)` 을 텍스트로, `OnCountdownEnded` → `Collapsed`.
+- `WBP_CB_HUD`에 배치하고 `Is Variable`을 켠다. `Event Construct`의 기존 ASC 캐스트 결과로 `Initialize With ASC`를 호출한다(상태창과 같은 자리).
+- 새 `UCLASS`·`UFUNCTION` 이 있으므로 코드 반영 후 **에디터를 재시작**해야 한다.
+
 ## 위젯 클래스 등록 — 로드아웃
 
 위젯 클래스도 에셋이므로 로드아웃 원칙(→ [Loadout.md](../Foundation/Loadout.md))대로 로드아웃에 등록하고, 컴포넌트 멤버는 런타임 캐시(세터 주입)다. 주입은 모두 Ready 방송 **전**에 실행되므로 준비 완료 훅 시점엔 클래스가 확정돼 있다.
@@ -537,6 +571,18 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
 | `bShowNamePlate`<br>`NamePlateWidgetClass`<br>`NamePlateZMargin` | `UCBCharacterLoadout`(베이스) | `ApplyToCharacter()` — 전 인스턴스 공용 (남의 이름표도 보여야 하므로). 부착 높이 여유값을 클래스와 같은 자리에 둔 이유는 **캡슐 크기가 캐릭터마다 다르기 때문** |
 | `BossBarWidgetClass` | `UCBOutlawLoadout` | `ApplyToCharacter()` — 전 인스턴스 공용 (모든 클라 화면에 뜨므로). 비우면 보스 바 없음 |
 | `HUDWidgetClass` | `UCBChaserLoadout` | `Local_ApplyToCharacter()` — 소유 클라이언트 전용 (InputConfig와 동일 경로). 타입은 `TSubclassOf<UUserWidget>` — 체력바가 아닌 임의 HUD 컨테이너 WBP를 지정. 구 필드명 `HUDHealthWidgetClass`는 `[CoreRedirects]` PropertyRedirect로 승계 |
+
+## UI 머티리얼·텍스처 규칙 (엔진 동작)
+
+Image 위젯에 UI 머티리얼(`Material Domain = User Interface`)을 넣거나 UI 텍스처를 움직일 때. 전부 **에러 없이 결과만 어긋난다.** 적용 예: 메인메뉴 배경 `M_UI_MainMenuBG` — 드리프트·별 발광·유리 반사를 머티리얼 하나에서 처리하고, 영역은 같은 UV로 읽는 마스크 텍스처 `MainMenu_BG_Mask`가 정한다.
+
+| 규칙 | 이유 |
+|---|---|
+| **위젯의 Color and Opacity·Render Opacity를 머티리얼에서 다시 곱하지 않는다** (VertexColor 노드로 곱하지 말 것) | Image 브러시는 머티리얼 출력에 버텍스 컬러(= 위젯 틴트·투명도)를 **엔진이 자동으로 곱한다** — Additive는 알파까지 곱한다(`SlateElementPixelShader.usf`의 `GetDefaultElementColor`). 머티리얼에서도 곱하면 두 번 적용돼 50% 페이드가 25%가 된다 |
+| 밝기로 투명도를 만들 때는 **감마 값 기준** | 머티리얼 출력은 `GammaCorrect`를 거쳐 감마 공간에서 섞인다. 선형 값 그대로 `밝기 = 투명도`로 쓰면 어두운 영역이 거의 사라진다 |
+| 움직이거나 확대되는 UI 텍스처는 **밉맵 + `Filter = Trilinear`** | UI 텍스처 그룹 기본값이 `NoMipmaps` + **밉 전환 point**다(`BaseDeviceProfiles.ini`). 밉 없이 축소 표시하면 움직일 때 지글거리고, 밉만 켜면 확대 중 단계가 바뀌는 순간 툭 튄다. Slate도 텍스처의 필터 설정을 따른다(`SlateRHIRenderingPolicy.cpp`) |
+| `Maximum Texture Size`는 **2의 거듭제곱으로 올린 뒤 반씩 줄여** 맞춘다 | 3840을 넣으면 4096이 되고, 5504 원본은 2752가 된다(`Texture.cpp`). 정확한 크기가 필요하면 원본을 그 크기로 만들어 넣는다 |
+| 마스크·별마다 다른 값처럼 **데이터를 담은 텍스처는 sRGB를 끈다.** 채널끼리 값이 섞이면 안 되면 **비압축**(`VectorDisplacementmap`) | 블록 압축은 4×4 블록 단위로 채널을 묶어 압축해 값이 번진다 |
 
 ## 외부에서 UI 접근 (설계 규칙)
 

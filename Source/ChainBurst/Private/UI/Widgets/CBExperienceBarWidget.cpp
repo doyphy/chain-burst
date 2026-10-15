@@ -48,6 +48,9 @@ void UCBExperienceBarWidget::BindToGameState()
 	// 변경 구독 (다이내믹이라 중복 구독은 AddUnique 로 방지)
 	GameplayGameState->OnExperienceChanged.AddUniqueDynamic(this, &UCBExperienceBarWidget::HandleExperienceChanged);
 
+	// 필요량이 접속 인원에 따라 달라지므로 인원 변경도 구독 (매치 시작 때 PlayerState 가 차례로 도착할 때·누가 나갈 때)
+	GameplayGameState->OnPlayerListChanged.AddUniqueDynamic(this, &UCBExperienceBarWidget::HandlePlayerListChanged);
+
 	// 구독 전에 이미 확정된 값 반영 (델리게이트는 '바뀔 때'만 오므로)
 	BroadcastExperience(GameplayGameState->GetCurrentLevel(), GameplayGameState->GetExperience());
 }
@@ -57,6 +60,7 @@ void UCBExperienceBarWidget::UnbindFromGameState()
 	if (ACBGameplayGameState* GameplayGameState = CachedGameState.Get())
 	{
 		GameplayGameState->OnExperienceChanged.RemoveDynamic(this, &UCBExperienceBarWidget::HandleExperienceChanged);
+		GameplayGameState->OnPlayerListChanged.RemoveDynamic(this, &UCBExperienceBarWidget::HandlePlayerListChanged);
 	}
 	CachedGameState.Reset();
 
@@ -79,14 +83,24 @@ void UCBExperienceBarWidget::HandleExperienceChanged(int32 InLevel, int32 InExpe
 	BroadcastExperience(InLevel, InExperience);
 }
 
+void UCBExperienceBarWidget::HandlePlayerListChanged()
+{
+	if (const ACBGameplayGameState* GameplayGameState = CachedGameState.Get())
+	{
+		BroadcastExperience(GameplayGameState->GetCurrentLevel(), GameplayGameState->GetExperience());
+	}
+}
+
 void UCBExperienceBarWidget::BroadcastExperience(int32 InLevel, int32 InExperience)
 {
-	// 필요량은 복제하지 않고 서버와 같은 데이터에서 계산함
+	// 필요량은 복제하지 않고 서버와 같은 식(데이터 x 접속 인원)으로 계산함
+	const ACBGameplayGameState* GameplayGameState = CachedGameState.Get();
+	const int32 RequiredExperience = GameplayGameState ? GameplayGameState->GetRequiredExperience(InLevel) : 0;
+
+	// 최대 레벨이면 더 쌓이지 않으므로 바를 가득 찬 상태로 보여줌.
+	// 누가 나가 필요량이 줄면 쌓인 양이 넘칠 수 있음 - 서버는 다음 처치 때 레벨업하므로 그때까지 가득 찬 채로 보여줌
 	const UCBGameInstance* CBGameInstance = GetGameInstance<UCBGameInstance>();
 	const UCBLevelUpData* LevelUpData = CBGameInstance ? CBGameInstance->GetLevelUpData() : nullptr;
-	const int32 RequiredExperience = LevelUpData ? LevelUpData->GetRequiredExperience(InLevel) : 0;
-
-	// 최대 레벨이면 더 쌓이지 않으므로 바를 가득 찬 상태로 보여줌
 	const bool bIsMaxLevel = LevelUpData && LevelUpData->IsMaxLevel(InLevel);
-	OnExperienceChanged(InLevel, bIsMaxLevel ? RequiredExperience : InExperience, RequiredExperience);
+	OnExperienceChanged(InLevel, bIsMaxLevel ? RequiredExperience : FMath::Min(InExperience, RequiredExperience), RequiredExperience);
 }

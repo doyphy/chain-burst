@@ -1,13 +1,14 @@
 # 레벨업 (공유 경험치·카드 선택)
 
-> 플레이어가 AI를 처치하면 **전 플레이어가 같은 경험치를 함께** 얻고, 레벨이 오르면 **모든 플레이어의 게임이 정지**된 채 각자 카드 3장 중 하나를 골라 어트리뷰트를 올린다. 경험치와 레벨 판정은 서버(호스트)만 하고, 카드는 플레이어마다 따로 뽑는다. 최대 레벨은 데이터로 정하며 0이면 무제한이다(→ "최대 레벨").
+> 플레이어가 AI를 처치하면 **전 플레이어가 같은 경험치를 함께** 얻고, 레벨이 오르면 **모든 플레이어의 게임이 정지**된 채 각자 카드 3장 중 하나를 골라 어트리뷰트를 올린다. 경험치와 레벨 판정은 서버(호스트)만 하고, 카드는 플레이어마다 따로 뽑는다. 다음 레벨까지 필요한 경험치는 접속 인원만큼 늘어난다(→ "인원 비례 필요량"). 최대 레벨은 데이터로 정하며 0이면 무제한이다(→ "최대 레벨").
 
 ## 흐름
 
 ```
 [서버] AI 사망 (ACBAICharacter::Auth_OnDeath)
   └ ACBGameplayGameMode::Auth_AddExperience(로드아웃의 ExperienceReward)
-      ├ 넘친 만큼 레벨 증가 → ACBGameplayGameState::Auth_SetExperience (복제 → 경험치 바)
+      ├ 넘친 만큼 레벨 증가 (필요량 = 게임 스테이트 GetRequiredExperience — 데이터 × 접속 인원)
+      │    → ACBGameplayGameState::Auth_SetExperience (복제 → 경험치 바)
       └ 오른 레벨 수만큼 PendingLevelUps 증가 → 진행 중인 레벨업이 없으면 시작
 
 [서버] Auth_StartLevelUpRound — 레벨업 하나
@@ -30,19 +31,19 @@
 | 요소 | 위치 | 역할 |
 |---|---|---|
 | 규칙 | `ACBGameplayGameMode` (`#pragma region LevelUp`) | 경험치 누적·레벨 판정·카드 뽑기·선택 검증·적용·정지/해제·타임아웃. 서버 전용 |
-| 공유 레벨·경험치 | `ACBGameplayGameState` | `Level`·`Experience` 복제 + `OnExperienceChanged`. 게임모드 생성자가 `GameStateClass`로 고정 |
+| 공유 레벨·경험치 | `ACBGameplayGameState` | `Level`·`Experience` 복제 + `OnExperienceChanged`. 필요량 계산 `GetRequiredExperience`(데이터 × `PlayerArray` 인원 — 서버·바 공용). 게임모드 생성자가 `GameStateClass`로 고정 |
 | 카드 주고받기 | `ACBChaserController` | `Client_OfferLevelUpCards` / `Server_SelectLevelUpCard` / `Client_EndLevelUp`, 카드 위젯 생성·스택 삽입·제거 |
 | 데이터 | `UCBLevelUpData` → `UCBGameInstance::LevelUpData` | 경험치 곡선, 카드 목록(`FCBLevelUpCard`), `CardsPerLevelUp`(3), `SelectionTimeout`(20초), 카드 위젯 클래스 |
 | AI 보상 | `UCBAILoadout::ExperienceReward` | 로드 완료 시 `ACBAICharacter`가 캐싱, 사망 시 게임모드에 전달 |
 | 카드 효과 | 카드마다 GE 에셋 (Infinite) | 어떤 어트리뷰트를 어떻게 올릴지는 GE가, 얼마나는 카드의 `Magnitude`가 SetByCaller(`Data.LevelUp`)로 정함 |
 | 카드 위젯 | `UCBLevelUpWidget` | 카드 표시(`OnCardsOffered`)·선택(`Local_SelectCard`)·남은 시간(`GetRemainingSelectionTime`)·대기 상태 |
-| 경험치 바 | `UCBExperienceBarWidget` | 게임 스테이트 구독 → `OnExperienceChanged(Level, Current, Required)`. HUD WBP 안에 배치 |
+| 경험치 바 | `UCBExperienceBarWidget` | 게임 스테이트의 경험치·플레이어 목록 변경 구독 → `OnExperienceChanged(Level, Current, Required)`. HUD WBP 안에 배치 |
 | 메뉴 레이어 다리 | `ACBHUD::PushMenuLayerWidget` | C++에서 Menu 레이어에 올리는 이벤트 (→ [EasyGameUI.md](../Presentation/EasyGameUI.md)) |
 
 ### 왜 이 자리인가
 
 - **경험치는 어트리뷰트가 아니다.** 전 플레이어 공유 값이라 플레이어별 ASC에 둘 이유가 없다 — 4명의 ASC에 같은 값을 복제하게 된다. 게임 전역 상태이므로 게임 스테이트다(→ [GameFlow.md](../Flow/GameFlow.md) "클래스별 존재 범위").
-- **다음 레벨 필요량은 복제하지 않는다.** 데이터가 게임 인스턴스에 있어 클라이언트도 `GetRequiredExperience(Level)`로 같은 값을 계산한다.
+- **다음 레벨 필요량은 복제하지 않는다.** 데이터가 게임 인스턴스에 있고 인원(`PlayerArray`)은 엔진이 복제하므로, 클라이언트도 게임 스테이트의 `GetRequiredExperience(Level)`로 같은 값을 계산한다(→ "인원 비례 필요량").
 - **데이터는 게임 인스턴스에 둔다.** 서버(뽑기·검증)와 클라이언트(카드 표시·필요량)가 **폰 없이** 읽어야 한다 — `CharacterCatalog`와 같은 이유(→ [Loadout.md](../Foundation/Loadout.md)). 카드는 배열 인덱스로 주고받으므로 양쪽이 같은 에셋을 본다.
 - **카드 위젯은 컨트롤러가 띄운다.** 캐릭터 HUD 위젯은 폰과 함께 파괴·재생성되므로, 리스폰 중에 카드가 오면 받을 위젯이 없다. 컨트롤러는 폰이 바뀌어도 살아 있다.
 - **처치자를 따지지 않는다.** 경험치가 공유이고, 지금 AI를 죽일 수 있는 건 플레이어뿐이다(Outlaw·Rogue는 같은 팀, 중립은 적대 대상이 아님, 무기 판정은 적대만 맞힘 → [Teams.md](../Foundation/Teams.md)).
@@ -55,6 +56,22 @@
 - **경험치 바**: 최대 레벨이면 C++ 위젯이 현재 경험치를 필요량과 같게 넘겨 바가 가득 찬다. BP 이벤트 인자는 그대로라 기존 WBP를 고칠 필요가 없고, "MAX" 표시가 필요하면 WBP에서 `IsMaxLevel(Level)`로 분기한다.
 - 넘친 경험치를 따로 쌓아 두지 않는다 — 쓸 곳이 없다. 최대 레벨 이후의 처치 보상(회복 등)이 필요해지면 별도 설계.
 - 최대 레벨을 두면 경험치 곡선은 그 레벨까지만 키를 찍으면 되므로, 마지막 키 뒤의 외삽 설정을 신경 쓸 필요가 없다.
+
+### 인원 비례 필요량
+
+플레이어가 늘면 처치 속도도 그만큼 빨라지므로, **다음 레벨까지 필요한 경험치 = 곡선 값(1인 기준) × 접속 인원**이다. 처치 보상은 그대로다. 보스의 인원 비례 내구도와 같은 취지다(→ [BossArena.md](BossArena.md) "인원 비례 내구도").
+
+```
+ACBGameplayGameState::GetRequiredExperience(Level)      ← 서버 판정·경험치 바 공용 (식이 한 곳)
+  = UCBLevelUpData::GetRequiredExperience(Level)        ← 곡선 값, 1인 기준 (데이터는 그대로)
+  × max(PlayerArray.Num(), 1)
+```
+
+- **계산은 게임 스테이트 한 곳이다.** 게임모드의 레벨업 반복과 경험치 바가 같은 함수를 부르므로 서버 판정과 화면 숫자가 어긋나지 않는다. 레벨업 데이터의 함수는 "1인 기준 곡선 값"으로 남아 시그니처가 바뀌지 않았다.
+- **인원은 `PlayerArray` 로 센다.** 엔진이 모든 클라이언트에 복제하는 목록이라 **새 복제 값 없이** 클라도 같은 값을 계산한다. 인원은 그때그때 센다 — 매치 시작 때 seamless travel 로 플레이어가 차례로 도착하므로 "시작 인원"을 고정할 시점이 없고, 이탈이 저절로 반영된다. 난입은 막혀 있어(`bAllowJoinInProgress = false`) 매치 도중에는 줄기만 한다.
+- **경험치 바는 플레이어 목록 변경도 구독한다.** 공용 게임 스테이트(`ACBGameStateBase`)가 서버·클라 양쪽에서 `OnPlayerListChanged` 를 방송하므로 그대로 쓴다. WBP 가 필요량 숫자를 표시하므로, 구독하지 않으면 매치 시작 때(PlayerState 가 아직 덜 도착) 또는 누가 나갔을 때 숫자가 틀린 채 다음 처치까지 남는다.
+- **누가 나가 필요량이 줄면 쌓인 경험치가 넘칠 수 있다**(예: 2인 150/200 → 1인 150/100). 그 자리에서 레벨업하면 누가 나가는 순간 월드가 정지하므로, **다음 처치 때** 기존 반복이 넘친 만큼 레벨업한다. 그동안 경험치 바는 필요량으로 잘라 가득 찬 채로 보여준다.
+- 보스 구역은 인원을 서버 플레이어 컨트롤러 수로 센다(서버 전용 판정). 경험치는 클라도 알아야 해서 `PlayerArray` 를 쓴다. 평소에는 같은 값이다.
 
 ## 정지 — 엔진이 정한 제약
 
@@ -176,7 +193,7 @@ OnWidgetRemovedFromStack → bClosing = true, CardOut 재생, HandledByWidget? =
 | `GE_LevelUp_MaxHealth` | 위 + Additional Effects 컴포넌트 → On Application: `GE_LevelUp_Heal`, `Copy Data From Original Spec` = true |
 | `GE_LevelUp_Heal` | Instant, CurrentHealth Add, SetByCaller `Data.LevelUp` |
 | `GE_Chaser_FullHeal` | Instant, CurrentHealth Override, Attribute Based (MaxHealth, Target, Snapshot 끔). Chaser 로드아웃 4개 `StartupEffects`의 Init **다음**에 추가 |
-| `DA_CB_LevelUpData` | 곡선, `MaxLevel`(0 = 무제한), 카드 목록(카드마다 `Grade`), `GradeWeights`(쓰는 등급 전부, 비우면 균등), 카드 위젯 클래스, **`GradeStyles`(쓰는 등급 전부)** → `GI_EasyMainGameInstance`의 `Level Up Data`에 지정. 곡선은 X = 레벨(정수), Y = 다음 레벨까지 필요량. **마지막 키 뒤에도 늘어나게 하려면 `Create External Curve`로 `CurveFloat` 에셋을 만들어 그 에디터에서 Post-Infinity를 Linear로** 둔다 — 디테일 패널의 내장 미니 에디터는 외삽 메뉴가 없어 기본값(Constant, 마지막 값 유지)에 머문다. `GetRequiredExperience`는 외부 에셋이 지정돼 있으면 그쪽을 읽는다 |
+| `DA_CB_LevelUpData` | 곡선, `MaxLevel`(0 = 무제한), 카드 목록(카드마다 `Grade`), `GradeWeights`(쓰는 등급 전부, 비우면 균등), 카드 위젯 클래스, **`GradeStyles`(쓰는 등급 전부)** → `GI_EasyMainGameInstance`의 `Level Up Data`에 지정. 곡선은 X = 레벨(정수), Y = 다음 레벨까지 필요량(**1인 기준** — 실제 필요량은 접속 인원만큼 곱해짐). **마지막 키 뒤에도 늘어나게 하려면 `Create External Curve`로 `CurveFloat` 에셋을 만들어 그 에디터에서 Post-Infinity를 Linear로** 둔다 — 디테일 패널의 내장 미니 에디터는 외삽 메뉴가 없어 기본값(Constant, 마지막 값 유지)에 머문다. `GetRequiredExperience`는 외부 에셋이 지정돼 있으면 그쪽을 읽는다 |
 | 카드 위젯 WBP | `UCBLevelUpWidget` 상속. `BPI_EGUI_UINavigationInterface` 직접 구현(→ [EasyGameUI.md](../Presentation/EasyGameUI.md) "C++ 위젯") — Menu 레이어 선언값(Input Config ✅ / Focus Handler ✅ / Global Occluder ❌ / Remove Gameplay IMCs ✅). `OnCardsOffered`로 카드 칸 채움, 버튼 → `Local_SelectCard(슬롯)`, `OnCardSelected`로 대기 표시, 남은 시간은 `GetRemainingSelectionTime` 바인딩 |
 | 경험치 바 WBP | `UCBExperienceBarWidget` 상속, HUD 컨테이너 WBP(`WBP_CB_HUD`)에 배치. `OnExperienceChanged`로 바·레벨 텍스트 갱신 (필요량 0 = 데이터 없음) |
 | Rogue / Outlaw 로드아웃 | `ExperienceReward` |
@@ -191,6 +208,11 @@ OnWidgetRemovedFromStack → bClosing = true, CardOut 재생, HandledByWidget? =
 | 카드 위젯을 캐릭터 HUD 위젯이 띄우기 | 리스폰 중에는 HUD 위젯이 없어 카드 제시를 놓침 |
 | 카드 수치를 GE 에셋에 직접 | MaxHealth 카드의 회복 GE와 수치가 두 곳에 생김 |
 | 다음 레벨 필요량 복제 | 클라이언트도 같은 데이터에서 계산 가능 |
+| 인원 배율(또는 필요량)을 게임 스테이트에 복제 | 엔진이 이미 복제하는 `PlayerArray` 와 같은 정보. 인원 변경 신호(`OnPlayerListChanged`)도 이미 있음 |
+| 처치 보상을 인원으로 나누기 | 경험치가 정수라 보상 5 를 3명으로 나누면 손실이 생김. 요청은 바(필요량)를 늘리는 것 |
+| 매치 시작 인원으로 고정 | seamless travel 로 플레이어가 차례로 도착해 "시작" 시점이 없고, 이탈이 반영되지 않음 |
+| 인원이 줄면 그 자리에서 레벨업 판정 | 누가 나가는 순간 월드가 정지함. 다음 처치 때 반복이 넘친 만큼 처리 |
+| 인원 변경 시 현재 경험치 비율 보존 | 요청 없음. 넘친 경험치는 다음 처치 때 레벨업으로 처리됨 |
 | 남은 시간 서버 동기화 | 같은 설정값으로 로컬 카운트다운, 지연분은 서버가 먼저 끝내므로 무해 |
 | 처치자 판정 | 경험치 공유 + AI를 죽일 수 있는 건 플레이어뿐 |
 | 난입 플레이어 따라잡기(레벨·보너스) | `bAllowJoinInProgress = false`로 게임 도중 접속을 거부함 |
@@ -204,6 +226,8 @@ OnWidgetRemovedFromStack → bClosing = true, CardOut 재생, HandledByWidget? =
 
 - **마지막 대기자가 나간 직후 다음 레벨업이 이어지면** 그 레벨업이 나간 플레이어에게도 카드를 보낸다 — `Logout` 시점에는 컨트롤러가 아직 목록에 있다. 그 플레이어는 고를 수 없으므로 **타임아웃까지 기다린 뒤** 끝난다. 한 번에 여러 레벨이 오르는 순간에 누가 나가는 경우라 그대로 둔다.
 - **재개는 서버가 먼저다.** 해제 후 서버 시간이 다시 흐르고 나서 WorldSettings가 평소 주기로 복제되므로, 클라이언트는 그 한 번의 갱신 간격만큼 늦게 재개된다.
+- **인원이 바뀌는 순간에는 서버와 클라의 필요량이 잠깐 다를 수 있다.** 서버는 `Logout` 에서, 클라는 PlayerState 파괴가 복제될 때 목록이 줄어든다. 판정은 서버만 하므로 화면 숫자가 그 사이만 어긋난다.
+- **누가 나가 넘친 경험치는 다음 처치 때 레벨업된다.** 그 사이 바는 가득 찬 채로 머문다(위 "인원 비례 필요량").
 
 ## 검증
 
@@ -215,6 +239,8 @@ OnWidgetRemovedFromStack → bClosing = true, CardOut 재생, HandledByWidget? =
 6. 선택 도중 클라 한 명이 나가도 나머지가 고르면 재개된다
 7. 정지 중 마우스·게임패드 모두로 카드를 고를 수 있다 (EGUI 내비 입력이 정지 중에도 동작하는지)
 8. 정지 중 버스트 남은 시간·리스폰 대기도 멈췄다가 재개 후 이어진다
+9. 2인 매치 — 호스트·클라 경험치 바의 필요량 숫자가 둘 다 곡선 값의 두 배이고, 같은 처치 수에서 혼자일 때의 절반만큼 찬다. 혼자 하면 곡선 값 그대로
+10. 2인 매치에서 바가 절반 넘게 찼을 때 클라가 나가면, 호스트 바의 필요량이 곧바로 곡선 값으로 줄고 바는 가득 찬 채로 머문다. 다음 처치에서 레벨업한다
 
 ## 관련 문서
 

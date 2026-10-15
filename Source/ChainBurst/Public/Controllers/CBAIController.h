@@ -20,6 +20,7 @@ struct FGameplayEventData;
  * 로드아웃이 주입한 비헤이비어 트리를 캐릭터의 준비 완료(SystemReady) 신호 이후에 구동.
  * 시야·청각·피해 퍼셉션으로 적(진영이 다른 대상)을 감지하고, 후보들을 점수화해 블랙보드 타겟을 선정·갱신.
  * 현재 타겟을 들고 있을 때 교체할지는 ReevaluateTarget()이 정함 (베이스 = 점수 배수 비교, 등급별 오버라이드).
+ * 소환한 쪽이 타겟을 지정하면(Auth_AssignTarget) 그 대상이 살아 있는 동안은 인지·점수와 무관하게 그 대상만 쫓음 (보스전 졸개 등).
  * 경로 추종은 군중 회피(Detour Crowd)를 사용해 여러 AI 가 서로 겹치지 않게 이동.
  * BT가 아닌 다른 두뇌가 필요한 자식은 StartAILogic()을 오버라이드. 직접 스폰하지 않는 추상 클래스.
  */
@@ -119,8 +120,19 @@ public:
 	 * 타겟 선정. 인지 중인 적 후보를 점수화해 블랙보드 TargetActor를 갱신.
 	 */
 public:
-	/** [서버] 후보를 재평가해 블랙보드 타겟을 갱신. UCBBTService_UpdateTarget·퍼셉션 콜백이 호출. */
+	/**
+	 * [서버] 후보를 재평가해 블랙보드 타겟을 갱신. UCBBTService_UpdateTarget·퍼셉션 콜백이 호출.
+	 * 지정 타겟(Auth_AssignTarget)이 적이고 살아 있으면 재평가 없이 그 대상을 씀.
+	 */
 	virtual void UpdateTarget();
+
+	/**
+	 * [서버] 소환한 쪽이 쫓을 대상을 지정하고 곧바로 타겟에 반영함 (블랙보드 미준비면 BT 시작 때 반영).
+	 * 그 대상이 적이고 살아 있는 동안은 인지·점수·교체 규칙과 무관하게 유지 - 숨거나 다른 적이 더 가까워도 놓지 않음.
+	 * 대상이 죽거나 사라지면 지정이 풀린 것처럼 평소 선정(퍼셉션)으로 돌아감.
+	 * @param InTarget 쫓을 대상 (nullptr 이면 지정 해제)
+	 */
+	void Auth_AssignTarget(AActor* InTarget);
 
 protected:
 	/**
@@ -234,6 +246,9 @@ private:
 
 	/** 현재 타겟을 블랙보드에 마지막으로 쓴 시각(초). 음수면 기록 없음. */
 	float TargetAssignedTime = -1.f;
+
+	/** 소환한 쪽이 지정한 타겟 (Auth_AssignTarget). 유효한 동안은 UpdateTarget 이 재평가 없이 씀 */
+	TWeakObjectPtr<AActor> AssignedTarget;
 #pragma endregion
 
 #pragma region Stagger

@@ -179,6 +179,7 @@ ACBAIController::StartAILogic()  (SystemReady 후)
 
 ```
 UpdateTarget()
+  ├ 지정 타겟(Auth_AssignTarget)이 적 + 생존 → 그 대상 (아래 단계를 모두 건너뜀 — 아래 "지정 타겟")
   ├ 현재 타겟이 유지 불가(IsTargetStillValid 실패) → 버림
   ├ 현재 타겟 없음 → FindBestTarget() 을 바로 씀 (없으면 클리어)
   ├ 전환 금지 구간(CanSwitchTarget 실패) → 유지
@@ -272,6 +273,16 @@ Score = BaseTargetScore(1.0)
 | 누적 딜량 위협도 | 규칙이 전부 "최근에 때렸나(예/아니오)"로 성립한다 |
 | 가해자별 피격 시각 맵 직접 구현 | 엔진 피해 감각이 같은 일을 하고, 퍼셉션 경로(후보·유지·콜백)와 자동으로 합류한다 |
 
+#### 지정 타겟 — 소환한 쪽이 정한다 (`Auth_AssignTarget`)
+
+AI 를 소환한 쪽이 **쫓을 대상을 정해 줄 수 있다.** 지정한 대상이 적이고 살아 있는 동안 `UpdateTarget()` 은 맨 앞에서 그 대상을 블랙보드에 쓰고(이미 그 대상이면 쓰지 않음) 끝낸다 — 인지·점수·전환 금지 구간·등급별 교체 규칙을 전부 건너뛴다. 첫 사용처는 보스전 졸개다(→ [BossArena.md](BossArena.md) "졸개").
+
+- **왜 필요한가.** 퍼셉션 선정만으로는 "이 플레이어를 계속 쫓아라"를 표현할 수 없다 — 등 뒤에 나오면 가만히 있는 대상을 못 알아채고(시야 120°, 정지 = 무소음), 다른 적이 더 가깝거나 때리면 그쪽으로 가고, 숨으면 놓친다(보스처럼 "놓지 않기"를 해도 최초 획득과 교체는 여전히 점수다).
+- **블랙보드에 쓰는 경로는 여전히 `UpdateTarget()` 하나다.** `Auth_AssignTarget` 은 값을 저장하고 `UpdateTarget()` 을 부를 뿐이다. 블랙보드가 아직 없으면(BT 시작 전 — 로드아웃 비동기 로드 중) 그 자리에선 아무 일 없고, `StartAILogic()` 의 첫 선정이 반영한다.
+- **지정한 대상이 죽거나 사라지면 평소 선정으로 돌아간다.** 지정을 지우지는 않지만 매 선정에서 적·생존 검사에 떨어지므로 아래 흐름이 그대로 돈다 — 블랙보드에 남은 죽은 대상은 `IsTargetStillValid()` 의 생존 검사로 버려지고 퍼셉션 후보에서 새로 고른다.
+- **서브클래스가 아니라 베이스에 둔 이유.** 지정은 AI 의 종류가 아니라 **누가 소환했나**에 달린 입력이다. 같은 Rogue 를 일반 스포너(퍼셉션)와 보스전(지정)에 함께 쓸 수 있고, 지정용 컨트롤러·캐릭터 BP 가 따로 필요 없다. 지정하지 않은 AI 는 동작이 바뀌지 않는다.
+- 지정은 액터(폰) 단위라 폰이 바뀌면 이어지지 않는다. 지금 폰이 바뀌는 경우는 사망 리스폰뿐이라 다루지 않는다.
+
 #### 위협 입력 — 피격 이벤트 재사용
 
 ```
@@ -308,6 +319,7 @@ BehaviorTree  →  경직 분기 (Blackboard 데코레이터, Observer Aborts = 
 - **연속 피격 시 태그가 1 → 0 → 1로 한 번 튄다** (피격 어빌리티 재발동 → `ActivationOwnedTags` 재부여). 같은 호출 스택이라 BT 는 다음 틱에 최종값만 보지만, 데코레이터 옵저버가 두 번 울려 경직 브랜치가 한 번 재진입(= `Wait` 재시작)할 수 있다. 동작상 무해하다.
 - 구독/해제는 위협 판정과 같은 진입점(`BindPawnASCEvents()`)을 탄다. 단 **구독은 `RunBehaviorTree()` 보다 앞서므로 초기 값 1회 반영은 블랙보드가 없어 버려진다.** 태그·BB 키 둘 다 기본값이 false 라 어긋나지 않는다.
 - **기절(보스)도 이 경로를 그대로 탄다.** 기절 어빌리티가 `Status.Combat.Staggered` 를 함께 소유하므로 컨트롤러·블랙보드·BT 경직 분기를 하나도 바꾸지 않고 "이동을 끊고 기절 동안 대기"가 된다. 기절 고유의 판단(게이지 적립 중단 등)은 별도 태그 `Status.Combat.Stunned` 가 맡는다 → [Stun.md](Stun.md).
+- **보스 등장 연출도 같다.** 등장 어빌리티가 `Staggered` 를 소유해 등장 몽타주 동안 BT 가 대기한다. 등장 고유의 판단(카메라 복귀)은 `Status.Combat.Intro` 가 맡는다 → [BossArena.md](BossArena.md) "등장 연출".
 
 ### 이벤트가 아니라 태그를 구독하는 이유
 
@@ -348,6 +360,7 @@ AI 쪽에서 눈여겨볼 두 가지:
 | **어빌리티 활성화** | **커스텀** — `UCBBTTask_ActivateAbility(AndWait)` (아래) |
 | **후퇴·경계 지점 계산** | **EQS** — `BTTask_RunEQSQuery`(내장) + 쿼리 에셋 (아래) |
 | **경계 중 타겟 주시 + 스트레이프 회전** | **커스텀** — `UCBBTService_StrafeFocus` (아래) |
+| **특정 이동 동안만 속도 바꾸기** (멀 때 전력질주) | **커스텀** — `UCBBTService_MovementSpeed` (아래) |
 | **타겟 재선정 주기** | **커스텀** — `UCBBTService_UpdateTarget` (아래) |
 | **후보 중 무작위 선택** (쓸 수 있는 공격 중 하나) | **커스텀** — `UCBBTComposite_RandomSelector` (아래) |
 | **타겟까지 벽 없이 보이는가** | **커스텀** — `UCBBTDecorator_HasLineOfSight` (아래) |
@@ -432,10 +445,43 @@ bUseControllerDesiredRotation = true;
 - 정식 경로는 `GA_Walk → GE_MovementModifier → MovementSpeed 어트리뷰트 → ACBBaseCharacter::OnMovementSpeedChanged → CMC.MaxWalkSpeed` 다. `OnMovementSpeedChanged` 는 **종착점**이라 여기만 부르면 어트리뷰트와 CMC 가 어긋나고, 이후 아무 GE 나 어트리뷰트를 갱신하면 값이 조용히 덮어써진다.
 - 더 큰 이유는 **개이트 태그**다. 속도만 낮추면 `UCBLocomotionProcessor` 가 여전히 `Gait.Run` 으로 판정해서 → 애님은 Run 기준 속도 비율로 출발/정지를 판정하고, `UCBNoiseEmitterComponent` 는 Run Loudness(0.65)로 소음을 보고하며(살금살금 걷는데 뛰는 만큼 시끄러움), 가속·제동도 Run 값이 된다.
 - 이탈 시에는 **태그로 취소**한다(`CancelAbilities`). 어빌리티의 `EndAbility` 가 속도 GE 를 제거하므로 원래 개이트로 복구된다 — 핸들을 보관할 필요가 없다(활성화·취소 모두 애셋 태그로 매칭).
+- 켜기·취소는 `UCBAbilitySystemLibrary::SetAbilityActiveByTag()` 하나다 — 아래 `Movement Speed` 서비스와 같은 규칙을 공유한다(이미 켜져 있으면 그대로, 후보 중 첫 성공만).
 - **로드아웃에 해당 어빌리티가 부여돼 있어야 한다.** 없으면 활성화가 조용히 실패하고 속도만 안 바뀐다.
 - BP 자식의 `bEndWhenNoAcceleration` 은 꺼져 있어야 한다(GA_Sprint 전용). 켜져 있으면 경계 중 잠깐 멈출 때마다 걷기가 풀린다.
 
 **태스크 두 개(진입/종료)로 나누지 않는 이유**: 브랜치는 여러 경로로 끝난다 — 경계 시퀀스 정상 완료(공격으로 넘어감), 타겟 상실, BT 정지, 사망. 종료 태스크는 그때 실행되지 않아 **회전 모드가 켜진 채 남고**, 이후 추격·순찰이 계속 이상하게 돈다. 서비스의 `OnCeaseRelevant` 는 중단 경로에서도 호출이 보장되므로 짝이 어긋날 수 없다.
+
+### 노드 실행 중 이동 속도 — `UCBBTService_MovementSpeed`
+
+붙은 노드가 실행되는 동안만 이동 속도 어빌리티(`SpeedAbilityTag`, 기본 `Ability.Movement.Sprint`)를 켜 둔다. 보스가 **멀리 있는 타겟에게 다가가는 `MoveTo`** 에 붙여, 그 이동 동안 전력질주하고 `MoveTo` 가 끝나거나 끊기면 일반 달리기로 돌아오게 한다(→ [전투 사이클 (Outlaw)](#전투-사이클-outlaw) ①).
+
+- **Strafe Focus 의 속도 부분만 떼어낸 것이다.** 진입(`OnBecomeRelevant`)에 켜고 이탈(`OnCeaseRelevant`)에 태그로 취소한다 — 이탈은 정상 완료·거리 데코레이터의 중단·경직/기절 분기의 중단·BT 정지 모두에서 호출되므로 질주가 켜진 채 남지 않는다. 켜기·취소 규칙은 `UCBAbilitySystemLibrary::SetAbilityActiveByTag()` 를 Strafe Focus 와 공유한다.
+- **속도를 CMC 에 직접 쓰지 않는다** — Strafe Focus "③ 이동 속도" 와 같은 이유(개이트 태그·어트리뷰트·가속/제동이 함께 따라와야 함). 질주 중에는 `Status.Movement.Gait.Sprint` 라 `UCBLocomotionProcessor` 가 Sprint 가속·제동을 적용하고, 애님 개이트도 Sprint 가 된다.
+- **"멀 때"는 서비스가 판단하지 않는다.** 거리 조건은 붙은 가지의 데코레이터(① `TargetDistance ≥ 1500`)가 이미 정하므로, 어디에 붙이느냐가 곧 조건이다. 1500 안으로 들어오면 데코레이터가 `MoveTo` 를 끊고 → 이탈 → 질주 취소.
+- **틱이 없다.** 진입·이탈에만 반응한다(`INIT_SERVICE_NODE_NOTIFY_FLAGS` 가 `TickNode` 미오버라이드를 보고 틱을 끔). 질주 도중 활성화가 풀리는 경로(경직·기절)는 `MoveTo` 자체가 중단되므로 재시도할 상황이 없다.
+- **AI 용 질주 어빌리티가 따로 필요하다.** 플레이어의 `GA_Sprint` 는 대시에 종속(`ActivationRequiredTags = Status.Movement.Dashing`)이고 무가속이면 자동 종료라 AI 가 켤 수 없다(→ [Locomotion.md](Locomotion.md) "대시 & Sprint"). `UCBGAChangeSpeed` 자식으로 조건 없이 만든다(아래 "에디터 작업").
+- **이동 데이터에 Sprint 항목이 있어야 한다.** 없으면 `GetSpeedForTag` 가 0 이라 보스가 멈추는데, 거리가 줄지 않아 `MoveTo` 도 끊기지 않으므로 **영구히 멈춘다.** 그래서 `UCBGAChangeSpeed` 가 속도 0 이면 경고 로그를 남기고 취소 종료한다 — 보스는 일반 달리기로 계속 간다.
+- 서비스는 **태스크 노드에도 붙일 수 있다**(엔진 BT). 가지(Sequence)가 아니라 그 `MoveTo` 에 붙여야 이동이 끝나는 순간 풀린다.
+
+**에디터 작업**
+
+| 대상 | 작업 |
+|---|---|
+| `GA_AI_Sprint` (새 BP, `GameAbilities/Shared`) | 부모 `UCBGAChangeSpeed`. Asset Tags `Ability.Movement.Sprint`, `SpeedDataTag` = `Status.Movement.Gait.Sprint`, `MovementModifierGEClass` = `GE_MovementModifier`, **`bEndWhenNoAcceleration` 끔**, `ActivationRequiredTags` 비움 |
+| `DA_Loadout_Outlaw_Hulk` | 어빌리티 목록 `+= GA_AI_Sprint` |
+| `DA_Movement_Outlaw_Hulk` | 개이트 맵에 **`Status.Movement.Gait.Sprint`** 항목 추가 (`MaxSpeed` 등 — 지금은 Run·Walk 뿐) |
+| `BT_Outlaw_Hulk` | ① 아주 멂 `MoveTo` 에 서비스 `Movement Speed` 부착 (태그 기본값 그대로) |
+| `ABP_Outlaw_Hulk` | 질주 클립이 없음(조깅 블렌드스페이스 `BS_Outlaw_Hulk_Run` 하나, Crunch 팩에도 스프린트 없음) — 속도만 오르면 발이 미끄러져 보일 수 있어 재생 속도를 속도 비율로 올리는 등 애님 측 처리 확인 |
+
+**채택하지 않은 것**
+
+| 안 | 이유 |
+|---|---|
+| 서비스가 거리를 직접 보고 켜고 끄기 | 거리 조건은 가지 데코레이터가 이미 가짐. 같은 기준이 BT·서비스 두 곳에 생김 |
+| Strafe Focus 재사용 (회전 끔 + Sprint 태그) | 추격 중 타겟 포커스(Gameplay 우선순위)까지 걸리고, 노드 이름이 용도와 맞지 않음 |
+| 진입/종료 태스크 두 개 | 중단 경로에서 종료 태스크가 실행되지 않아 질주가 켜진 채 남음 (Strafe Focus 와 같은 이유) |
+| 틱마다 재활성화 시도 | 질주가 풀리는 경로가 `MoveTo` 중단과 함께 옴. 재시도할 상황이 없음 |
+| 플레이어 `GA_Sprint` 공유 | 대시 종속·무가속 자동 종료라 AI 가 켤 수 없음 |
 
 ### 타겟 재선정 주기 — `UCBBTService_UpdateTarget`
 
@@ -597,8 +643,8 @@ Root  [Service: Update Target] [Service: Update Target Distance → TargetDistan
    │   │   ├─ Activate Ability And Wait (등 뒤 대응 스킬 — 회전 베기 등)
    │   │   └─ Wait (템포 ± 편차)   + Service: Strafe Focus (TargetActor)
    │   │
-   │   ├─ MoveTo (TargetActor)   [TargetDistance ≥ 1500, Aborts = Self]
-   │   │                         ← ① 아주 멂: 접근하다 1500 안으로 들어오는 순간 끊고 다시 고름
+   │   ├─ MoveTo (TargetActor)   [TargetDistance ≥ 1500, Aborts = Self]   + Service: Movement Speed (Sprint)
+   │   │                         ← ① 아주 멂: 전력질주로 접근하다 1500 안으로 들어오는 순간 끊고(질주 해제) 다시 고름
    │   │
    │   ├─ [TargetDistance ≥ 700, Aborts = None]  Sequence "원거리"               ← ② 700~1500
    │   │   ├─ Selector
@@ -660,6 +706,8 @@ Root  [Service: Update Target] [Service: Update Target Distance → TargetDistan
 - **공격 → `Wait` 순서.** 공격 직전에 거리가 확정된 시점이라 곧바로 친다. 반대로 두면 대기 중 타겟이 빠져나간 뒤 헛스윙한다.
 
 ## 다음 단계
+
+- **[에디터]** 보스 전력질주: `GA_AI_Sprint` 생성·Hulk 로드아웃 부여, `DA_Movement_Outlaw_Hulk` 에 Sprint 개이트 항목, `BT_Outlaw_Hulk` ① `MoveTo` 에 `Movement Speed` 서비스 (→ [노드 실행 중 이동 속도](#노드-실행-중-이동-속도--ucbbtservice_movementspeed) "에디터 작업"). 질주 모션(발 미끄러짐) 확인.
 
 - **[에디터]** `BT_Outlaw_Hulk` 를 위 [전투 사이클 (Outlaw)](#전투-사이클-outlaw) 대로 배선(세 구역·거리 서비스·랜덤 셀렉터·시야), `BB_Outlaw_Hulk` 에 `TargetDistance`(Float) 키 추가, `BP_OutlawController` 의 `RecentDamageBonus` = 1.5(`SwitchScoreRatio` 는 보스에서 쓰이지 않음 — [보스의 타겟 유지](#보스의-타겟-유지--acboutlawcontroller)), 스킬 GA BP 쿨다운 GE(Skill.B 포함) 확인.
 

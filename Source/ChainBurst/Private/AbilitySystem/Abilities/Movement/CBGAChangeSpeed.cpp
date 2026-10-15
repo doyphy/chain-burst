@@ -33,14 +33,25 @@ void UCBGAChangeSpeed::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 		return;
 	}
 
+	// 데이터 에셋에서 태그에 맞는 속도 값 가져오기
+	const UCBCharacterMovementData* MovementData = BaseChar->GetMovementDataAsset();
+	const float TargetSpeed = MovementData ? MovementData->GetSpeedForTag(SpeedDataTag) : 0.f;
+
+	// 이동 데이터에 이 개이트 항목이 없으면 속도가 0 이 되어 캐릭터가 멈춤 (AI 는 MoveTo 가 끝나지 않아 영구히 멈춤).
+	// 조용히 멈추지 않게 경고하고 속도를 바꾸지 않음 - 기존 개이트가 그대로 유지됨
+	if (TargetSpeed <= 0.f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] %s: 이동 데이터(%s)에 %s 속도가 없어 속도를 바꾸지 않음 - 이동 데이터 에셋의 개이트 항목 확인"),
+			*GetNameSafe(BaseChar), *GetName(), *GetNameSafe(MovementData), *SpeedDataTag.ToString());
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
 	// 기존에 적용된 '이동 오버라이드' GE가 있다면 먼저 제거.
 	// Status.Movement.Overridden 태그를 가진 모든 GE를 찾아서 제거.
 	FGameplayTagContainer CleanUpContainer;
 	CleanUpContainer.AddTag(CBGameplayTags::Status_Movement_Overridden);
 	ASC->RemoveActiveEffectsWithGrantedTags(CleanUpContainer);
-
-	// 데이터 에셋에서 태그에 맞는 속도 값 가져오기
-	float TargetSpeed = BaseChar->GetMovementDataAsset()->GetSpeedForTag(SpeedDataTag);
 
 	// GE Spec 생성
 	FGameplayEffectSpecHandle SpecHandle = MakeOutgoingGameplayEffectSpec(MovementModifierGEClass);

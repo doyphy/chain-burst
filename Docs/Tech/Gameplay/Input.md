@@ -65,6 +65,8 @@ EnhancedInput 기반이며, 모든 입력은 **입력 태그(`Input.*`)에 바�
 
 `FCBMappingContextEntry`의 주석대로 **캐릭터 조작에 본질적인 IMC만 `UCBInputConfig`에 둔다.** 상황·전역 컨텍스트는 그 상황과 가장 밀접한 클래스(위젯 등)가 소유한다.
 
+**IMC 를 UI 스택 밖에서 직접 빼고 넣지 않는다.** 스택은 메뉴가 열릴 때 "걷기 직전에 붙어 있던 IMC"를 기억했다 닫힐 때 되돌리므로, 다른 곳이 따로 손대면 메뉴와 순서가 엉켜 메뉴 위에서 입력이 살아나거나 입력이 죽은 채 남는다. **UI 가 아닌 이유로 행동을 막을 때는 GE 의 `Block Abilities with Tags`** 를 쓴다 — 보스 등장 연출이 그 예다(이동·시점은 시네마틱 모드, 공격·대시·점프는 차단 GE → [BossArena.md](BossArena.md) "등장 연출").
+
 ## 관련 문서
 - 로드아웃의 `InputConfig` 주입(`Local_ApplyToCharacter`): [Loadout.md](../Foundation/Loadout.md)
 - UI가 IMC를 걷어내는 규칙·등록 체크리스트: [EasyGameUI.md](../Presentation/EasyGameUI.md)

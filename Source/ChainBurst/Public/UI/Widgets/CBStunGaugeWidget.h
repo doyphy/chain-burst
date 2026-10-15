@@ -38,7 +38,7 @@ protected:
 	 * 기절 게이지 변경 시(및 초기화 시 1회) 호출되는 BP 이벤트. WBP가 비주얼(프로그레스 바 등)을 갱신.
 	 * 기절이 시작되면 게이지가 비워지므로 0 이 들어옴.
 	 * @param CurrentGauge 현재 게이지
-	 * @param MaxGauge     최대 게이지 (UCBAttributeSet::MaxStunGauge)
+	 * @param MaxGauge     최대 게이지 (MaxStunGauge 어트리뷰트 - 보스전 인원만큼 늘어나 있을 수 있음)
 	 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "ChainBurst|UI")
 	void OnStunGaugeChanged(float CurrentGauge, float MaxGauge);

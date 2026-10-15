@@ -12,7 +12,7 @@ class UCBLevelUpData;
  * 게임플레이 레벨의 게임모드.
  * 실제 매치 규칙(승패 판정·리스폰·레벨업 등)을 담당함.
  * 진행 중인 매치로의 난입은 접속 승인 단계에서 거부함.
- * 플레이어가 죽으면 일정 시간 뒤 PlayerStart 에 다시 스폰시킴 (지연·지점 규칙을 이 클래스가 소유).
+ * 플레이어가 죽으면 일정 시간 뒤 PlayerStart 에 다시 스폰시킴 (지연·지점 규칙을 이 클래스가 소유). 보스전 중 사망자는 보스 구역의 부활 지점에 스폰.
  * AI 처치 경험치를 전 플레이어 공유로 쌓고, 레벨이 오르면 월드를 정지한 채 플레이어마다 카드를 뽑아 주고 고른 카드의 효과를 적용함.
  */
 UCLASS()
@@ -44,6 +44,7 @@ public:
 	/**
 	 * [서버] 플레이어가 죽었을 때 호출. RespawnDelay 뒤에 다시 스폰하도록 예약함. (서버에서만 실행)
 	 * 이미 예약된 컨트롤러면 아무것도 하지 않음.
+	 * 보스전 중에 죽었으면 부활 위치를 이 시점에 보스 구역의 부활 지점으로 정해 둠 (부활 시점엔 전멸 리셋으로 보스전이 끝나 있을 수 있음).
 	 * @param InController 죽은 플레이어의 컨트롤러
 	 */
 	void Auth_HandlePlayerDeath(AController* InController);
@@ -56,8 +57,17 @@ protected:
 	 * [서버] 실제로 다시 스폰시키는 함수. (예약 타이머가 만료되면 호출)
 	 * ASC 가 PlayerState 소유라 폰을 갈아도 살아남으므로, 스폰 전에 사망 상태와 이전 로드아웃 부여분을 걷어냄.
 	 * @param InController 다시 스폰할 플레이어의 컨트롤러
+	 * @param InRespawnTransform 정해 둔 부활 위치 (보스전 중 사망). 비어 있으면 엔진 기본 규칙으로 PlayerStart 에서 스폰
 	 */
-	void Auth_RespawnPlayer(AController* InController);
+	void Auth_RespawnPlayer(AController* InController, const TOptional<FTransform>& InRespawnTransform);
+
+	/**
+	 * [서버] 보스전이 진행 중인 보스 구역이 있으면 그 부활 지점을 돌려주는 함수.
+	 * 구역이 게임모드에 등록·해제하는 대신 사망 시점에 레벨을 훑어 물음 (등록 해제 누락이 생기지 않음).
+	 * @param InController 부활시킬 플레이어의 컨트롤러 (폰 클래스를 정하는 데 씀)
+	 * @return 부활 위치. 보스전 중이 아니면 비어 있음
+	 */
+	TOptional<FTransform> Auth_FindBossFightRespawnTransform(AController* InController);
 
 	/**
 	 * [서버] 다시 스폰하기 전에 ASC 를 사망 이전 상태로 되돌리는 함수.

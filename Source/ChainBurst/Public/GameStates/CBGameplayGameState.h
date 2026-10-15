@@ -9,7 +9,8 @@
  * 게임플레이 레벨의 게임 스테이트.
  * 전 플레이어가 공유하는 레벨·경험치를 들고 전 클라이언트에 복제함 (경험치 바 표시용).
  * 값을 정하는 규칙(경험치 누적·레벨 판정)은 게임모드(ACBGameplayGameMode)가 담당하고, 여기는 결과만 받음.
- * 다음 레벨까지 필요한 경험치는 복제하지 않음 - 각 인스턴스가 레벨업 데이터에서 같은 값을 계산할 수 있음.
+ * 다음 레벨까지 필요한 경험치는 복제하지 않음 - 각 인스턴스가 레벨업 데이터(1인 기준) x 접속 인원(PlayerArray)으로 같은 값을 계산할 수 있음.
+ * 서버 판정과 경험치 바 표시가 모두 GetRequiredExperience 하나를 씀.
  */
 UCLASS()
 class CHAINBURST_API ACBGameplayGameState : public ACBGameStateBase
@@ -36,6 +37,14 @@ public:
 	/** [Getter] 현재 레벨에서 쌓인 경험치 */
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|LevelUp")
 	FORCEINLINE int32 GetExperience() const { return Experience; }
+
+	/**
+	 * 지금 레벨에서 다음 레벨까지 필요한 경험치 = 레벨업 데이터의 1인 기준 값 x 접속 인원. (서버 판정·경험치 바 표시 공용)
+	 * 인원은 전 클라에 복제되는 PlayerArray 로 세므로 클라도 같은 값을 계산함. 인원이 바뀌면 OnPlayerListChanged 가 방송됨
+	 * @param InLevel 현재 레벨 (1부터)
+	 * @return 다음 레벨까지 필요한 경험치 (레벨업 데이터가 없으면 0)
+	 */
+	int32 GetRequiredExperience(int32 InLevel) const;
 
 protected:
 	//~ Begin AActor Interface.

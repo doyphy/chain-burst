@@ -9,9 +9,11 @@
 #include "DataAssets/LevelUp/CBLevelUpData.h"
 #include "GameStates/CBGameplayGameState.h"
 #include "PlayerState/CBPlayerState.h"
+#include "Spawn/CBBossArena.h"
 
 // engine
 #include "Engine/Engine.h"
+#include "EngineUtils.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -81,10 +83,13 @@ void ACBGameplayGameMode::Auth_HandlePlayerDeath(AController* InController)
 	// 사망 처리가 두 번 들어와도 예약은 하나만 유지
 	if (RespawnTimers.Contains(InController)) return;
 
+	// 보스전 중 사망이면 부활 위치를 지금 정함. 부활 시점에 물으면 전멸 리셋 뒤라 마지막 사망자들만 PlayerStart 로 가게 됨
+	const TOptional<FTransform> RespawnTransform = Auth_FindBossFightRespawnTransform(InController);
+
 	// 지연이 없으면 곧바로 처리
 	if (RespawnDelay <= 0.f)
 	{
-		Auth_RespawnPlayer(InController);
+		Auth_RespawnPlayer(InController, RespawnTransform);
 		return;
 	}
 
@@ -93,14 +98,14 @@ void ACBGameplayGameMode::Auth_HandlePlayerDeath(AController* InController)
 	FTimerHandle& RespawnTimer = RespawnTimers.Add(InController);
 
 	// 리스폰 타이머 예약. 만료 시 Auth_RespawnPlayer 호출
-	GetWorldTimerManager().SetTimer(RespawnTimer, FTimerDelegate::CreateWeakLambda(this, [this, WeakController]()
+	GetWorldTimerManager().SetTimer(RespawnTimer, FTimerDelegate::CreateWeakLambda(this, [this, WeakController, RespawnTransform]()
 	{
-		Auth_RespawnPlayer(WeakController.Get());
+		Auth_RespawnPlayer(WeakController.Get(), RespawnTransform);
 	}), RespawnDelay, false);
 }
 
 // [서버] 예약 만료 시 실제 리스폰. 사망 상태를 걷어내고 폰을 새로 스폰.
-void ACBGameplayGameMode::Auth_RespawnPlayer(AController* InController)
+void ACBGameplayGameMode::Auth_RespawnPlayer(AController* InController, const TOptional<FTransform>& InRespawnTransform)
 {
 	// 컨트롤러가 사라졌더라도 예약 항목은 남지 않게 먼저 지움
 	RespawnTimers.Remove(InController);
@@ -119,9 +124,29 @@ void ACBGameplayGameMode::Auth_RespawnPlayer(AController* InController)
 		OldPawn->Destroy();
 	}
 
-	// 스폰 지점은 엔진 기본 규칙(ChoosePlayerStart)이 PlayerStart 중에서 고름.
-	// 스폰할 클래스는 GetDefaultPawnClassForController 가 PlayerState 의 선택 캐릭터를 보고 정함
+	// 스폰할 클래스는 두 경로 모두 GetDefaultPawnClassForController 가 PlayerState 의 선택 캐릭터를 보고 정함
+	if (InRespawnTransform.IsSet())
+	{
+		// 보스전 중 사망 - 보스 구역 밖의 부활 지점
+		RestartPlayerAtTransform(PlayerController, InRespawnTransform.GetValue());
+		return;
+	}
+
+	// 스폰 지점은 엔진 기본 규칙(ChoosePlayerStart)이 PlayerStart 중에서 고름
 	RestartPlayer(PlayerController);
+}
+
+// [서버] 보스전 중인 보스 구역의 부활 지점. 사망 시점에 한 번 불리므로 레벨을 훑는 비용은 무시할 만함
+TOptional<FTransform> ACBGameplayGameMode::Auth_FindBossFightRespawnTransform(AController* InController)
+{
+	for (TActorIterator<ACBBossArena> It(GetWorld()); It; ++It)
+	{
+		if (It->IsBossFightActive())
+		{
+			return It->GetRespawnTransform(GetDefaultPawnClassForController(InController));
+		}
+	}
+	return {};
 }
 
 // [서버] 사망 상태 정리. 사망 GE 제거 + 이전 폰의 로드아웃 부여분 회수.
@@ -162,11 +187,12 @@ void ACBGameplayGameMode::Auth_AddExperience(int32 InAmount)
 
 	int32 Experience = GameplayGameState->GetExperience() + InAmount;
 
-	// 한 번에 여러 레벨을 넘을 수 있으므로 넘은 만큼 반복 (필요량은 최소 1 이라 반드시 끝남). 최대 레벨에서 멈춤
+	// 한 번에 여러 레벨을 넘을 수 있으므로 넘은 만큼 반복 (필요량은 최소 1 이라 반드시 끝남). 최대 레벨에서 멈춤.
+	// 필요량은 접속 인원만큼 늘어난 값 (경험치 바와 같은 계산). 누가 나가 필요량이 줄어 넘친 경험치도 여기서 레벨업으로 처리됨
 	int32 GainedLevels = 0;
-	for (int32 RequiredExperience = LevelUpData->GetRequiredExperience(Level);
+	for (int32 RequiredExperience = GameplayGameState->GetRequiredExperience(Level);
 		!LevelUpData->IsMaxLevel(Level) && Experience >= RequiredExperience;
-		RequiredExperience = LevelUpData->GetRequiredExperience(Level))
+		RequiredExperience = GameplayGameState->GetRequiredExperience(Level))
 	{
 		Experience -= RequiredExperience;
 		++Level;

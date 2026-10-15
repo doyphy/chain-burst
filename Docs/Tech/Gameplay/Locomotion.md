@@ -16,6 +16,7 @@
 ## 개이트 (Walk / Run / Sprint)
 
 - 개이트 = **ASC의 `Status.Movement.Gait.*` 태그** — 항상 정확히 1개 유지. Walk/Sprint(의도)는 `GA_Walk`/`GA_Sprint`가 홀드 동안 GE로 태그+속도(SetByCaller)를 부여하고 릴리즈 시 제거(`UCBGAChangeSpeed`), Run은 `UCBLocomotionProcessor`가 "Walk/Sprint 태그 둘 다 없음"에서 파생해 명시 부여(태그 이벤트 기반). 태그 분류·복제 규칙은 [GameplayTags.md](../Foundation/GameplayTags.md) 참고.
+- **속도는 이동 데이터에서 개이트 태그로 찾는다**(`GetSpeedForTag`). 그 개이트 항목이 없으면 0 이라 캐릭터가 멈추므로, `UCBGAChangeSpeed` 는 속도가 0 이하면 경고 로그를 남기고 **속도를 바꾸지 않은 채 취소 종료**한다(기존 개이트 유지). 새 캐릭터에 Walk/Sprint 어빌리티를 줄 때는 이동 데이터에 그 개이트 항목부터 넣는다.
 - 판별 우선순위 Sprint > Walk > 기본 Run — **`UCBAbilitySystemLibrary::GetCurrentGaitTag()`** 공용 헬퍼 사용 (AnimInstance·RotationComponent·InputManager·`GetGaitMontageIndex()` 공유, 중복 구현 금지).
 - 개이트별 몽타주 변형을 가진 액션(무기 장착/해제 등)은 **`UCBAbilitySystemLibrary::GetGaitMontageIndex()`** 로 재생 인덱스 결정 — Idle=0, Walk=1, Run/Sprint=2 (순수 태그 조회 — Idle은 아래 파생 상태 태그, [Montage.md](Montage.md) 참고).
 
@@ -120,6 +121,7 @@
   - **대시 몽타주(`AM_Chaser_*_Dash`/`*_Combat_Dash`)에는 이동 구간 전체를 덮는 Motion Warping AnimNotifyState가 배치되어 있어야 한다** (Root Motion Modifier: Skew Warp, Translation+Rotation 워프 켜짐, Warp Target Name = **`"Action.Movement.Dash"`** — 액션 태그 문자열과 정확히 일치해야 함). 이 노티파이가 없으면 워프 타겟만 등록되고 아무 효과가 없다(무해하게 무시됨). 다른 액션에 워프를 추가할 때는 그 액션의 태그 문자열을 그대로 Warp Target Name에 쓰면 된다.
   - [루트모션 재생 중 회전 잠금](#루트모션-재생-중-회전-잠금)과 공존한다 — 회전 잠금은 액터 회전을 안 건드리는 쪽으로 막을 뿐이고, 모션 워핑은 루트모션 델타 자체를 보정하는 별개 파이프라인(`ProcessRootMotionPreConvertToWorld`)이라 서로 간섭하지 않는다.
 - **종속 체인**: ① `GA_Sprint`는 `ActivationRequiredTags = Status.Movement.Dashing`으로 대시 없인 활성화 불가 (대시 쿨다운이면 Sprint도 발동 불가) ② 대시 성공 시 `UCBGADash`가 `TryActivateAbilitiesByTag(Ability.Movement.Sprint)`로 Sprint를 직접 활성화(부여 순서 무관) ③ Sprint는 릴리즈 또는 **가속 소실 자동 종료**(`bEndWhenNoAcceleration`, 유예 0.2초 — 정지·피벗 잠금 포함)로 해제.
+  - **AI 질주는 이 체인 밖이다.** AI 는 대시 입력이 없으므로 같은 `UCBGAChangeSpeed` 로 조건 없는 BP(`GA_AI_Sprint` — 대시 요구 없음, 무가속 자동 종료 끔)를 따로 두고, BT 서비스가 노드 실행 동안만 켠다(→ [AI.md](AI.md) "노드 실행 중 이동 속도").
 - 대시 쿨다운은 GAS 표준(`CooldownGameplayEffectClass`), 활성 중 `Status.Movement.Dashing` 부여(ActivationOwnedTags) — 대시 감속·점프 차단·Sprint 활성화 조건에 사용. 상세: [Abilities.md](Abilities.md)
 - 대시 종료 후 상태 머신 인계는 Idle 고속 출구(`Idle → Move`)가 담당 (위 지상 표).
 

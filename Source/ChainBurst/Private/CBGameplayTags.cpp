@@ -33,6 +33,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_SuperArmor, "Status.Combat.SuperArmor", "슈퍼아머 상태 - 피격 반응에 끊기지 않음 (어빌리티가 ActivationOwnedTags로 부여)")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_Staggered, "Status.Combat.Staggered", "피격 경직 상태 - 피격 어빌리티가 ActivationOwnedTags로 부여")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_Stunned, "Status.Combat.Stunned", "기절 상태 - 기절 어빌리티가 ActivationOwnedTags로 부여 (기절 중에는 기절 게이지가 쌓이지 않음)")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_Intro, "Status.Combat.Intro", "등장 연출 중 상태 - 등장 어빌리티가 ActivationOwnedTags로 부여. 보스 구역(서버)이 이 태그가 빠지는 순간 플레이어 카메라를 되돌림")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_Burst, "Status.Combat.Burst", "버스트 상태 - 버스트 GE의 GrantedTags로 부여 (만료·사망·캐릭터 변경 시 GE와 함께 제거)")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Combat_Engaged, "Status.Combat.Engaged", "교전 개시 상태 (AI) - 첫 타겟을 잡으면 AI 컨트롤러가 TagOnly 루스 태그로 부여해 사망까지 유지. 보스 바 등 클라 UI가 구독")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Overridden, "Status.Movement.Overridden", "GE에 의해 이동속도가 오버라이드 된 상태")
@@ -46,6 +47,8 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Dead, "Status.Dead", "사망 상태")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Movement_Strafe, "Status.Movement.Strafe", "타겟을 주시한 채 이동하는 상태(스트레이프)")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_UI_StatusWindow, "Status.UI.StatusWindow", "상태창 열림 상태(상태창 어빌리티에서 사용)")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Arena_Waiting, "Status.Arena.Waiting", "보스 구역에서 다른 플레이어 진입을 기다리는 상태 - 보스 구역(서버)이 플레이어 ASC 에 TagOnly 루스 태그로 부여·제거. HUD 대기 표시가 구독")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Status_Arena_Countdown, "Status.Arena.Countdown", "보스 등장 카운트다운 중 - 보스 구역(서버)이 적용하는 카운트다운 기간 GE 의 GrantedTags. HUD 대기 표시가 구독하고 남은 시간은 그 GE 에서 읽음")
 
 	/** Event Tags. (애님노티파이 등 태그 이벤트) */
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_EquipWeapon, "Event.Combat.EquipWeapon", "무기 장착 이벤트")
@@ -58,6 +61,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_HitReact, "Event.Combat.HitReact", "피격 반응 트리거 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_Death, "Event.Combat.Death", "사망 트리거 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_Stunned, "Event.Combat.Stunned", "기절 트리거 이벤트 (기절 게이지가 가득 차면 발행)")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_Intro, "Event.Combat.Intro", "등장 연출 트리거 이벤트 (보스 구역이 소환한 보스가 준비되면 발행)")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Action_EndAbility, "Event.Action.EndAbility", "액션 어빌리티 종료 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Action_JumpSection, "Event.Action.JumpSection", "액션 몽타주 섹션 점프 요청 이벤트")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Action_CheckInput, "Event.Action.CheckInput", "액션 입력 확인 이벤트")
@@ -86,6 +90,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_BurstGauge, "Ability.Combat.BurstGauge", "버스트 게이지 적립 패시브 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_LifeOnHit, "Ability.Combat.LifeOnHit", "적중 회복 패시브 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Stunned, "Ability.Combat.Stunned", "기절 어빌리티 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Intro, "Ability.Combat.Intro", "등장 연출 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_StunGauge, "Ability.Combat.StunGauge", "기절 게이지 적립 패시브 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Dash, "Ability.Movement.Dash", "대시 어빌리티 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Sprint, "Ability.Movement.Sprint", "전력 질주 어빌리티 태그")
@@ -110,6 +115,7 @@ namespace CBGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_UnequipWeapon, "Action.Combat.UnequipWeapon", "무기 해제 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Burst, "Action.Combat.Burst", "버스트 발동 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Stunned, "Action.Combat.Stunned", "기절 액션 태그")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Combat_Intro, "Action.Combat.Intro", "등장 연출 액션 태그")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Action_Movement_Dash, "Action.Movement.Dash", "대시 액션 태그 (몽타주 인덱스 = 8방향 섹터)")
 
 	/** Cooldown Tags. (어빌리티 쿨다운 GE의 GrantedTags에 사용) */

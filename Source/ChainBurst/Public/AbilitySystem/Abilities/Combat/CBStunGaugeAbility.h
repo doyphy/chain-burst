@@ -12,7 +12,8 @@
  * - 적립 2 - 자기 어빌리티: 정상 종료(캔슬 제외)된 어빌리티의 식별 태그를 AbilityGaugeGains 에서 찾아 그 양만큼.
  *   표에 없는 어빌리티(피격·기절 등)는 무시. 스킬을 끝까지 쓴 뒤에 쌓이므로 게이지를 채운 스킬이 기절에 끊기지 않음.
  * - 기절 중(Status.Combat.Stunned)에는 쌓지 않음.
- * - MaxStunGauge 에 닿으면 게이지를 비우고 기절 이벤트(Event.Combat.Stunned)를 발행 → 기절 어빌리티가 발동.
+ * - MaxStunGauge 어트리뷰트에 닿으면 게이지를 비우고 기절 이벤트(Event.Combat.Stunned)를 발행 → 기절 어빌리티가 발동.
+ *   최대값은 기본 100이고 보스전 인원만큼 늘어날 수 있음 (ACBBossArena). 적립량은 인원과 무관하게 그대로.
  *
  * 기절 동작 자체(공격 캔슬·몽타주·상태 태그)는 이벤트 액션 어빌리티 BP(GA_Stun)가 담당. 적립량은 BP 자식(GA_StunGauge)에서 지정.
  * AI 는 ASC 가 폰과 함께 사라지므로 종료 시 게이지를 초기화하지 않음.
@@ -31,12 +32,12 @@ protected:
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 	//~ End UGameplayAbility Interface
 
-	/** 한 번 맞을 때마다 쌓이는 게이지 양 (MaxStunGauge = 100 기준) */
+	/** 한 번 맞을 때마다 쌓이는 게이지 양 (1인 기준 MaxStunGauge = 100) */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Stun", meta = (ClampMin = "0.0"))
 	float GaugeGainPerHit = 5.f;
 
 	/**
-	 * 정상 종료된 자기 어빌리티의 식별 태그별 적립량 (MaxStunGauge = 100 기준).
+	 * 정상 종료된 자기 어빌리티의 식별 태그별 적립량 (1인 기준 MaxStunGauge = 100).
 	 * 어빌리티 Asset Tags 와 정확히 같은 태그로 찾음 (예: Ability.Combat.Attack.Skill.A → 20). 표에 없으면 적립 없음.
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Stun", meta = (Categories = "Ability"))

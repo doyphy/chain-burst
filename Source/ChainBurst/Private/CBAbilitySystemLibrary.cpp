@@ -65,6 +65,42 @@ UAbilitySystemComponent* UCBAbilitySystemLibrary::GetASC(const AActor* InActor)
 	return ASCInterface->GetAbilitySystemComponent();
 }
 
+// 켜 두는 동안만 효과가 있는 어빌리티 토글 (켜기 = 활성화 / 끄기 = 태그로 취소)
+void UCBAbilitySystemLibrary::SetAbilityActiveByTag(UAbilitySystemComponent* InASC, const FGameplayTag& InAbilityTag, bool bInActive)
+{
+	if (!InASC || !InAbilityTag.IsValid()) return;
+
+	const FGameplayTagContainer AbilityTagContainer(InAbilityTag);
+
+	if (!bInActive)
+	{
+		// 태그로 취소. 어빌리티의 EndAbility 가 자기 효과(속도 GE 등)를 제거하므로 원래 상태로 복구됨.
+		InASC->CancelAbilities(&AbilityTagContainer);
+		return;
+	}
+
+	// 어빌리티 순회. 일치하는 모든 어빌리티 배열에 담음.
+	TArray<FGameplayAbilitySpecHandle> CandidateHandles;
+	for (const FGameplayAbilitySpec& Spec : InASC->GetActivatableAbilities())
+	{
+		if (!Spec.Ability || !Spec.Ability->GetAssetTags().HasAll(AbilityTagContainer)) continue;
+
+		// 이미 켜져 있으면 재활성화하지 않음.
+		if (Spec.IsActive()) return;
+
+		CandidateHandles.Add(Spec.Handle);
+	}
+
+	// 어빌리티 활성화 시도. 여러 개가 있으면 첫 번째 성공한 것만 켬.
+	for (const FGameplayAbilitySpecHandle& CandidateHandle : CandidateHandles)
+	{
+		if (InASC->TryActivateAbility(CandidateHandle))
+		{
+			return;
+		}
+	}
+}
+
 bool UCBAbilitySystemLibrary::HasGameplayTag(const AActor* InActor, const FGameplayTag& InTag)
 {
 	if (!InTag.IsValid()) return false;

@@ -44,11 +44,10 @@ public:
 
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, StunGauge)
 
+	ATTRIBUTE_ACCESSORS(UCBAttributeSet, MaxStunGauge)
+
 	/** 버스트 게이지 최대값. (차는 속도는 UCBBurstGaugeAbility으로 조절하므로 상수로 고정함) */
 	static constexpr float MaxBurstGauge = 100.f;
-
-	/** 기절 게이지 최대값. (차는 속도는 UCBStunGaugeAbility 의 적립량으로 조절하므로 상수로 고정함) */
-	static constexpr float MaxStunGauge = 100.f;
 
 	/** 캐릭터 시스템 준비 완료 시 캐릭터에서 호출되는 함수 (초기화 작업) */
 	void OnCharacterSystemReady();
@@ -96,6 +95,14 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_StunGauge)
 	FGameplayAttributeData StunGauge;
 
+	/**
+	 * 기절 게이지 최대값. 기본 100 (1인 기준 - 적립량 데이터가 이 값 기준).
+	 * 차는 속도는 UCBStunGaugeAbility 의 적립량으로 조절하고, 이 값은 보스 구역이 보스전 인원만큼 곱할 때만 바뀜 (ACBBossArena).
+	 * 복제는 UI(보스 기절 게이지) 표시용.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat", ReplicatedUsing = OnRep_MaxStunGauge)
+	FGameplayAttributeData MaxStunGauge;
+
 	/** 리플리케이션 설정 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	
@@ -125,6 +132,9 @@ public:
 
 	UFUNCTION()
 	virtual void OnRep_StunGauge(const FGameplayAttributeData& OldStunGauge);
+
+	UFUNCTION()
+	virtual void OnRep_MaxStunGauge(const FGameplayAttributeData& OldMaxStunGauge);
 
 	void UpdateMovementSpeed(float NewValue);
 

@@ -102,7 +102,7 @@
 | `Action.*` | 식별 | 몽타주 식별 태그 (UCBActionComponent에서 몽타주 선택) |
 | `GameplayCue.*` | 식별 | 게임플레이 큐 라우팅 |
 | `Effect.*` | 속성 | GE 동작 의도 선언 (Opt-in, 여러 GE 공유 가능) |
-| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`, `Staggered`, `Stunned`, `Burst`, `Engaged`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망), `Status.UI.*`(UI 연출 — `StatusWindow`. `LocalOnly` 어빌리티의 ActivationOwnedTags로 자기 화면 ASC에만 붙음, 판정 금지 → [UI.md](../Presentation/UI.md) "상태창") |
+| `Status.*` | 상태 | 캐릭터 상태. `Status.Combat.*`(전투 — `InCombat`, `SuperArmor`, `Staggered`, `Stunned`, `Burst`, `Engaged`, `Intro`), `Status.Movement.*`(이동 — 아래 구조), `Status.Dead`(사망), `Status.UI.*`(UI 연출 — `StatusWindow`. `LocalOnly` 어빌리티의 ActivationOwnedTags로 자기 화면 ASC에만 붙음, 판정 금지 → [UI.md](../Presentation/UI.md) "상태창"), `Status.Arena.*`(보스 구역 — `Waiting`, `Countdown`. 아래) |
 | `Cooldown.*` | 상태 | 어빌리티 쿨다운 (쿨다운 GE의 GrantedTags — GAS가 자동 검사. 관례상 별도 루트 유지) |
 | `Event.*` | 이벤트 | 애님노티파이 등 이벤트 트리거 |
 
@@ -124,9 +124,15 @@ Status.Movement.Overridden                  ← 속도 오버라이드 GE
 
 **`Status.Combat.Stunned`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 기절 어빌리티(`GA_Stun`, `UCBEventActionAbility` BP)이고 **어빌리티 활성 구간이 곧 기절 구간**이다(= 기절 몽타주 길이). 소비자는 `UCBStunGaugeAbility`(기절 중 적립 중단)이며 이후 보스 UI·추가 피해 등이 붙을 자리다. 같은 어빌리티가 `Status.Combat.Staggered`(BT 경직 분기)·`Status.Combat.SuperArmor`(피격 반응 차단)도 함께 소유한다 — 경직과 구분되는 태그를 따로 둔 이유는 **경직 중에는 기절 게이지가 계속 쌓여야** 하기 때문이다 (→ [Stun.md](../Gameplay/Stun.md)).
 
+**`Status.Combat.Intro`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 등장 어빌리티(`GA_Boss_Intro`, `UCBEventActionAbility` BP)이고 **어빌리티 활성 구간이 곧 등장 연출 구간**이다(= 등장 몽타주 길이). 소비자는 서버의 `ACBBossArena` 하나로, 보스 ASC 에서 이 태그가 빠지는 순간 플레이어 카메라·입력을 되돌린다 (→ [BossArena.md](../Gameplay/BossArena.md) "등장 연출"). 서버만 알면 되므로 복제하지 않는다 — 클라이언트의 카메라 복귀는 서버가 엔진 RPC(`ClientSetViewTarget`)로 보낸다. 같은 어빌리티가 `Staggered`(BT 대기)·`SuperArmor`(피격 반응 차단)도 함께 소유한다 — 기절과 같은 구성이고, 등장 고유의 판단(카메라 복귀)만 이 태그가 맡는다.
+
 **`Status.Combat.SuperArmor`** — 복제 경로 ②(`ActivationOwnedTags`). 부여 주체는 "피격에 끊기지 않아야 하는" 어빌리티 자신(스킬 BP 등)이고, 소비자는 `UCBHitReactAbility`의 `ActivationBlockedTags` 하나뿐이다 (→ [Abilities.md](../Gameplay/Abilities.md) "슈퍼아머"). 서버와 오너 클라에서만 존재하면 충분하다 — 판정도 몽타주 스킵도 어빌리티 발동 단계에서 끝나므로 시뮬 프록시는 이 태그를 알 필요가 없다.
 
-**`Status.Combat.Engaged`** — 복제 경로 ③(수동 루스 태그, `TagOnly`). **AI 의 교전 개시** — 첫 타겟을 잡은 순간부터 사망까지 붙어 있다. 부여 주체는 `ACBAIController::UpdateTargetInBlackboard()`(블랙보드 타겟 쓰기의 유일한 경로)이고 **떼지 않는다** — 타겟을 잠깐 잃을 때마다 소비자가 꺼졌다 켜지지 않게 하기 위함이다. AI ASC 는 캐릭터와 함께 파괴되므로 `EndPlay` 정리도 필요 없다(③의 "폰이 사라질 때 뺀다"는 PlayerState 소유 ASC 의 규칙). 소비자는 `UCBUIComponent`(화면 상단 보스 바 → [UI.md](../Presentation/UI.md) "보스 바"). 클라 UI 가 구독하므로 `StrafeFocus` 의 `Strafe` 와 같은 이유로 복제한다. **플레이어의 `InCombat`(무기를 든 상태)과는 다른 뜻**이라 따로 둔다 — AI 는 `InCombat` 을 쓰지 않는다. 보스 리셋(전멸 시 회복)이 생기면 그 지점이 이 태그를 떼는 곳이 된다.
+**`Status.Combat.Engaged`** — 복제 경로 ③(수동 루스 태그, `TagOnly`). **AI 의 교전 개시** — 첫 타겟을 잡은 순간부터 사망까지 붙어 있다. 부여 주체는 `ACBAIController::UpdateTargetInBlackboard()`(블랙보드 타겟 쓰기의 유일한 경로)이고 **떼지 않는다** — 타겟을 잠깐 잃을 때마다 소비자가 꺼졌다 켜지지 않게 하기 위함이다. AI ASC 는 캐릭터와 함께 파괴되므로 `EndPlay` 정리도 필요 없다(③의 "폰이 사라질 때 뺀다"는 PlayerState 소유 ASC 의 규칙). 소비자는 `UCBUIComponent`(화면 상단 보스 바 → [UI.md](../Presentation/UI.md) "보스 바"). 클라 UI 가 구독하므로 `StrafeFocus` 의 `Strafe` 와 같은 이유로 복제한다. **플레이어의 `InCombat`(무기를 든 상태)과는 다른 뜻**이라 따로 둔다 — AI 는 `InCombat` 을 쓰지 않는다. 보스 구역의 전멸 리셋은 보스를 **파괴하고 새로 소환**하므로 이 태그를 뗄 일이 없다(→ [BossArena.md](../Gameplay/BossArena.md)). 같은 보스를 살려 둔 채 회복·원위치시키는 리셋이 생기면 그 지점이 이 태그를 떼는 곳이 된다.
+
+**`Status.Arena.Waiting`** — 복제 경로 ③(수동 루스 태그, `TagOnly`). **보스 구역에서 다른 플레이어를 기다리는 중** — 구역 안에 들어왔지만 아직 전원이 모이지 않은 플레이어의 ASC(PlayerState)에 붙는다. 부여·제거 주체는 `ACBBossArena`(서버) 하나이고, 매 스캔 "지금 살아서 구역 안에 있는 플레이어"와 맞춘다(`Auth_UpdateWaitingTags`) — 나가거나 죽으면 다음 스캔에 떨어지고, 전원이 모이면 전부 뗀다. 소비자는 HUD 의 `UCBArenaWaitingWidget`(→ [UI.md](../Presentation/UI.md) "보스 구역 대기 표시")이라 **소유 클라이언트에 닿아야 하므로 복제한다**(`TagOnly` 는 엔진 정의상 소유자 포함 전 클라 — 레거시 복제에서는 `GameplayTagCountContainer`(조건 없음)로 나간다. ⚠️ Iris 복제를 켜면 엔진 폴백(`UpdateTagMapSingle_Internal`)이 `TagOnly` 를 소유자 제외(`COND_SkipOwner`) 경로로 보내 원격 클라에서 표시가 안 뜬다 — 그때는 `CountToOwner` 이상으로 올린다). PlayerState 소유 ASC 의 루스 태그지만 ③의 "폰이 사라질 때 뺀다" 대상이 아니다 — 폰이 아니라 구역이 소유한 상태라, 리스폰으로 폰이 바뀌어도 구역의 다음 스캔이 맞춘다. 판정에 쓰지 않는다 (UI 표시 전용).
+
+**`Status.Arena.Countdown`** — 복제 경로 ①(GE GrantedTags). **보스 등장 카운트다운 중** — 전원이 구역에 모인 순간부터 보스 등장(또는 취소)까지. 소유자는 카운트다운 기간 GE(`ACBBossArena::CountdownEffectClass`, 예: `GE_ArenaCountdown`)이고, 적용·제거 주체는 `ACBBossArena`(서버) 하나다 — 기간은 구역의 `BossAppearDelay` 로 덮어쓰고(`Spec.SetDuration`), 취소·보스 등장 때 `RemoveActiveEffectsWithGrantedTags` 로 걷는다. 소비자는 HUD 의 `UCBArenaWaitingWidget` 으로, 태그로 시작·종료를 알고 **남은 시간은 같은 GE 에서** 읽는다. 루스 태그(③)가 아니라 GE 인 이유는 **시간을 실어야** 하기 때문이다 — 태그만으로는 위젯이 길이를 따로 알아야 해 값이 두 곳에 생긴다. `Status.Combat.Burst` 와 같은 형태다. 판정에 쓰지 않는다 (UI 표시 전용).
 
 **`Status.Combat.Burst`** — 복제 경로 ①(GE GrantedTags). 소유자는 `GE_Burst`이고, 부여 주체는 `UCBBurstAbility`(예측 적용), 제거는 GE 만료 또는 `UCBBurstGaugeAbility`의 종료(사망·캐릭터 변경 시 `RemoveActiveEffectsWithGrantedTags`). 소비자는 `UCBBurstGaugeAbility`(버스트 중 적립 중단)이며 이후 UI·이펙트가 붙는다. 버프 모디파이어 때문에 GE가 어차피 필요하므로 ①이 추가 비용 없이 따라온다 (→ [Burst.md](../Gameplay/Burst.md)).
 

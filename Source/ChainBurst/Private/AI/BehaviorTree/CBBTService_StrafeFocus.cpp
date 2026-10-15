@@ -6,7 +6,6 @@
 // engine
 #include "AIController.h"
 #include "AbilitySystemComponent.h"
-#include "Abilities/GameplayAbility.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -96,41 +95,10 @@ void UCBBTService_StrafeFocus::SetStrafeModeEnabled(const UBehaviorTreeComponent
 // 이동 속도 어빌리티 토글 (켜기 = 활성화 / 끄기 = 태그로 취소)
 void UCBBTService_StrafeFocus::SetSpeedAbilityEnabled(const UBehaviorTreeComponent& OwnerComp, bool bEnabled) const
 {
-	if (!SpeedAbilityTag.IsValid()) return;
-
+	// 켜기·취소 규칙은 Movement Speed 서비스와 공용 (태그가 비어 있으면 아무것도 하지 않음)
 	const AAIController* AIController = OwnerComp.GetAIOwner();
 	UAbilitySystemComponent* ASC = AIController ? UCBAbilitySystemLibrary::GetASC(AIController->GetPawn()) : nullptr;
-	if (!ASC) return;
-
-	const FGameplayTagContainer AbilityTagContainer(SpeedAbilityTag);
-
-	if (!bEnabled)
-	{
-		// 태그로 취소. 어빌리티의 EndAbility 가 속도 GE 를 제거하므로 기본 개이트로 복구됨.
-		ASC->CancelAbilities(&AbilityTagContainer);
-		return;
-	}
-
-	// 어빌리티 순회. 일치하는 모든 어빌리티 배열에 담음.
-	TArray<FGameplayAbilitySpecHandle> CandidateHandles;
-	for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
-	{
-		if (!Spec.Ability || !Spec.Ability->GetAssetTags().HasAll(AbilityTagContainer)) continue;
-
-		// 이미 켜져 있으면 재활성화하지 않음.
-		if (Spec.IsActive()) return;
-
-		CandidateHandles.Add(Spec.Handle);
-	}
-
-	// 어빌리티 활성화 시도. 여러 개가 있으면 첫 번째 성공한 것만 켬.
-	for (const FGameplayAbilitySpecHandle& CandidateHandle : CandidateHandles)
-	{
-		if (ASC->TryActivateAbility(CandidateHandle))
-		{
-			return;
-		}
-	}
+	UCBAbilitySystemLibrary::SetAbilityActiveByTag(ASC, SpeedAbilityTag, bEnabled);
 }
 
 FString UCBBTService_StrafeFocus::GetStaticDescription() const

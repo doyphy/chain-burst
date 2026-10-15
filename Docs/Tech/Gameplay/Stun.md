@@ -7,9 +7,10 @@
 ```
 [서버] 피격 (Event.Combat.HitReact)                   ─┐
 [서버] 자기 어빌리티 정상 종료 (ASC OnAbilityEnded)      ─┤→ UCBStunGaugeAbility (패시브)
-                                                       │     StunGauge = min(현재 + 적립량, 100)
+                                                       │     StunGauge = min(현재 + 적립량, MaxStunGauge)
                                                        │     기절 중(Status.Combat.Stunned)이면 쌓지 않음
-                                                       └→    100 도달: StunGauge = 0 + Event.Combat.Stunned
+                                                       └→    MaxStunGauge 도달: StunGauge = 0 + Event.Combat.Stunned
+                                                             (MaxStunGauge = 100 × 보스전 인원 → BossArena.md "인원 비례 내구도")
 Event.Combat.Stunned ─→ GA_Stun (UCBEventActionAbility BP — 코드 없음)
                           · CancelAbilityTag = Ability.Combat.Attack           진행 중 공격 끊음
                           · ActivationOwnedTags = Status.Combat.Stunned
@@ -23,7 +24,8 @@ BT ─→ Status.Combat.Staggered → 블랙보드 bIsStaggered → 경직 분�
 
 | 요소 | 위치 | 역할 |
 |---|---|---|
-| `StunGauge` | `UCBAttributeSet` | 0 ~ `MaxStunGauge`(상수 100). 서버만 기록하고 전 클라에 복제(보스 UI 용) |
+| `StunGauge` | `UCBAttributeSet` | 0 ~ `MaxStunGauge`. 서버만 기록하고 전 클라에 복제(보스 UI 용) |
+| `MaxStunGauge` | `UCBAttributeSet` | 기본 100(생성자, 1인 기준). 보스 구역이 보스전 인원만큼 곱함. 복제(보스 UI 용) |
 | `UCBStunGaugeAbility` | 로드아웃 `PassiveAbilities` | `OnGiven` + `ServerOnly`. 피격·자기 어빌리티 종료마다 적립, 가득 차면 비우고 기절 이벤트 |
 | `GA_Stun` | `UCBEventActionAbility` BP | 트리거 `Event.Combat.Stunned`. 공격 캔슬 + 기절 몽타주 + 상태 태그 셋 |
 | `Status.Combat.Stunned` | 기절 어빌리티 `ActivationOwnedTags` | 기절 중 적립 중단. 이후 UI·추가 피해의 기준 |
@@ -49,6 +51,14 @@ BT ─→ Status.Combat.Staggered → 블랙보드 bIsStaggered → 경직 분�
 - **발동된 어빌리티가 없으면 경고 로그**(`HandleGameplayEvent` 반환값 0) — 로드아웃 부여·트리거 설정·발동 조건 누락. 게이지만 조용히 비워지는 것을 막는다.
 - **피격으로 가득 찬 경우의 순서**: `HandleGameplayEvent` 는 트리거 어빌리티를 먼저 발동하고 대기 태스크에 나중에 알린다. 그래서 피격 반응이 먼저 시작되고, 바로 이어 기절이 발동해 **기절 몽타주가 피격 몽타주를 덮는다**(피격 어빌리티는 끊김 → 캔슬 종료).
 
+### 최대값 — 보스전 인원만큼
+
+`MaxStunGauge` 는 어트리뷰트다. 기본값 100 은 `UCBAttributeSet` 생성자가 정하고(**1인 기준** — 적립량 데이터가 이 값 기준이라 GE 가 아니라 코드에 둠), 보스 구역이 보스 준비 완료 때 **보스전 인원만큼 곱한다**(→ [BossArena.md](BossArena.md) "인원 비례 내구도"). 인원이 늘면 타격도 그만큼 빨리 쌓이므로 기절까지 걸리는 시간이 인원과 무관하게 비슷해진다.
+
+- 처음에는 상수였다 — 차는 속도는 적립량으로 조절하므로 최대값을 바꿀 소비자가 없었다. 인원 비례가 그 소비자다.
+- 패시브는 매 적립마다 어트리뷰트를 읽는다. 최대값은 보스가 준비될 때 한 번 바뀌고 그 뒤로는 그대로다.
+- **자기 스킬 적립량은 인원과 무관하다.** 보스가 스킬을 쓰는 빈도는 인원과 상관없으므로, 인원이 많을수록 기절은 상대적으로 타격에 더 좌우된다. 스킬 몫도 맞추려면 패시브가 `AbilityGaugeGains` 값에 `MaxStunGauge / 100` 을 곱하면 된다(지금은 하지 않음).
+
 ## 기절 — 코드 없는 BP
 
 `UCBEventActionAbility` 가 이미 "이벤트로 발동 → 지정 어빌리티 캔슬 → 몽타주 재생"을 한다(피격 반응·사망과 같은 베이스). 기절 고유의 것은 **태그 설정뿐**이라 C++ 클래스를 두지 않았다.
@@ -65,6 +75,7 @@ BT ─→ Status.Combat.Staggered → 블랙보드 bIsStaggered → 경직 분�
 | 값 | 기록 | 복제 |
 |---|---|---|
 | `StunGauge` | 서버 (`SetNumericAttributeBase`) | 어트리뷰트 복제 — 전 클라. 화면 상단 보스 바(`UCBStunGaugeWidget`)가 네트워크 코드 없이 표시 (→ [UI.md](../Presentation/UI.md) "보스 바") |
+| `MaxStunGauge` | 서버 — 보스 구역이 보스 준비 때 1회 (`SetNumericAttributeBase`) | 어트리뷰트 복제 — 전 클라. 같은 위젯이 최대값으로 읽음 |
 | 기절 상태 태그 | `GA_Stun` `ActivationOwnedTags` | 경로 ② (→ [GameplayTags.md](../Foundation/GameplayTags.md)) — 소비자가 서버뿐이라 충분 |
 | 기절 모션 | `GameplayCue.PlayAction` | 전 클라 (→ [Montage.md](Montage.md)) |
 
@@ -86,7 +97,7 @@ AI 어빌리티는 서버 전용이라 예측·거부 처리가 없다.
 | Outlaw 로드아웃 | `PassiveAbilities += GA_StunGauge`, 어빌리티 목록 `+= GA_Stun` |
 
 - 새 `UPROPERTY` 가 있으므로 코드 반영 후 **에디터를 재시작**해야 BP 에서 값이 보인다.
-- 적립량의 기준은 `MaxStunGauge = 100` 이다(예: `GaugeGainPerHit` 5 = 20 대에 기절, 스킬 사용과 섞이면 더 빨리).
+- 적립량의 기준은 **1인 기준** `MaxStunGauge = 100` 이다(예: `GaugeGainPerHit` 5 = 혼자서 20 대에 기절, 스킬 사용과 섞이면 더 빨리). 여럿이면 최대값이 인원만큼 늘어 맞아야 할 타수도 그만큼 는다.
 
 ## 검토했지만 채택하지 않은 것
 
@@ -98,19 +109,20 @@ AI 어빌리티는 서버 전용이라 예측·거부 처리가 없다.
 | 공격 어빌리티가 스스로 적립 (어빌리티마다 적립량 프로퍼티) | 공격 기능이 기절을 알게 되고, 모든 AI 공격 BP 에 값 칸이 생긴다 — 버스트가 "무기 트레이스 조각에서 적립"을 택하지 않은 것과 같은 이유 |
 | 기절 전용 C++ 어빌리티 | 이벤트 발동·캔슬·몽타주를 `UCBEventActionAbility` 가 이미 한다. 고유한 것은 태그 설정뿐 |
 | 기절 시간 파라미터 + 루프 몽타주 | 루프 섹션은 블렌드 아웃이 오지 않아 종료 경로가 따로 필요하다. 몽타주 길이로 정하면 코드가 없다 |
-| `MaxStunGauge` 어트리뷰트 | 차는 속도는 적립량으로 조절된다. 최대값을 바꿔야 할 소비자가 없다 (버스트와 같은 판단) |
+| `MaxStunGauge` 를 상수로 두고 적립량을 인원으로 나누기 | 인원을 실어 나를 자리(어트리뷰트 등)가 어차피 필요하다. 최대 체력과 같은 규칙(최대값 × 인원)으로 두는 편이 읽기 쉽고, 적립량 데이터가 "1인 기준 100" 그대로 남는다 (→ "최대값 — 보스전 인원만큼") |
 
 ## 검증
 
 1. UBT 컴파일 통과 ✅
 2. 보스를 때릴 때마다 `StunGauge` 가 `GaugeGainPerHit` 만큼 오른다 (`showdebug abilitysystem`) — 보스 스킬 중(슈퍼아머)에 때려도 오른다
 3. 표에 있는 스킬을 **끝까지** 쓰면 그 양만큼 오르고, 피격으로 **끊긴** 스킬은 오르지 않는다
-4. 100 이 되면 게이지가 0 이 되고 기절 몽타주가 재생되며, 진행 중이던 공격이 끊긴다
+4. `MaxStunGauge`(혼자면 100)가 되면 게이지가 0 이 되고 기절 몽타주가 재생되며, 진행 중이던 공격이 끊긴다
 5. 기절 동안 BT 가 경직 분기로 대기하고(이동·공격 없음), 때려도 피격 반응 없이 데미지만 들어가며 게이지도 오르지 않는다
 6. 기절 몽타주가 끝나면 보스가 정상 전투로 돌아오고 게이지가 다시 쌓인다
 7. 클라이언트 화면에서도 기절 모션이 보인다
 8. 기절 중 사망 → 사망 몽타주로 넘어간다
 9. `GA_Stun` 을 빼고 게이지를 채우면 경고 로그가 남는다
+10. 2인 보스전 — `MaxStunGauge` 가 200 이고, 혼자일 때의 두 배를 맞아야 기절한다. 보스 바의 기절 게이지도 200 기준으로 찬다 (→ [BossArena.md](BossArena.md) 검증)
 
 ## 관련 문서
 
@@ -118,3 +130,4 @@ AI 어빌리티는 서버 전용이라 예측·거부 처리가 없다.
 - 피격 반응·슈퍼아머·이벤트 액션 베이스: [Abilities.md](Abilities.md)
 - BT 경직 분기·위협 입력(같은 피격 이벤트): [AI.md](AI.md)
 - 상태 태그 복제 경로: [GameplayTags.md](../Foundation/GameplayTags.md)
+- 최대값을 인원만큼 곱하는 쪽: [BossArena.md](BossArena.md) "인원 비례 내구도"

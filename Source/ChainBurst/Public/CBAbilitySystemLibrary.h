@@ -124,6 +124,17 @@ public:
 	static UAbilitySystemComponent* GetASC(const AActor* InActor);
 
 	/**
+	 * 켜 두는 동안만 효과가 있는 어빌리티(이동 속도 등)를 식별 태그로 켜거나 취소하는 함수. (C++ 전용)
+	 * 켜기: 식별 태그를 가진 어빌리티를 찾아 첫 번째로 활성화에 성공한 것만 켬. 이미 켜져 있으면 아무것도 하지 않음.
+	 * 끄기: 태그로 취소 - 어빌리티의 EndAbility 가 자기 효과(속도 GE 등)를 걷어 원래 상태로 복구됨.
+	 * BT 서비스가 브랜치 진입·이탈에 맞춰 부름 (Strafe Focus 의 걷기, Movement Speed 의 전력질주).
+	 * @param InASC 대상 ASC (nullptr 이면 아무것도 하지 않음)
+	 * @param InAbilityTag 어빌리티 식별 태그 (Asset Tags). 비어 있으면 아무것도 하지 않음
+	 * @param bInActive true = 활성화 / false = 취소
+	 */
+	static void SetAbilityActiveByTag(UAbilitySystemComponent* InASC, const FGameplayTag& InAbilityTag, bool bInActive);
+
+	/**
 	 * ASC 소유 액터를 그 ASC 를 쓰는 폰으로 변환하는 함수.
 	 * 플레이어는 폰이 아니라 PlayerState 가 들어오기 때문에 소유 액터로 변환해야 함.
 	 * @param InActor 환원할 액터 (폰 / 컨트롤러 / PlayerState)

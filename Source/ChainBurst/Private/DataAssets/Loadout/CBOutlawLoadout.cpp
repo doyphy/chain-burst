@@ -1,6 +1,6 @@
 // project
 #include "DataAssets/Loadout/CBOutlawLoadout.h"
-#include "Characters/CBBaseCharacter.h"
+#include "Characters/CBOutlawCharacter.h"
 #include "Components/UI/CBUIComponent.h"
 #include "UI/Widgets/CBBossBarWidget.h"
 
@@ -15,5 +15,11 @@ void UCBOutlawLoadout::ApplyToCharacter(ACBBaseCharacter* InCharacter)
 	if (UCBUIComponent* UIComponent = InCharacter->GetCBUIComponent())
 	{
 		UIComponent->SetBossBarWidgetClass(BossBarWidgetClass);
+	}
+
+	// 보스 BGM 을 캐릭터에 주입 (재생은 각 머신의 준비 완료 때 캐릭터가 수행)
+	if (ACBOutlawCharacter* OutlawCharacter = Cast<ACBOutlawCharacter>(InCharacter))
+	{
+		OutlawCharacter->SetBossMusic(BossMusic);
 	}
 }

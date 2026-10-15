@@ -38,6 +38,7 @@
 | 대상 | 위치 | 역할 |
 |---|---|---|
 | `MF_CB_TeleportDissolve` | `/Game/ChainBurst/VFX/Teleport/` | 팩 텔레포트 블록을 머티리얼 함수로 재구성. 입력 Emissive(원래 발광 통과), 출력 OpacityMask · Emissive · WorldPositionOffset |
+| `MF_CB_TeleportDissolve_MA` | `/Game/ChainBurst/VFX/Teleport/` | **어트리뷰트 방식 마스터용 래퍼.** 입력·출력 모두 Material Attributes. 안에서 Break → 위 함수 → `Set Material Attributes`(Emissive · OpacityMask = 원래 × 함수 · WPO = 원래 + 함수). 마스터의 최종 출력 앞에 노드 하나로 끼운다 (아래 "원본 마스터에 직접 연결한다") |
 | 원본 마스터 | 각 팩 폴더 (아래 "수정한 원본 마스터") | 함수를 직접 연결. 그 마스터를 쓰는 MI·메시는 자동으로 연출 가능 |
 | `M_CB_GltfDefault` | `/Game/ChainBurst/Items/Weapons/Materials/` | 무기용. 원래 부모가 엔진 플러그인(`/InterchangeAssets/gltf/M_Default`)이라 수정할 수 없어, 프로젝트로 복사해 함수를 연결하고 무기 MI 의 부모만 바꿈 |
 | `UCBCharacterLoadout::SpawnCueTag` / `DespawnEffectClass` | 로드아웃(공통) | 생성 큐 태그 / 소멸 GE. `ApplyToCharacter` 가 `SetLifecycleEffects` 로 캐릭터에 주입 |
@@ -80,7 +81,10 @@ WPO         = |(1 − 노이즈.R)^Pow × VertexNoise × (0,0,1) × VertexNormal
 | Opacity (Translucent) | 원래 Opacity × 함수 `OpacityMask` — 반투명은 이진 마스크가 아니라 흐려지며 사라짐 |
 | WorldPositionOffset | 원래 WPO + 함수 `WorldPositionOffset` (없으면 직결) |
 
-- **머티리얼 어트리뷰트 방식 마스터**(MetaHuman 등)는 출력이 하나라, 마지막 어트리뷰트 뒤에 `Set Material Attributes`(Emissive Color · Opacity Mask 또는 Opacity · World Position Offset 핀)를 끼우고 `Break Material Attributes` 로 원래 값을 꺼내 위 표대로 잇는다. **Set 노드의 핀 추가는 에디터에서 한다** — MCP 로 핀 목록(`attributeSetTypes`)을 쓰면 핀 배열이 함께 늘지 않아 에디터가 크래시한다.
+- **머티리얼 어트리뷰트 방식 마스터**(MetaHuman·Paragon 등)는 출력이 하나라, 마지막 어트리뷰트 뒤에 `Set Material Attributes`(Emissive Color · Opacity Mask 또는 Opacity · World Position Offset 핀)를 끼우고 `Break Material Attributes` 로 원래 값을 꺼내 위 표대로 잇는다. **Set 노드의 핀 추가는 에디터에서 한다** — MCP 로 핀 목록(`attributeSetTypes`)을 쓰면 핀 배열이 함께 늘지 않아 에디터가 크래시한다.
+  - **Opaque·Masked 어트리뷰트 마스터는 래퍼 `MF_CB_TeleportDissolve_MA` 를 최종 출력 앞에 끼우기만 한다.** 위 Break·Set 배선이 래퍼 안에 한 번만 들어 있어, 마스터마다 Set 노드 핀을 손으로 추가할 필요가 없다(Hulk 부터 적용). 원래 마스크 기본값이 1, WPO 기본값이 0 이라(`MaterialAttributeDefinitionMap.cpp`) Opaque 마스터에도 그대로 맞는다.
+  - **Translucent 어트리뷰트 마스터는 래퍼를 쓰지 않는다** — 래퍼는 OpacityMask 만 다룬다. Opacity 를 곱하는 마스터별 Set 노드로 연결한다(MetaHuman 눈 가림·눈물막). MetaHuman 의 Opaque 마스터들은 래퍼 이전에 마스터마다 Set 노드로 연결했고 그대로 둔다.
+  - **Break → Make 패스스루는 쓰지 않는다.** 핀은 27개가 1:1 로 맞지만 Make 는 연결된 모든 속성을 "설정됨"으로 만들어, 원래 쓰지 않던 이방성·PixelDepthOffset·Tangent 등의 셰이더 경로가 켜진다. Set 은 고른 속성만 덮어쓰고 나머지의 설정 여부를 그대로 넘긴다.
 - **Opaque → Masked 로 바꾼 뒤 마스크가 무시되면 `CB.FixIgnoredOpacityMask` 를 돌린다.** 증상은 **마스크에 상수 0 을 꽂아도 그대로 보이는 것**이고, 옛 팩 머티리얼에 남아 있던 두 가지 원인이 있다.
   | 원인 | 무엇이 일어나나 | 겪은 곳 |
   |---|---|---|
@@ -107,6 +111,7 @@ WPO         = |(1 − 노이즈.R)^Pow × VertexNoise × (0,0,1) × VertexNormal
 | 의상 | `SciFi_Bundle_03` 의 `M_Jacket_Helmet_*` · `M_Pants_Sneakers_*` · `M_Armor_Helmet_*` (13, 색 변형마다 마스터가 따로 있음) | Opaque → Masked, 불투명 간주 플래그·마스크 핀 상수 표시 끔 |
 | 무기 | `M_CB_GltfDefault` (복사본) ← MI `aiStandardSurface1SG/4SG` 4개 | Opaque → Masked |
 | 피부(MetaHuman) | `MetaHumans/Common` 의 `M_skin_unified_baked`, `M_teeth_unified`, `M_eye_eyeball_unified`, `M_eye_occlusion_unified`, `M_eye_lacrimal_fluid_unified`, `M_Eyelashes_Cards` (6) | 피부·치아·눈동자 Opaque → Masked, 눈 가림·눈물막 Translucent(어트리뷰트 방식 — Set 노드 경유), 속눈썹 Translucent |
+| Hulk | `ParagonCrunch/.../Skins/Tier_3/BlackSite/Materials` 의 `ParentMaterials/M_MASTER_BlackSite`(MI 6개의 부모), `M_Crunch_BlackSite_Cone`, `M_Crunch_Blacksite_Glass` (3) | 셋 다 어트리뷰트 방식 — 래퍼 `MF_CB_TeleportDissolve_MA` 경유. 마스터·콘 Opaque → Masked, 유리는 원래 Masked. 참조자는 전부 Hulk 메시(`Crunch_Black_Site`)뿐. 불투명 간주 플래그 문제 없음(디졸브 0 캡처로 확인) |
 
 ### 대상 메시 — 캐릭터 전체 + 붙은 액터
 
@@ -118,7 +123,7 @@ WPO         = |(1 − 노이즈.R)^Pow × VertexNoise × (0,0,1) × VertexNormal
 |---|---|---|---|
 | Robot | ✅ 원본 마스터 2 | ✅ | ✅ |
 | Dog | ✅ 원본 마스터 8 | ✅ (Dog1~4) | ✅ (Dog1~4) |
-| Hulk | 예정 (`M_MASTER_BlackSite` · 유리 · 콘) | 예정 | 예정 |
+| Hulk | ✅ 원본 마스터 3 (래퍼 경유). 주먹 무기는 메시가 없어 대상 아님 | ✅ (`GameplayCue.Character.SpawnReveal.Boss` — 보스용 `GCN_SpawnReveal_Boss`) | ✅ (공용 `GE_DespawnReveal`) |
 | Chaser(플레이어) | ✅ 의상 13 · 무기(복사본 1) · 피부(MetaHuman) 6. 리더 메시(`SKM_Manny_*`)는 숨김이라 제외 | ✅ (Sword·Dagger·GreatSword·Spear) | ✅ (4개 모두) |
 
 새 캐릭터를 추가하면 메시의 원본 마스터에 함수를 연결(위 "원본 마스터에 직접 연결한다")하고 로드아웃에 `SpawnCueTag` · `DespawnEffectClass` 를 지정한다. 텔레포트 함수가 없는 머티리얼은 연출 중에도 그대로 보이고 나이아가라만 뜬다.
@@ -133,7 +138,7 @@ WPO         = |(1 − 노이즈.R)^Pow × VertexNoise × (0,0,1) × VertexNormal
 
 | 상황 | 연출 |
 |---|---|
-| 스포너가 소환 / 플레이어 리스폰 | O (그 순간 관련 있던 모든 머신) |
+| 스포너가 소환 / 보스 구역이 보스 소환 / 플레이어 리스폰 | O (그 순간 관련 있던 모든 머신) |
 | 매치 시작 때 스폰되는 플레이어, 로비 첫 생성·무기 변경 | O (전부 런타임 생성) |
 | 레벨에 배치된 캐릭터 | X (창을 열지 않음) |
 | 이미 있던 캐릭터가 관련 거리 안으로 들어옴 | X (창이 닫힌 뒤 첫 복제) |

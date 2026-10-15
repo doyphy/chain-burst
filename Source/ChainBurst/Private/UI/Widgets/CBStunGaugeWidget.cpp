@@ -63,9 +63,11 @@ void UCBStunGaugeWidget::BroadcastStunGaugeChanged()
 	// ASC가 유효하지 않으면 갱신하지 않음
 	if (!CachedASC.IsValid()) return;
 
-	// 현재 확정된 어트리뷰트 값을 읽어 BP 이벤트로 전달. 최대값은 상수
+	// 현재 확정된 어트리뷰트 값을 읽어 BP 이벤트로 전달.
+	// 최대값은 보스 준비 때 한 번만 바뀌고(보스전 인원 배율) 그때 게이지는 0 이라 따로 구독하지 않고 매번 읽음
 	const float CurrentGauge = CachedASC->GetNumericAttribute(UCBAttributeSet::GetStunGaugeAttribute());
-	OnStunGaugeChanged(CurrentGauge, UCBAttributeSet::MaxStunGauge);
+	const float MaxGauge = CachedASC->GetNumericAttribute(UCBAttributeSet::GetMaxStunGaugeAttribute());
+	OnStunGaugeChanged(CurrentGauge, MaxGauge);
 }
 
 void UCBStunGaugeWidget::UnbindFromASC()

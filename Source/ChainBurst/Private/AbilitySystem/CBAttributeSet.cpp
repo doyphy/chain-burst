@@ -17,6 +17,9 @@ UCBAttributeSet::UCBAttributeSet()
 	InitAttackPower(1.f);
 	InitDefensePower(1.f);
 	InitAttackSpeed(1.f);
+
+	// 1인 기준 최대값. 적립량 데이터(UCBStunGaugeAbility)가 이 값 기준이라 GE 가 아니라 여기서 정함
+	InitMaxStunGauge(100.f);
 }
 
 // [서버/클라] 어트리뷰트 값이 최종 확정된 후 호출.
@@ -111,6 +114,7 @@ void UCBAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME_CONDITION_NOTIFY(UCBAttributeSet, BurstGauge, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UCBAttributeSet, LifeOnHit, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UCBAttributeSet, StunGauge, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UCBAttributeSet, MaxStunGauge, COND_None, REPNOTIFY_Always);
 }
 
 void UCBAttributeSet::OnRep_MovementSpeed(const FGameplayAttributeData& OldMovementSpeed)
@@ -156,6 +160,11 @@ void UCBAttributeSet::OnRep_LifeOnHit(const FGameplayAttributeData& OldLifeOnHit
 void UCBAttributeSet::OnRep_StunGauge(const FGameplayAttributeData& OldStunGauge)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UCBAttributeSet, StunGauge, OldStunGauge);
+}
+
+void UCBAttributeSet::OnRep_MaxStunGauge(const FGameplayAttributeData& OldMaxStunGauge)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UCBAttributeSet, MaxStunGauge, OldMaxStunGauge);
 }
 
 void UCBAttributeSet::UpdateMovementSpeed(float NewValue)

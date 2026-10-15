@@ -83,11 +83,14 @@ void UCBStunGaugeAbility::AddStunGauge(float InGain)
 	// 기절 중에는 쌓지 않음 (기절할 때 비운 게이지가 기절 동안 0으로 유지됨)
 	if (ASC->HasMatchingGameplayTag(CBGameplayTags::Status_Combat_Stunned)) return;
 
+	// 최대값은 보스전 인원만큼 늘어나 있을 수 있음 (ACBBossArena)
+	const float MaxGauge = ASC->GetNumericAttribute(UCBAttributeSet::GetMaxStunGaugeAttribute());
+
 	const FGameplayAttribute GaugeAttribute = UCBAttributeSet::GetStunGaugeAttribute();
-	const float NewGauge = FMath::Min(ASC->GetNumericAttributeBase(GaugeAttribute) + InGain, UCBAttributeSet::MaxStunGauge);
+	const float NewGauge = FMath::Min(ASC->GetNumericAttributeBase(GaugeAttribute) + InGain, MaxGauge);
 
 	// 아직 덜 참 - 서버 권위 기록 (기본값에 쓰므로 전 클라로 복제됨)
-	if (NewGauge < UCBAttributeSet::MaxStunGauge)
+	if (NewGauge < MaxGauge)
 	{
 		ASC->SetNumericAttributeBase(GaugeAttribute, NewGauge);
 		return;

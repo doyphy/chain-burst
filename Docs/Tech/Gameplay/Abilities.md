@@ -255,7 +255,7 @@ if (!ContainsModifier(Animation, StartTime, EndTime))   // Animation + 윈도우
 
 ## 사망 (`UCBDeathAbility`)
 
-체력이 0이 되면 **`UCBAttributeSet::PostGameplayEffectExecute`(서버)가 `Event.Combat.Death`를 발행**하고, 그 이벤트가 `UCBDeathAbility`를 발동시킨다. 피격 반응(`UCBHitReactAbility`)과 완전히 같은 경로이며, 같은 함수에서 체력 0이면 피격 대신 사망으로 갈라진다.
+체력이 0이 되면 **`UCBAttributeSet::PostGameplayEffectExecute`(서버)가 `Event.Combat.Death`를 발행**하고, 그 이벤트가 `UCBDeathAbility`를 발동시킨다. 피격 반응(`UCBHitReactAbility`)과 완전히 같은 경로이며, 같은 함수에서 체력 0이면 피격 대신 사망으로 갈라진다. 이 갈림보다 먼저(체력 클램프 전) 공격한 플레이어의 데미지 기록을 더한다 — 매치 클리어 화면용 (→ [GameFlow.md](../Flow/GameFlow.md) "클리어 기록").
 
 `ActivateAbility`의 순서가 곧 설계다.
 

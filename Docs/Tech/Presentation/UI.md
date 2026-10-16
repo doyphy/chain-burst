@@ -1,4 +1,4 @@
-# 캐릭터 UI (체력바·이름표·플레이어 목록·보스 바·상태창·보스 구역 대기 표시)
+# 캐릭터 UI (체력바·이름표·플레이어 목록·보스 바·상태창·보스 구역 대기 표시·매치 클리어 화면)
 
 > 캐릭터 부착형 UI(HUD 체력·머리 위 체력바)의 구조와 규칙. **UI는 각 클라이언트 로컬이며, 값 동기화는 어트리뷰트 리플리케이션이 전담한다 — UI를 위한 RPC/복제 코드를 만들지 않는다.**
 
@@ -560,6 +560,24 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
   - 카운트다운 숫자 텍스트 — **기본 `Collapsed`**. `OnCountdownStarted` → 보이기, `OnCountdownProgress` → `Ceil(RemainingTime)` 을 텍스트로, `OnCountdownEnded` → `Collapsed`.
 - `WBP_CB_HUD`에 배치하고 `Is Variable`을 켠다. `Event Construct`의 기존 ASC 캐스트 결과로 `Initialize With ASC`를 호출한다(상태창과 같은 자리).
 - 새 `UCLASS`·`UFUNCTION` 이 있으므로 코드 반영 후 **에디터를 재시작**해야 한다.
+
+## 매치 클리어 화면 (보스 처치)
+
+보스를 잡고 그 시체가 사라지면 전원에게 뜨는 Menu 레이어 위젯 `WBP_CB_GameClear` — 클리어 문구 + "로비로"(호스트만) + "메인 메뉴로"(각자). 흐름·규칙은 → [GameFlow.md](../Flow/GameFlow.md) "매치 종료".
+
+- **생성 주체는 소유 컨트롤러(`ACBChaserController`)**, 클래스는 `UCBGameInstance::MatchClearWidgetClass`. 캐릭터 데이터가 필요 없고 리스폰 대기 중에도 떠야 해서 레벨업 카드 창과 같은 자리다(위 "구성 요소"의 `UCBLevelUpWidget`).
+- **C++ 베이스가 없는 순수 WBP다.** 클리어 기록(경과 시간·내 데미지 — `FCBMatchResult`)은 컨트롤러가 RPC 로 받아 보관하고 WBP 가 `Event Construct`에서 `GetMatchResult`로 읽는다. 버튼은 컨트롤러의 `Server_RequestReturnToLobby` / `Local_LeaveMatchToMainMenu`를 직접 부르며, 호스트 판정은 `Is Server` 노드로 한다. C++ 베이스에 이벤트를 두면 `WBP_EasyMasterWidget` 부모를 버리고 내비게이션 인터페이스를 직접 구현해야 해서 쓰지 않는다.
+- **신호는 RPC(`Client_ShowMatchClear(FCBMatchResult)`)다.** 이 문서의 "UI용 RPC를 만들지 않는다"는 **값 동기화**(체력·게이지 등 복제되는 상태)에 대한 규칙이다. 클리어는 한 번 일어나는 게임 이벤트이고, 늦게 오는 클라(난입 거부)·폰 교체(컨트롤러 소유)가 없어 상태를 복제해 둘 이유가 없다.
+- **내리는 것도 컨트롤러다** — 레벨을 떠나기 직전(`PreClientTravel`)과 메인 메뉴 나가기에서. WBP 가 `Remove This Widget`을 부르지 않는다.
+
+## 경과 시간 표시 (HUD 우측 상단)
+
+`WBP_CB_ElapsedTime` — `WBP_CB_HUD` 우측 상단의 경과 시간. **C++ 없이 엔진이 복제하는 서버 시간을 읽는다.**
+
+- `Event Construct`에서 게임 스테이트를 저장하고, `Tick`마다 `Get Server World Time Seconds`(엔진 `AGameStateBase` — 서버가 0.1초마다 자기 월드 시간을 복제하고 클라가 차이를 평균 내 보정) → 포맷 → `Set Text`.
+- 기준이 클리어 기록과 같은 **서버 월드 시간**이라 레벨 시작 때 0 부터 흐르고, 레벨업 카드를 고르는 동안(월드 정지) 멈춘다(→ [GameFlow.md](../Flow/GameFlow.md) "클리어 기록").
+- **보스를 잡아도 멈추지 않는다.** 클리어 위젯의 시간은 처치 순간 값이라, 클리어 화면이 뜰 때 시계는 그보다 몇 초 앞서 있다. 같이 보이지 않게 하려면 클리어 위젯의 `Global Occluder`를 켜 아래 HUD 를 숨긴다(→ [EasyGameUI.md](EasyGameUI.md) 선언값). 시계를 처치 순간에 멈추려면 클리어 시각을 게임 스테이트에 복제해 두 위젯이 같은 값을 읽게 해야 한다 — 요청이 생기면 그때.
+- HUD 컨테이너 자식이라 폰과 함께 사라진다 — 리스폰을 기다리는 동안은 다른 HUD 처럼 보이지 않는다.
 
 ## 위젯 클래스 등록 — 로드아웃
 

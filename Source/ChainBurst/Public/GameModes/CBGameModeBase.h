@@ -12,6 +12,7 @@ class UCBCharacterCatalog;
  * 파생 게임모드가 공통으로 쓸 컨트롤러·플레이어 상태 클래스와 맵 전환 방식을 고정하고,
  * 플레이어가 고른 캐릭터(무기)로 스폰하도록 기본 폰 클래스를 결정함.
  * 접속한 플레이어에게 들어온 순서대로 기본 닉네임(Player1, Player2 ...)을 부여하고, 닉네임 변경 요청을 다듬어 중복을 막음.
+ * 전원을 데리고 다음 레벨로 넘어가는 이동(세션 유지)도 파생 게임모드가 같은 함수로 함.
  * 레벨별 규칙은 파생 클래스(로비·게임플레이)가 담당함.
  */
 UCLASS()
@@ -54,6 +55,14 @@ protected:
 
 	/** [서버] 고를 수 있는 캐릭터 카탈로그를 게임 인스턴스에서 가져옴. 등록하지 않았으면 nullptr. */
 	UCBCharacterCatalog* GetCharacterCatalog() const;
+
+	/**
+	 * [서버] 접속한 전원을 데리고 다른 레벨로 이동함 (seamless ServerTravel). (서버에서만 실행)
+	 * 이동 뒤에도 클라이언트가 붙어 있도록 ?listen 을, 정원이 엔진 기본값으로 돌아가지 않도록 ?MaxPlayers 를 다시 붙임
+	 * (AGameSession 은 레벨마다 새로 스폰되어 URL 옵션을 다시 읽음). 로비 → 게임플레이, 게임플레이 → 로비 공용.
+	 * @param InLevel 이동할 레벨. 비어 있으면 아무것도 하지 않음 (부르는 쪽이 먼저 확인하고 경고할 것)
+	 */
+	void Auth_ServerTravelToLevel(const TSoftObjectPtr<UWorld>& InLevel);
 
 	/**
 	 * [서버] 아무도 쓰지 않는 가장 작은 번호로 기본 닉네임을 만드는 함수. (Player1, Player2 ...)

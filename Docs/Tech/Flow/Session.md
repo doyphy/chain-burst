@@ -267,6 +267,8 @@ ACBLobbyGameMode::PostLogin / Logout
 
 > 나중에 난입을 열게 되면 이 호출을 빼고 `ACBGameplayGameMode`에서도 같은 인원 갱신을 이어가야 한다.
 
+**로비로 돌아오면 다시 연다.** 보스를 잡아 호스트가 전원을 로비로 데려오면(→ [GameFlow.md](GameFlow.md) "매치 종료") `ACBLobbyGameMode::BeginPlay`가 `Auth_SetSessionAcceptingPlayers(true)`를 부르고, 돌아온 인원은 `HandleSeamlessTravelPlayer`의 재집계가 광고에 싣는다(→ [Lobby.md](Lobby.md) "게임플레이에서 돌아올 때"). 다시 열지 않으면 그 방은 목록에 계속 참가 불가로 남는다. 세션 자체는 매치 내내 유지되므로 다시 만들 것이 없다.
+
 ### PIE는 월드 컨텍스트로 서비스 인스턴스를 구분한다
 
 `GetServices(EOnlineServices::Default, InstanceName)`의 두 번째 인자에 **월드 컨텍스트 핸들**을 넘긴다. 한 프로세스에 게임 인스턴스가 여럿인 PIE에서 이걸 빠뜨리면 **두 인스턴스가 같은 서비스를 공유해 서로의 세션이 섞인다.**
@@ -512,7 +514,7 @@ Null 제공자(LAN 비콘)의 검색 동작 두 가지는 **버그가 아니라 
 - **메인 메뉴 맵은 `GameDefaultMap` 하나에서 온다.** 접속 실패 복귀와 같은 판정(`Local_ResolveMainMenuTravelMap()`)을 공유하며, 이미 메인 메뉴면 빈 문자열을 반환해 아무것도 하지 않는다
 - **클라이언트만 `ClientTravel`인 이유는 커넥션 정리다.** 나가는 순간 서버가 `Logout`을 받아 로비 인원 집계가 갱신된다(→ [Lobby.md](Lobby.md) "준비 완료와 게임 시작"의 `Logout` 제외 처리와 한 쌍)
 - **호스트가 나가면 남은 클라이언트는 자동으로 따라 나온다.** 커넥션이 끊겨 각자 `ConnectionLost` → 기존 실패 복귀 경로를 탄다. 호스트 자신에게도 실패가 올라오지만 넷 드라이버가 `NM_ListenServer`라 기존 가드에 걸려 무시된다 — **추가 코드가 없다**
-- **레벨을 가리지 않는다.** 넷 모드만 보므로 게임플레이 레벨(일시정지 메뉴)에서도 그대로 쓸 수 있다. 다만 그 배선은 아직 하지 않았다(아래 "진행 상황")
+- **레벨을 가리지 않는다.** 넷 모드만 보므로 게임플레이 레벨에서도 그대로 쓸 수 있다. 매치 클리어 화면의 "메인 메뉴로"가 이 함수를 쓴다(`ACBChaserController::Local_LeaveMatchToMainMenu` → [GameFlow.md](GameFlow.md) "매치 종료"). 일시정지 메뉴 배선은 아직 하지 않았다(아래 "진행 상황")
 - **세션에 들어가 있으면 먼저 빠져나온다.** 호스트는 파괴(`bDestroySession=true`), 참가자는 떠나기만 한다. **완료를 기다리지 않는다** — 이동은 다음 프레임이고, 기다리면 나가기가 온라인 서비스 응답에 묶인다
 
 ### 나가는 중의 접속 끊김은 경고로 띄우지 않는다 — `bLeaveRequested`
@@ -540,6 +542,7 @@ Local_HostLobby / Local_JoinServerByAddress → bLeaveRequested = false  (새 �
 - **신호를 새로 만들지 않는다.** 게임 시작이 `Multicast_NotifyMatchStarting`이었던 건 **서버가 전원을 대신 이동시키기 때문**이고, 나가기는 **누른 사람 혼자의 로컬 동작**이라 위젯이 스스로 빠지면 끝이다
 - **같은 프레임에 제거 → 이동 요청이어도 안전하다.** `OpenLevel`·`ClientTravel`은 `TravelURL`만 세팅하고 실제 이동은 `UEngine::TickWorldTravel`(다음 프레임)이다
 - **증상이 늦게 나타나므로 더 위험하다.** 로비는 게임플레이 IMC를 애초에 안 붙이고 도착지인 메인 메뉴엔 조작할 캐릭터가 없어, 빠뜨려도 그 자리에서는 멀쩡해 보인다. 문제는 **메뉴 → 호스트 → 로비 → 게임플레이로 한 바퀴 돈 뒤**에 드러난다
+- **매치 클리어 화면은 위젯을 C++ 컨트롤러가 쥐고 있어 순서도 컨트롤러가 지킨다.** `Local_LeaveMatchToMainMenu`가 위젯을 먼저 내리고 이 함수를 부르므로 WBP 는 그 함수만 부른다 (→ [GameFlow.md](GameFlow.md) "매치 종료")
 
 ## 진행 상황
 
@@ -556,7 +559,7 @@ Local_HostLobby / Local_JoinServerByAddress → bLeaveRequested = false  (새 �
 - 접속 실패 사유를 모달로 표시 — C++은 완료, **위젯 배선만 남음**. 참가 실패는 `OnConnectionFailed` 구독, 접속 후 끊김은 `Local_ConsumePendingFailureReason()` — 두 경로 다 물릴 것 (위 "엔진의 자동 복귀")
 - 나가기 BP 배선 (`WBP_CB_Lobby_Footer` / `IA_CB_Leave`) — C++ 창구는 완료. **`Remove This Widget` → `Local_LeaveToMainMenu()` 순서**를 지킬 것 (위 "위젯을 먼저 빼고 부른다")
 - 나가기 사유 구분 — 호스트가 나갔을 때 남은 클라이언트에 "호스트가 종료했습니다"를 표시할지. **모달 배선 뒤에 판단한다** — 지금은 아무 메시지도 안 보이고, 이동 직전 멀티캐스트는 월드 teardown과 경합해 도착이 보장되지 않는다. 붙인다면 사유를 미리 저장해두고 실패 시 우선 사용하는 형태
-- 게임플레이 레벨의 나가기(일시정지 메뉴) — C++은 레벨을 가리지 않으므로 배선만 남음. 다만 팩 일시정지 메뉴에 **자체 메인 메뉴 복귀 경로**가 있어 둘 중 무엇이 이길지 정해야 하고, 호스트가 나가는 건 곧 매치 종료라 `ACBGameplayGameMode` 규칙과 함께 설계한다
+- 게임플레이 레벨의 나가기(일시정지 메뉴) — C++은 레벨을 가리지 않으므로 배선만 남음. 다만 팩 일시정지 메뉴에 **자체 메인 메뉴 복귀 경로**가 있어 둘 중 무엇이 이길지 정해야 한다. **보스 처치 뒤 클리어 화면의 나가기는 구현됨**(호스트 = 전원 로비 복귀, 각자 = 메인 메뉴 → [GameFlow.md](GameFlow.md) "매치 종료")
 
 ## 관련 문서
 

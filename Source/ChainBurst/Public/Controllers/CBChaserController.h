@@ -5,6 +5,7 @@
 #include "GameplayTagContainer.h"
 #include "Types/CBDelegates.h"
 #include "Types/CBEnumTypes.h"
+#include "Types/CBStructTypes.h"
 #include "CBChaserController.generated.h"
 
 class ACameraActor;
@@ -12,11 +13,13 @@ class ACBBaseCharacter;
 class ACBHUD;
 class ACBLobbyCamera;
 class UCBLevelUpWidget;
+class UUserWidget;
 
 /**
  * 플레이어의 컨트롤러.
  * 로컬 플레이어의 입력을 처리하고, 서버와 통신하며, 뷰 타겟과 오디오 감쇠 기준점을 관리함.
  * 레벨업 카드를 서버와 주고받고 카드 선택 위젯을 띄움 (폰과 무관하게 살아 있어 리스폰 중에도 카드를 받음).
+ * 매치가 클리어되면 클리어 위젯을 띄우고, 호스트의 전원 로비 복귀 요청과 각자의 메인 메뉴 나가기를 처리함.
  */
 UCLASS()
 class CHAINBURST_API ACBChaserController : public APlayerController
@@ -130,6 +133,62 @@ private:
 
 	/** 카드 위젯을 올린 HUD. 내릴 때 같은 HUD 에 요청함 */
 	TWeakObjectPtr<ACBHUD> LevelUpWidgetHUD;
+#pragma endregion
+
+#pragma region MatchEnd
+public:
+	/**
+	 * [서버 → 본인] 매치 클리어(보스 처치). 클리어 기록을 보관하고 클리어 위젯을 HUD 스택의 Menu 레이어에 띄움 (게임 입력은 위젯 선언값으로 걷힘).
+	 * 폰과 무관하게 살아 있는 컨트롤러가 받으므로 리스폰 대기 중에도 뜸.
+	 * @param InMatchResult 클리어 시간 + 이 플레이어가 넣은 데미지 (위젯이 GetMatchResult 로 읽음)
+	 */
+	UFUNCTION(Client, Reliable)
+	void Client_ShowMatchClear(const FCBMatchResult& InMatchResult);
+
+	/** [Getter] 서버가 보내 준 클리어 기록. 클리어 위젯이 표시할 때 읽음 (위젯을 만들기 전에 채워 둠) */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Match")
+	FORCEINLINE FCBMatchResult GetMatchResult() const { return MatchResult; }
+
+	/**
+	 * [클라 → 서버] 세션을 유지한 채 전원 로비 복귀 요청. (서버에서만 실행)
+	 * 호스트만 할 수 있음 - 매치가 클리어됐는지·호스트인지 검증은 게임플레이 게임모드가 함.
+	 */
+	UFUNCTION(BlueprintCallable, Server, Reliable, Category = "ChainBurst|Match")
+	void Server_RequestReturnToLobby();
+
+	/**
+	 * [로컬] 호스트를 기다리지 않고 혼자 세션을 나가 메인 메뉴로 감.
+	 * 클리어 위젯을 먼저 스택에서 내린 뒤 세션 서브시스템의 나가기를 부름 (호스트의 레벨 열기는 PreClientTravel 을 거치지 않으므로 직접 내림).
+	 * 호스트가 부르면 세션이 끝나 남은 클라이언트도 접속 끊김 경로로 메인 메뉴에 돌아감.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "ChainBurst|Match")
+	void Local_LeaveMatchToMainMenu();
+
+protected:
+	//~ Begin APlayerController Interface.
+	/**
+	 * 레벨을 떠나기 직전 호출됨 (호스트는 서버의 이동 처리가 직접, 클라는 이동 RPC 안에서).
+	 * 게임 입력을 걷어 둔 클리어 위젯을 스택에서 내림 - 위젯이 HUD 와 함께 사라지면 걷은 입력이 되돌아오지 않음.
+	 */
+	virtual void PreClientTravel(const FString& PendingURL, ETravelType TravelType, bool bIsSeamlessTravel) override;
+	//~ End APlayerController Interface.
+
+private:
+	/** [로컬] 클리어 위젯을 만들어 Menu 레이어에 올림. 이미 떠 있으면 무시, 위젯 클래스·HUD 가 없으면 경고만 남김 */
+	void Local_ShowMatchClearWidget();
+
+	/** [로컬] 클리어 위젯을 스택에서 내리고 비움. 떠 있지 않으면 아무 일 없음 */
+	void Local_HideMatchClearWidget();
+
+	/** 떠 있는 클리어 위젯 */
+	UPROPERTY()
+	TObjectPtr<UUserWidget> MatchClearWidget = nullptr;
+
+	/** 클리어 위젯을 올린 HUD. 내릴 때 같은 HUD 에 요청함 */
+	TWeakObjectPtr<ACBHUD> MatchClearWidgetHUD;
+
+	/** 서버가 보내 준 클리어 기록 */
+	FCBMatchResult MatchResult;
 #pragma endregion
 
 #pragma region Camera

@@ -7,10 +7,13 @@
 #include "PlayerState/CBPlayerState.h"
 
 // engine
+#include "Engine/World.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/GameSession.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
+#include "Misc/PackageName.h"
 
 ACBGameModeBase::ACBGameModeBase()
 {
@@ -92,6 +95,29 @@ UCBCharacterCatalog* ACBGameModeBase::GetCharacterCatalog() const
 {
 	const UCBGameInstance* CBGameInstance = GetGameInstance<UCBGameInstance>();
 	return CBGameInstance ? CBGameInstance->GetCharacterCatalog() : nullptr;
+}
+
+// [서버] 전원을 데리고 다른 레벨로 이동 (로비 → 게임플레이, 게임플레이 → 로비)
+void ACBGameModeBase::Auth_ServerTravelToLevel(const TSoftObjectPtr<UWorld>& InLevel)
+{
+	UWorld* World = GetWorld();
+	if (!World || InLevel.IsNull()) return;
+
+	// 소프트 참조의 경로는 "/Game/.../L_X.L_X" 형태라 패키지 이름만 뽑아 씀
+	const FString LevelPath = FPackageName::ObjectPathToPackageName(InLevel.ToString());
+
+	// "?listen" 을 붙여야 이동한 뒤에도 호스트가 리슨 서버로 남아 클라이언트가 붙어 있음
+	FString TravelURL = LevelPath + TEXT("?listen");
+
+	// AGameSession 이 레벨마다 새로 스폰되어 URL 을 다시 읽으므로 정원을 다시 실음. 빼면 엔진 기본 정원으로 돌아감
+	if (GameSession && GameSession->MaxPlayers > 0)
+	{
+		TravelURL += FString::Printf(TEXT("?MaxPlayers=%d"), GameSession->MaxPlayers);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[GameMode] 전원 레벨 이동: %s"), *TravelURL);
+
+	World->ServerTravel(TravelURL);
 }
 
 // [서버] 컨트롤러가 닉네임 변경 요청을 받으면 호출 (ACBChaserController::Server_RequestSetNickname 에서 호출됨)

@@ -7,6 +7,7 @@
 #include "Components/Mesh/CBModularMeshComponent.h"
 #include "Core/CBGameInstance.h"
 #include "Core/CBLocalReadySubsystem.h"
+#include "Core/CBSessionSubsystem.h"
 #include "CBGameplayTags.h"
 #include "DataAssets/LevelUp/CBLevelUpData.h"
 #include "GameModes/CBGameplayGameMode.h"
@@ -17,6 +18,7 @@
 
 // engine
 #include "AbilitySystemComponent.h"
+#include "Blueprint/UserWidget.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -262,6 +264,88 @@ void ACBChaserController::Local_ShowLevelUpCards(const TArray<int32>& InCardIndi
 	LevelUpWidget->Local_ShowOfferedCards(InCardIndices);
 	CBHUD->PushMenuLayerWidget(LevelUpWidget);
 	LevelUpWidgetHUD = CBHUD;
+}
+
+// [본인] 매치 클리어 수신 (본인 클라이언트에서 실행)
+void ACBChaserController::Client_ShowMatchClear_Implementation(const FCBMatchResult& InMatchResult)
+{
+	// 위젯이 만들어질 때(Construct) 읽으므로 먼저 보관
+	MatchResult = InMatchResult;
+
+	Local_ShowMatchClearWidget();
+}
+
+// [서버] 클리어 위젯에서 호스트가 로비 복귀 버튼을 누르면 호출 (서버에서 실행)
+void ACBChaserController::Server_RequestReturnToLobby_Implementation()
+{
+	// 검증은 전부 게임모드가 함 (매치 클리어 여부·호스트 여부·중복 요청)
+	if (ACBGameplayGameMode* GameplayGameMode = GetWorld()->GetAuthGameMode<ACBGameplayGameMode>())
+	{
+		GameplayGameMode->Auth_TryReturnToLobby(this);
+	}
+}
+
+// [로컬] 클리어 위젯에서 메인 메뉴 나가기 버튼을 누르면 호출. 호스트를 기다리지 않고 혼자 세션을 나감
+void ACBChaserController::Local_LeaveMatchToMainMenu()
+{
+	if (!IsLocalController()) return;
+
+	// 맵을 넘기 전에 게임 입력을 걷어 둔 위젯을 먼저 내림.
+	// 클라의 나가기(ClientTravel)는 PreClientTravel 을 거치지만, 호스트의 레벨 열기(OpenLevel)는 거치지 않음
+	Local_HideMatchClearWidget();
+
+	if (UCBSessionSubsystem* SessionSubsystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCBSessionSubsystem>() : nullptr)
+	{
+		SessionSubsystem->Local_LeaveToMainMenu();
+	}
+}
+
+// 레벨을 떠나기 직전. 로비 복귀(ServerTravel)·클라의 메인 메뉴 나가기(ClientTravel) 모두 여기를 지남
+void ACBChaserController::PreClientTravel(const FString& PendingURL, ETravelType TravelType, bool bIsSeamlessTravel)
+{
+	// 걷어 둔 게임 입력은 스택이 바뀔 때 되돌아오므로, HUD 와 함께 사라지기 전에 내려야 다음 레벨에서 입력이 살아 있음
+	Local_HideMatchClearWidget();
+
+	Super::PreClientTravel(PendingURL, TravelType, bIsSeamlessTravel);
+}
+
+// [로컬] 클리어 위젯 표시. Menu 레이어라 떠 있는 동안 게임 입력이 걷힘 (위젯 선언값)
+void ACBChaserController::Local_ShowMatchClearWidget()
+{
+	// 이미 떠 있으면 다시 만들지 않음
+	if (MatchClearWidget) return;
+
+	const UCBGameInstance* CBGameInstance = GetGameInstance<UCBGameInstance>();
+	const TSubclassOf<UUserWidget> WidgetClass = CBGameInstance ? CBGameInstance->GetMatchClearWidgetClass() : nullptr;
+
+	// 화면 배치는 HUD 의 내비게이션 스택이 전담함 (AddToViewport 금지)
+	ACBHUD* CBHUD = Cast<ACBHUD>(GetHUD());
+	if (!WidgetClass || !CBHUD)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 매치 클리어 위젯을 띄우지 못함 (위젯 클래스: %s, HUD: %s - 게임 인스턴스의 MatchClearWidgetClass 확인)"),
+			*GetName(), *GetNameSafe(WidgetClass), *GetNameSafe(GetHUD()));
+		return;
+	}
+
+	MatchClearWidget = CreateWidget<UUserWidget>(this, WidgetClass);
+	if (!MatchClearWidget) return;
+
+	CBHUD->PushMenuLayerWidget(MatchClearWidget);
+	MatchClearWidgetHUD = CBHUD;
+}
+
+// [로컬] 클리어 위젯 제거
+void ACBChaserController::Local_HideMatchClearWidget()
+{
+	if (!MatchClearWidget) return;
+
+	if (ACBHUD* CBHUD = MatchClearWidgetHUD.Get())
+	{
+		CBHUD->PopWidgetFromStack(MatchClearWidget);
+	}
+
+	MatchClearWidget = nullptr;
+	MatchClearWidgetHUD.Reset();
 }
 
 // 뷰포트/넷 커넥션이 연결된 직후. 화면을 그리기 시작하는 시점. 빙의보다 확실히 앞서므로 여기서 화면을 검게 덮음

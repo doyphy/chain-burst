@@ -258,3 +258,11 @@ void ACBPlayerState::ApplyCosmeticsToPawn()
 		ModularMeshComponent->RequestCosmeticPart(static_cast<ECBCosmeticSlot>(SlotIndex), Cosmetics[SlotIndex]);
 	}
 }
+
+// [서버] 적에게 깎은 체력 누적 (UCBAttributeSet::PostGameplayEffectExecute)
+void ACBPlayerState::Auth_AddDamageDealt(float InAmount)
+{
+	if (InAmount <= 0.f) return;
+
+	DamageDealt += InAmount;
+}

@@ -6,12 +6,13 @@
 
 class UCBCharacterCatalog;
 class UCBLevelUpData;
+class UUserWidget;
 
 /**
  * 프로젝트 공용 게임 인스턴스 클래스.
  * 맵을 넘어 유지돼야 하는 게임 전역 로직·데이터를 여기에 둠.
  * 접속 실패 시 엔진의 자동 기본 맵 복귀를 통제하기 위해 온라인 세션 클래스를 갈아끼우고,
- * 고를 수 있는 캐릭터(무기) 카탈로그와 레벨업 데이터를 보유해 서버와 전 클라이언트가 폰 없이 같은 데이터를 보게 함.
+ * 고를 수 있는 캐릭터(무기) 카탈로그와 레벨업 데이터, 매치 클리어 화면 위젯 클래스를 보유해 서버와 전 클라이언트가 폰 없이 같은 데이터를 보게 함.
  * 또한 진영 판정 규칙(attitude solver)을 엔진에 등록해 전 시스템이 같은 적/아군 판정 규칙을 쓰게 함.
  */
 UCLASS()
@@ -40,6 +41,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ChainBurst|LevelUp")
 	FORCEINLINE UCBLevelUpData* GetLevelUpData() const { return LevelUpData; }
 
+	/** [Getter] 매치 클리어(보스 처치) 화면 위젯 클래스. 등록하지 않았으면 nullptr. */
+	UFUNCTION(BlueprintPure, Category = "ChainBurst|Match")
+	FORCEINLINE TSubclassOf<UUserWidget> GetMatchClearWidgetClass() const { return MatchClearWidgetClass; }
+
 protected:
 	/**
 	 * 고를 수 있는 캐릭터(무기) 목록.
@@ -56,4 +61,11 @@ protected:
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|LevelUp")
 	TObjectPtr<UCBLevelUpData> LevelUpData = nullptr;
+
+	/**
+	 * 매치 클리어(보스 처치) 화면 위젯. 클리어 문구 + 로비 복귀(호스트)·메인 메뉴 나가기(각자) 버튼.
+	 * 각 클라이언트의 컨트롤러가 폰 없이 읽어 Menu 레이어에 띄우므로 게임 인스턴스에 둠 (레벨업 카드 위젯과 같은 이유).
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Match")
+	TSubclassOf<UUserWidget> MatchClearWidgetClass = nullptr;
 };

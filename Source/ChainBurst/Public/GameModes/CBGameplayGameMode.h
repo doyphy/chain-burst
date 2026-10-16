@@ -14,6 +14,7 @@ class UCBLevelUpData;
  * 진행 중인 매치로의 난입은 접속 승인 단계에서 거부함.
  * 플레이어가 죽으면 일정 시간 뒤 PlayerStart 에 다시 스폰시킴 (지연·지점 규칙을 이 클래스가 소유). 보스전 중 사망자는 보스 구역의 부활 지점에 스폰.
  * AI 처치 경험치를 전 플레이어 공유로 쌓고, 레벨이 오르면 월드를 정지한 채 플레이어마다 카드를 뽑아 주고 고른 카드의 효과를 적용함.
+ * 보스를 처치하면 매치를 끝내고 보스 시체가 사라진 뒤 전원에게 클리어 화면을 띄우며, 호스트가 요청하면 세션을 유지한 채 전원을 로비로 데려감.
  */
 UCLASS()
 class CHAINBURST_API ACBGameplayGameMode : public ACBGameModeBase
@@ -94,6 +95,7 @@ public:
 	/**
 	 * [서버] 전 플레이어가 공유하는 경험치를 더하는 함수. (AI 사망 통지 ACBAICharacter::Auth_OnDeath 가 호출)
 	 * 필요량을 넘은 만큼 레벨을 올리고, 진행 중인 레벨업이 없으면 카드 선택을 시작함.
+	 * 매치가 클리어된 뒤에는 무시함 (클리어 화면 위로 레벨업 정지가 걸리지 않게).
 	 * @param InAmount 더할 경험치 (0 이하면 무시)
 	 */
 	void Auth_AddExperience(int32 InAmount);
@@ -166,5 +168,47 @@ private:
 
 	/** 선택 타임아웃 티커 핸들. 월드 타이머는 정지 중에 멈추므로 코어 티커를 씀 */
 	FTSTicker::FDelegateHandle LevelUpTimeoutHandle;
+#pragma endregion
+
+#pragma region MatchEnd
+public:
+	/**
+	 * [서버] 보스 처치 통지. (ACBBossArena 가 보스 사망을 확인하면 호출)
+	 * 보스 처치 = 매치 클리어 확정. 클리어 시간을 기록하고, 이후 경험치를 받지 않음. 클리어 화면은 보스 시체가 사라진 뒤(Auth_HandleBossDespawned)에 띄움.
+	 */
+	void Auth_HandleBossDefeated();
+
+	/**
+	 * [서버] 처치한 보스가 사라졌다는 통지. (ACBBossArena 가 보스 파괴를 확인하면 호출)
+	 * 플레이어마다 클리어 기록(클리어 시간 + 그 플레이어가 넣은 데미지)을 담아 클리어 화면을 띄움.
+	 * 매치가 클리어되지 않았으면 무시함 (구역은 보스전마다 한 번만 부름).
+	 */
+	void Auth_HandleBossDespawned();
+
+	/**
+	 * [서버] 로비 복귀 요청 처리. (ACBChaserController::Server_RequestReturnToLobby 가 호출)
+	 * 매치가 클리어됐고 요청자가 호스트일 때만, 세션을 유지한 채 접속한 전원을 데리고 로비로 이동함.
+	 * 각자 세션을 나가 메인 메뉴로 가는 것은 이 경로가 아님 (ACBChaserController::Local_LeaveMatchToMainMenu).
+	 * @param InRequester 요청한 컨트롤러
+	 */
+	void Auth_TryReturnToLobby(const APlayerController* InRequester);
+
+protected:
+	/** 매치가 끝나면 호스트가 전원을 데리고 돌아갈 로비 레벨. 게임플레이 게임모드 BP 에서 설정 */
+	UPROPERTY(EditDefaultsOnly, Category = "ChainBurst|Gameplay")
+	TSoftObjectPtr<UWorld> LobbyLevel;
+
+private:
+	/** 보스를 처치해 매치가 끝났는지. 이후 경험치를 받지 않고, 로비 복귀를 허용함 */
+	bool bMatchCleared = false;
+
+	/**
+	 * 레벨 시작부터 보스 처치까지의 시간(초). 처치 순간의 월드 시간 - 게임플레이 월드는 레벨이 시작될 때 0 부터 흐르고,
+	 * 레벨업 카드를 고르는 동안(월드 정지)은 멈추므로 그 시간이 빠짐
+	 */
+	float MatchClearTime = 0.f;
+
+	/** 로비로 이동을 시작했는지. 버튼 연타 등 중복 요청이 와도 한 번만 이동하기 위함 */
+	bool bReturnToLobbyStarted = false;
 #pragma endregion
 };

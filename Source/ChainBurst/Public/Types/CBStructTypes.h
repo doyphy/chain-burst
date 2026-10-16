@@ -58,3 +58,21 @@ struct FCBSessionSearchEntry
 	UPROPERTY(BlueprintReadOnly)
 	bool bIsJoinable = false;
 };
+
+/**
+ * 매치 클리어 기록 (클리어 화면 표시용).
+ * 서버가 클리어 화면 RPC 에 플레이어마다 따로 담아 보내고, 클리어 위젯이 컨트롤러에서 읽어 표시한다.
+ */
+USTRUCT(BlueprintType)
+struct FCBMatchResult
+{
+	GENERATED_BODY()
+
+	/** 레벨 시작부터 보스 처치까지 걸린 시간(초). 레벨업 카드를 고르는 동안(월드 정지)은 빠짐 */
+	UPROPERTY(BlueprintReadOnly)
+	float ClearTimeSeconds = 0.f;
+
+	/** 이 플레이어가 레벨 전체에서 적에게 실제로 깎은 체력의 합 (오버킬·시체 타격 제외) */
+	UPROPERTY(BlueprintReadOnly)
+	float DamageDealt = 0.f;
+};

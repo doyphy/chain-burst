@@ -17,6 +17,7 @@ class UCBAttributeSet;
  * 플레이어가 소유한 [ASC]와 [AttributeSet]을 보유하며, IAbilitySystemInterface를 구현하여 다른 클래스에서 ASC에 접근할 수 있도록 함.
  * 로비에서 고른 값(의상 조합·캐릭터 선택·준비 상태)도 여기에 두어 전 클라이언트가 보고, 맵을 넘어 게임플레이 레벨까지 이관함.
  * 닉네임은 엔진의 PlayerName 을 그대로 쓰고(복제·이관이 엔진에 내장), 값이 바뀐 시점만 델리게이트로 알림.
+ * 이 레벨에서 적에게 깎은 체력의 합(매치 기록)을 서버에서만 누적함 - 클리어 화면에 실려 감.
  */
 UCLASS()
 class CHAINBURST_API ACBPlayerState : public APlayerState, public IAbilitySystemInterface
@@ -196,5 +197,25 @@ public:
 	 */
 	UPROPERTY(BlueprintAssignable, Category = "ChainBurst|Lobby")
 	FCBOnPlayerNicknameChanged OnPlayerNicknameChanged;
+#pragma endregion
+
+#pragma region MatchStats
+	/**
+	 * 매치 기록 (클리어 화면 표시용). 서버 전용 누적값이라 복제하지 않음 - 클리어 화면 RPC 가 끝에 한 번 실어 보냄.
+	 * CopyProperties 에도 넣지 않아 레벨마다 0 부터 셈. PlayerState 에 두어 리스폰해도 이어지고, 나가면 함께 사라짐.
+	 */
+public:
+	/**
+	 * [서버] 이 플레이어가 적에게 깎은 체력을 더하는 함수. (UCBAttributeSet 이 데미지 적용 직후 호출)
+	 * @param InAmount 실제로 깎인 체력 (0 이하면 무시)
+	 */
+	void Auth_AddDamageDealt(float InAmount);
+
+	/** [Getter] 이 레벨에서 적에게 깎은 체력의 합 (서버 값) */
+	FORCEINLINE float GetDamageDealt() const { return DamageDealt; }
+
+private:
+	/** 이 레벨에서 적에게 깎은 체력의 합 */
+	float DamageDealt = 0.f;
 #pragma endregion
 };

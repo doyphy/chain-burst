@@ -210,6 +210,21 @@ ACBLobbyGameMode::Auth_TravelToGameplayLevel()
 - **이동은 `ServerTravel(레벨 + "?listen")`.** `listen`을 유지해야 이동한 뒤에도 클라이언트가 붙어 있다
 - **게임플레이 레벨은 `GameplayLevel`(EditDefaultsOnly)로 로비 게임모드 BP가 지정한다.** 레벨 규칙은 게임모드 소관이므로, 메뉴 쪽 `New Game Level`(Global Config)과 등록소가 겹치지 않는다
 - **나가는 플레이어는 `Logout`에서 집계 대상에서 제외한다.** 그 시점엔 아직 `PlayerArray`에 남아 있어, 빼지 않으면 준비했던 사람이 나갔는데 "전원 준비"가 유지된다
+- **이동 URL 은 `ACBGameModeBase::Auth_ServerTravelToLevel`이 만든다**(`?listen` + `?MaxPlayers`). 게임플레이 → 로비 복귀도 같은 함수를 쓴다 (→ [GameFlow.md](GameFlow.md) "매치 종료")
+
+### 게임플레이에서 돌아올 때 — 다시 세고, 세션을 다시 연다
+
+보스를 잡으면 호스트가 전원을 데리고 로비로 돌아온다(→ [GameFlow.md](GameFlow.md) "매치 종료"). 처음 들어올 때와 두 가지가 다르다.
+
+| | 처음 (메인 메뉴에서) | 돌아올 때 (게임플레이에서) |
+|---|---|---|
+| 도착 경로 | 호스트 `OpenLevel` / 참가 `ClientTravel` → **`PostLogin`** | seamless travel → **`HandleSeamlessTravelPlayer`** (`PostLogin`을 타지 않음) |
+| 세션 | 방을 만든 직후라 열려 있음 | 매치 시작 때 닫혀 있음 |
+
+- **인원 재집계 — `ACBLobbyGameMode::HandleSeamlessTravelPlayer`.** `Super` 뒤에 `Auth_RefreshReadyState()`를 부른다. 없으면 준비 인원이 0/0 으로 보이고 방 목록 인원도 틀린 채로, 누군가 준비를 누를 때에야 맞춰진다. 아직 로딩 중인 플레이어는 **이전 레벨의 PlayerState 로 `PlayerArray`에 남아 있어**(새 게임 스테이트가 `PostInitializeComponents`에서 월드에 남은 PlayerState 를 전부 담음) 준비 전 인원으로 세어지고, 도착하면 새 PlayerState 로 바뀌며 다시 세어진다 — 다 도착하기 전에는 "전원 준비"가 될 수 없다.
+- **세션 재개방 — `ACBLobbyGameMode::BeginPlay`.** `Auth_SetSessionAcceptingPlayers(true)`. 매치 시작 때 닫은 것(→ [Session.md](Session.md) "매치가 시작되면 세션을 닫는다")의 짝이다. 처음 방을 열 때는 이미 열려 있어 값이 그대로이고, 세션 없이 연 로비(주소 직접 접속)는 아무 일도 없다.
+- **로비 UI·카메라·페이드는 처음과 같다.** 컨트롤러가 새로 만들어지므로(→ [GameFlow.md](GameFlow.md) "Seamless Travel") `bReadyStateApplied`·`OnLocalPlayerReady` 1회성 가드가 새로 시작한다.
+- **이 경로의 조작 차단은 로비 위젯이 한다.** 게임플레이에서 붙인 IMC 가 `ULocalPlayer`에 남아 넘어오고, 로비 위젯(`Should Remove Gameplay IMCs = true`)이 걷는다. 입력 바인딩(로드아웃 적용)과 로비 위젯(준비 완료 신호) 사이의 짧은 틈(검은 화면)만 열려 있어 그대로 둔다 (→ [GameFlow.md](GameFlow.md) "매치 종료" 알려진 한계).
 
 ## 로비 카메라 — 레벨에 있으면 켜지고 없으면 꺼진다
 
@@ -225,7 +240,7 @@ AutoManageActiveCameraTarget(SuggestedTarget)
 
 | 결정 | 이유 |
 |---|---|
-| **로비 전용 PlayerController를 만들지 않는다** | seamless travel은 로비와 게임플레이의 PC 클래스가 같아야 한다. `ACBGameModeBase`가 PC를 고정한 것과 같은 이유 |
+| **로비 전용 PlayerController를 만들지 않는다** | 로비 판별을 레벨의 카메라로 하므로(아래) 클래스를 나눌 이유가 없고, `ACBGameModeBase`가 PC 클래스를 하나로 고정한다. (예전 근거였던 "seamless travel 은 PC 클래스가 같아야 한다"는 UE 5.8 에서 성립하지 않는다 — 클래스와 무관하게 PC 를 새로 만든다 → [GameFlow.md](GameFlow.md) "Seamless Travel") |
 | **로비인지 판별하지 않는다** | 레벨에서 **`ACBLobbyCamera`** 를 찾아보고 없으면 `Super`에 맡긴다. GameMode는 클라이언트에 없어 물어볼 수 없고, 이 방식이면 게임플레이 레벨에서 자동으로 꺼진다 |
 | **액터 태그가 아니라 전용 클래스** | 이 프로젝트는 GameplayTag를 많이 써서 `AActor::Tags`와 혼동된다. 타입을 식별자로 쓰면 매직 스트링이 사라지고 컴파일러가 검사한다. 액터 이름은 `GetActorLabel()`이 에디터 전용이라 후보가 못 된다 |
 | **인스턴스를 구분하지 않는다** | 서버·클라 어디서 불려도 같은 답을 낸다. 서버가 원격 PC에 대해 부르면 그 값이 `ClientSetViewTarget`으로 클라에 전달되어 **양쪽이 같은 값으로 일치**한다 |

@@ -170,6 +170,9 @@ void ACBGameplayGameMode::Auth_AddExperience(int32 InAmount)
 {
 	if (InAmount <= 0) return;
 
+	// 매치가 끝났으면 쌓지 않음. 보스와 함께 쓰러지는 졸개의 처치 보상으로 클리어 화면 위에 레벨업 정지가 걸리지 않게 함
+	if (bMatchCleared) return;
+
 	// 레벨업 데이터 가져오기.
 	ACBGameplayGameState* GameplayGameState = GetGameState<ACBGameplayGameState>();
 	const UCBLevelUpData* LevelUpData = GetLevelUpData();
@@ -411,4 +414,73 @@ const UCBLevelUpData* ACBGameplayGameMode::GetLevelUpData() const
 {
 	const UCBGameInstance* CBGameInstance = GetGameInstance<UCBGameInstance>();
 	return CBGameInstance ? CBGameInstance->GetLevelUpData() : nullptr;
+}
+
+// [서버] 보스 처치 통지 (ACBBossArena::Auth_ClearArena). 매치 클리어를 확정함 - 화면은 보스가 사라진 뒤
+void ACBGameplayGameMode::Auth_HandleBossDefeated()
+{
+	if (bMatchCleared) return;
+	bMatchCleared = true;
+
+	// 레벨 시작부터 흐른 월드 시간 = 클리어 시간. 레벨업 정지 동안은 월드 시간이 멈춰 카드 고르는 시간이 빠짐
+	MatchClearTime = GetWorld()->GetTimeSeconds();
+
+	UE_LOG(LogTemp, Log, TEXT("[Gameplay] 보스 처치 - 매치 클리어 %.1f초 (보스가 사라지면 클리어 화면)"), MatchClearTime);
+}
+
+// [서버] 처치한 보스가 사라짐 (ACBBossArena 스캔). 전원에게 클리어 화면을 띄움
+void ACBGameplayGameMode::Auth_HandleBossDespawned()
+{
+	if (!bMatchCleared) return;
+
+	UE_LOG(LogTemp, Log, TEXT("[Gameplay] 보스 소멸 - 클리어 화면"));
+
+	// 리스폰 대기 중인 플레이어도 컨트롤러는 살아 있어 받음. 늦게 들어오는 플레이어는 없으므로(난입 거부) 상태를 복제하지 않고 RPC 로 보냄
+	for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
+	{
+		ACBChaserController* ChaserController = Cast<ACBChaserController>(Iterator->Get());
+		if (!ChaserController) continue;
+
+		// 데미지는 플레이어마다 달라 본인 것만 담음. 지금 읽으므로 처치 뒤 화면이 뜨기까지 넣은 데미지도 포함됨
+		FCBMatchResult MatchResult;
+		MatchResult.ClearTimeSeconds = MatchClearTime;
+		if (const ACBPlayerState* CBPlayerState = ChaserController->GetPlayerState<ACBPlayerState>())
+		{
+			MatchResult.DamageDealt = CBPlayerState->GetDamageDealt();
+		}
+
+		ChaserController->Client_ShowMatchClear(MatchResult);
+	}
+}
+
+// [서버] 로비 복귀 요청 (ACBChaserController::Server_RequestReturnToLobby). 호스트만 전원을 데리고 이동시킬 수 있음
+void ACBGameplayGameMode::Auth_TryReturnToLobby(const APlayerController* InRequester)
+{
+	// 이미 이동 중이면 무시 (버튼 연타·중복 요청 방어)
+	if (bReturnToLobbyStarted) return;
+
+	// 매치가 끝나기 전에는 돌아갈 수 없음
+	if (!bMatchCleared)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Gameplay] 매치가 끝나기 전에 로비 복귀를 요청함: %s"), *GetNameSafe(InRequester));
+		return;
+	}
+
+	// 세션을 유지한 채 전원을 옮기는 것은 호스트 몫. 리슨 서버에서 로컬인 컨트롤러는 호스트뿐임 (로비의 시작 요청과 같은 판정)
+	if (!InRequester || !InRequester->IsLocalController())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Gameplay] 호스트가 아닌 곳에서 로비 복귀를 요청함: %s"), *GetNameSafe(InRequester));
+		return;
+	}
+
+	if (LobbyLevel.IsNull())
+	{
+		UE_LOG(LogTemp, Error, TEXT("[Gameplay] 로비 레벨이 지정되지 않아 돌아갈 수 없음 (게임플레이 게임모드 BP 의 LobbyLevel 확인)"));
+		return;
+	}
+
+	bReturnToLobbyStarted = true;
+
+	// 클리어 위젯은 각 컨트롤러가 이동 직전(PreClientTravel)에 스스로 내림. 세션은 로비 게임모드가 다시 엶
+	Auth_ServerTravelToLevel(LobbyLevel);
 }

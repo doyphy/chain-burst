@@ -1,6 +1,6 @@
 # 보스 구역 (`ACBBossArena`)
 
-> 게임플레이 레벨의 보스 구역. **세션의 모든 플레이어가 구역에 들어오면 5초 뒤 보스가 나타나고 입구가 막힌다.** 보스의 최대 체력과 최대 기절 게이지는 인원만큼 곱해진다. 다 들어오지 않았으면 시작하지 않고, 들어와 있는 플레이어 화면에 "다른 플레이어 대기 중"을 띄운다. 전원이 모이면 같은 자리에 보스 등장까지 남은 시간을 센다. 보스가 나타나는 순간 모든 플레이어의 카메라가 등장 연출 카메라로 넘어가고, 보스는 등장 몽타주를 재생한다. 등장 연출이 끝나면 플레이어마다 주변에 졸개(소형 몬스터)가 소환되어 그 플레이어만 쫓고, 그 플레이어의 졸개를 다 잡으면 일정 시간 뒤 다시 소환된다. 보스를 잡으면 입구가 열리고, 보스전 중에 죽은 플레이어는 구역 밖의 지정한 위치에서 부활한다. 판정은 전부 서버 권위이고, 구역 액터 자신은 복제하지 않는다.
+> 게임플레이 레벨의 보스 구역. **세션의 모든 플레이어가 구역에 들어오면 5초 뒤 보스가 나타나고 입구가 막힌다.** 보스의 최대 체력과 최대 기절 게이지는 인원만큼 곱해진다. 다 들어오지 않았으면 시작하지 않고, 들어와 있는 플레이어 화면에 "다른 플레이어 대기 중"을 띄운다. 전원이 모이면 같은 자리에 보스 등장까지 남은 시간을 센다. 보스가 나타나는 순간 모든 플레이어의 카메라가 등장 연출 카메라로 넘어가고, 보스는 등장 몽타주를 재생한다. 등장 연출이 끝나면 플레이어마다 주변에 졸개(소형 몬스터)가 소환되어 그 플레이어만 쫓고, 그 플레이어의 졸개를 다 잡으면 일정 시간 뒤 다시 소환된다. 보스를 잡으면 매치가 끝나 입구가 열리고, 보스 시체가 사라지면 전원에게 클리어 화면이 뜨며(→ [GameFlow.md](../Flow/GameFlow.md) "매치 종료"), 보스전 중에 죽은 플레이어는 구역 밖의 지정한 위치에서 부활한다. 판정은 전부 서버 권위이고, 구역 액터 자신은 복제하지 않는다.
 
 ## 흐름
 
@@ -19,11 +19,14 @@
   Fighting  ─ 보스 소환(BossSpawnPoint) + 입구 차단 액터 소환(EntranceBlockerPoint, 복제)
      │          + 등장 연출 (아래 "등장 연출")
      │          └ 보스 준비 완료 → 최대 체력·최대 기절 게이지 × 접속 인원, 체력 가득 (아래 "인원 비례 내구도")
-     │          ├ 보스 사망 → 남은 졸개 사망 처리 + 입구 차단 액터 파괴 → Cleared (스캔 중지)
+     │          ├ 보스 사망 → 게임모드에 보스 처치 통지(매치 클리어) + 남은 졸개 사망 처리 + 입구 차단 액터 파괴 → Cleared
      │          ├ 구역 안 생존 인원 0명(전멸) → 보스·졸개 파괴 + 입구 개방 → Waiting
      │          └ 연출이 끝난 뒤 매 스캔 → 졸개 진행 (아래 "졸개")
      ▼
-  Cleared
+  Cleared   ─ 보스 시체가 사라지기를 기다림 (보스의 DespawnDelay 뒤 파괴 → 약참조가 빔)
+     │          └ 사라지면 게임모드에 소멸 통지 → 전원 클리어 화면 + 스캔 중지
+     ▼
+  (끝)
 
 [서버] 플레이어 사망 (ACBGameplayGameMode::Auth_HandlePlayerDeath)
   └ 보스전 중인 구역이 있으면 그 RespawnPoint 를 부활 위치로 정해 리스폰 타이머에 실음
@@ -47,6 +50,7 @@
 | 지정 타겟 (`ACBAIController::Auth_AssignTarget`) | AI 컨트롤러 | 졸개가 소환된 플레이어만 쫓게 함 (→ [AI.md](AI.md) "지정 타겟") |
 | 인원 비례 내구도 (`Auth_ScaleBossByPlayerCount`) | 구역 액터 | 보스 준비 완료(서버)에서 보스 ASC 의 `MaxHealth`·`MaxStunGauge` 기본값 × 접속 인원, `CurrentHealth` = 늘어난 최대 |
 | 보스전 부활 분기 | `ACBGameplayGameMode` | `Auth_FindBossFightRespawnTransform` → `Auth_RespawnPlayer(Controller, 부활 위치)` (→ [GameFlow.md](../Flow/GameFlow.md) "사망과 리스폰") |
+| 매치 클리어 통지 | `ACBGameplayGameMode::Auth_HandleBossDefeated` / `Auth_HandleBossDespawned` | 보스 처치 순간(경험치 중단)과 보스 시체가 사라진 순간(클리어 화면)에 구역이 부름. 화면·로비 복귀는 게임모드·컨트롤러 몫 (→ [GameFlow.md](../Flow/GameFlow.md) "매치 종료") |
 
 ## 단계 규칙
 
@@ -57,7 +61,8 @@
 | Countdown | (스캔) 한 명이라도 구역 밖·사망·리스폰 대기 | **취소** — 타이머 해제·GE 제거 → Waiting |
 | Countdown | 타이머 만료 + 인원 재확인 통과 | 카운트다운 GE 제거, 보스 + 입구 차단 액터 소환 → Fighting |
 | Countdown | 타이머 만료 + 인원 재확인 실패 | **취소** → Waiting |
-| Fighting | 보스 사망(또는 사라짐) | 남은 졸개 사망 처리, 입구 개방 → Cleared. **시체가 사라질 때까지 기다리지 않는다** |
+| Fighting | 보스 사망(또는 사라짐) | 게임모드에 보스 처치 통지(매치 클리어 — 졸개 처리보다 먼저), 남은 졸개 사망 처리, 입구 개방 → Cleared. **입구는 시체가 사라질 때까지 기다리지 않는다** |
+| Cleared | 보스가 사라짐(파괴되어 약참조가 빔) | 게임모드에 소멸 통지 → 클리어 화면, 스캔 중지. 처치 때 이미 없었거나 `DespawnDelay` ≤ 0(스스로 사라지지 않음 — 경고)이면 처치 순간 바로 |
 | Fighting | 구역 안 생존 인원 0명 | **전멸 리셋** — 보스·졸개 파괴 + 입구 개방 → Waiting |
 | Fighting | 그 외 + 등장 연출 끝남 | 졸개 진행 (아래 "졸개") |
 
@@ -69,7 +74,7 @@
 
 ### 폴링 — 스포너와 같은 이유
 
-트리거 오버랩 대신 `ScanInterval`(0.5초, 코드 상수) 타이머 하나로 인원 집계·카운트다운 이탈·전멸·보스 사망을 모두 본다(보스 등장 시각만 예외 — 아래 "카운트다운"). 사망 후 리스폰마다 폰이 새로 생기므로(→ [GameFlow.md](../Flow/GameFlow.md)) 오버랩 상태를 폰마다 다시 맞춰야 하는데, 스캔마다 플레이어 컨트롤러에서 현재 폰을 읽으면 그 문제가 없다. 보스의 사망 델리게이트도 구독하지 않고 약참조 + `IsDead()`로 본다 — 해제 누락이 생기지 않는다 (→ [Spawner.md](Spawner.md) "왜 폴링인가").
+트리거 오버랩 대신 `ScanInterval`(0.5초, 코드 상수) 타이머 하나로 인원 집계·카운트다운 이탈·전멸·보스 사망·처치 뒤 보스 소멸을 모두 본다(보스 등장 시각만 예외 — 아래 "카운트다운"). 사망 후 리스폰마다 폰이 새로 생기므로(→ [GameFlow.md](../Flow/GameFlow.md)) 오버랩 상태를 폰마다 다시 맞춰야 하는데, 스캔마다 플레이어 컨트롤러에서 현재 폰을 읽으면 그 문제가 없다. 보스의 사망 델리게이트도 구독하지 않고 약참조 + `IsDead()`로 본다 — 해제 누락이 생기지 않는다 (→ [Spawner.md](Spawner.md) "왜 폴링인가").
 
 이탈 감지가 최대 스캔 주기(0.5초)만큼 늦을 뿐이라 주기는 튜닝 대상이 아니다.
 
@@ -240,7 +245,7 @@
 | 전멸 리셋 | **즉시 파괴** | 보스와 같은 처리. 다음 보스전은 묶음을 처음부터 다시 센다 |
 
 - 사망 이벤트로 발동된 어빌리티가 없으면(준비 전이라 아직 부여 전·로드아웃 누락) 그 졸개는 파괴한다. 보스전이 끝난 뒤에도 졸개가 살아서 쫓아오지 않게.
-- **사망 처리라 처치 보상도 평소처럼 들어간다**(`ExperienceReward` → [LevelUp.md](LevelUp.md)). 졸개 로드아웃 보상이 0 이면 아무 일 없다.
+- **보스 처치 때 쓰러지는 졸개의 처치 보상은 들어가지 않는다.** 구역이 졸개를 사망 처리하기 **전에** 게임모드에 보스 처치를 알리고, 매치가 끝난 게임모드는 경험치를 무시한다 — 보상으로 레벨이 올라 클리어 화면 위에 월드 정지·카드 창이 뜨지 않게 (→ [GameFlow.md](../Flow/GameFlow.md) "매치 종료"). 보스전 도중 잡은 졸개의 보상은 평소처럼 들어간다(`ExperienceReward` → [LevelUp.md](LevelUp.md)).
 
 ### 스폰 높이 — 화살표는 바닥에
 
@@ -286,6 +291,7 @@
 | 보스전 부활 위치 | 서버 게임모드 내부 (리스폰은 평소대로 복제) |
 | 졸개 | 복제되는 캐릭터의 소환·사망·파괴 (평소와 같음). 묶음·지정 타겟은 서버 전용 |
 | 인원 비례 내구도 | 서버가 보스 어트리뷰트 기본값에 기록 → 어트리뷰트 복제 (보스 바가 그대로 읽음) |
+| 매치 클리어 | 구역 → 게임모드(서버 내부, 처치·소멸 두 번) → 소멸 때 PC 마다 `Client_ShowMatchClear` (→ [GameFlow.md](../Flow/GameFlow.md) "매치 종료") |
 
 ## 에디터 작업
 
@@ -300,7 +306,7 @@
 | `GE_BossIntro_BlockAction` | `Duration Policy` = Infinite. **Block Abilities with Tags 컴포넌트**에 `Ability.Combat.Attack`, `Ability.Combat.EquipWeapon`, `Ability.Combat.UnequipWeapon`, `Ability.Combat.Burst`, `Ability.Movement` (GE 컴포넌트는 MCP 로 만들 수 없어 에디터에서). 구역 인스턴스의 `IntroBlockEffectClass` 에 지정 |
 | `GA_Boss_Intro` | `UCBEventActionAbility` BP 자식. Triggers `Event.Combat.Intro`(Gameplay Event), Asset Tags `Ability.Combat.Intro`, `BoundActionTag = Action.Combat.Intro`, `ActivationOwnedTags = Status.Combat.Intro + Status.Combat.Staggered + Status.Combat.SuperArmor` |
 | 몽타주 데이터 (Hulk) | `Action.Combat.Intro` 에 등장 몽타주 등록. **루프 섹션 없이** — 블렌드 아웃이 와야 어빌리티가 끝나고 카메라가 돌아옴 (→ [Montage.md](Montage.md)) |
-| `DA_Loadout_Outlaw_Hulk` | 어빌리티 목록 `+= GA_Boss_Intro`. 보스 BGM 은 `BossMusic` (→ [Music.md](../Presentation/Music.md)) |
+| `DA_Loadout_Outlaw_Hulk` | 어빌리티 목록 `+= GA_Boss_Intro`. 보스 BGM 은 `BossMusic` (→ [Music.md](../Presentation/Music.md)). **`ExperienceReward` 는 0 권장** — 보스 처치로 매치가 끝나므로 레벨업이 쓸모없고, 오르면 카드를 고른 뒤에야 클리어 화면이 뜸 (→ [GameFlow.md](../Flow/GameFlow.md) "매치 종료") |
 | 졸개 캐릭터 | 기존 Rogue BP 를 그대로 쓰거나 Rogue BP 자식 + 로드아웃(메시·BT·공격·`SpawnCueTag`). 지정 타겟은 베이스 컨트롤러 기능이라 컨트롤러 BP 를 따로 둘 필요 없음 |
 | 졸개 로드아웃 | **`ExperienceReward` 는 0 권장** — 계속 소환되므로 0 이 아니면 보스전이 경험치 파밍 구간이 됨. 졸개 적중도 적중 회복·버스트 게이지를 채우므로 밸런스 확인 |
 | `BT_Rogue` | 루트에 `Update Target` 서비스 — 주인이 죽은 뒤 졸개가 남은 플레이어로 넘어가는 반응 속도 (→ [AI.md](AI.md) "타겟 재선정 주기") |
@@ -366,7 +372,7 @@
 3. 카운트다운 중 한 명이 나가면 양쪽 카운트다운이 내려가고 안에 남은 사람에게 다시 "대기 중". 다시 들어오면 5초를 처음부터 센다
 4. 대기 중 사망 → 표시가 꺼지고 PlayerStart 에서 부활
 5. 보스전 중 한 명 사망 → 5초 뒤 `RespawnPoint` 에서 부활, 입구가 막혀 들어갈 수 없음
-6. 보스 처치 → 입구 차단 액터가 양쪽 화면에서 사라짐
+6. 보스 처치 → 입구 차단 액터가 양쪽 화면에서 바로 사라지고, 보스가 소멸 연출로 사라진 뒤 양쪽에 클리어 위젯이 뜸 (이후 흐름은 → [GameFlow.md](../Flow/GameFlow.md) "매치 종료" 검증)
 7. 보스전 중 전원 사망 → 보스·보스 바가 사라지고 입구가 열림, 전원 `RespawnPoint` 에서 부활. 다시 전원 진입 → 5초 뒤 새 보스
 8. 카운트다운 중 레벨업 → 정지 동안 화면 숫자와 보스 등장이 함께 멈췄다가 재개 후 이어짐
 9. `CountdownEffectClass` 를 비우면 경고 로그가 남고, 숫자 없이 5초 뒤 보스가 나온다
@@ -389,7 +395,7 @@
 
 - 같은 폴링 구조의 소환 액터: [Spawner.md](Spawner.md)
 - 졸개의 지정 타겟: [AI.md](AI.md) "지정 타겟"
-- 사망과 리스폰·게임모드 규칙: [GameFlow.md](../Flow/GameFlow.md)
+- 사망과 리스폰·게임모드 규칙, 보스 처치 뒤 매치 종료·로비 복귀: [GameFlow.md](../Flow/GameFlow.md)
 - 보스 바·대기 표시 위젯: [UI.md](../Presentation/UI.md)
 - 대기 태그 소유·복제 규칙: [GameplayTags.md](../Foundation/GameplayTags.md)
 - 보스의 생성 연출: [SpawnFX.md](../Presentation/SpawnFX.md)

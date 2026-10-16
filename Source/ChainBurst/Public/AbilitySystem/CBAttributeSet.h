@@ -23,7 +23,7 @@ public:
 	/** [서버/클라] 어트리뷰트 값이 최종 확정된 후 호출.*/
 	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 
-	/** [서버] GE가 어트리뷰트에 적용된 직후 호출. */
+	/** [서버] GE가 어트리뷰트에 적용된 직후 호출. 체력 클램프, 데미지 기록(공격한 플레이어), 피격 반응·사망 이벤트 발행. */
 	virtual void PostGameplayEffectExecute(const struct FGameplayEffectModCallbackData& Data) override;
 	
 	ATTRIBUTE_ACCESSORS(UCBAttributeSet, MovementSpeed)
@@ -144,4 +144,11 @@ public:
 	 * @param InInstigator 사망을 유발한 액터
 	 */
 	void Auth_SendDeathEvent(AActor* InInstigator);
+
+	/**
+	 * [서버] 이 피격으로 실제로 깎인 체력을 공격한 플레이어의 매치 기록(ACBPlayerState)에 더함.
+	 * 체력 클램프 전에 불러야 함 - 맞기 전 체력을 넘은 양(오버킬)과 시체 타격을 빼고 셈. 공격한 쪽이 플레이어가 아니면 아무것도 하지 않음.
+	 * @param Data 체력을 깎은 GE 적용 정보
+	 */
+	void Auth_RecordDamageDealt(const struct FGameplayEffectModCallbackData& Data) const;
 };

@@ -7,11 +7,8 @@
 
 // engine
 #include "Engine/GameInstance.h"
-#include "Engine/World.h"
-#include "GameFramework/GameSession.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
-#include "Misc/PackageName.h"
 
 ACBLobbyGameMode::ACBLobbyGameMode()
 {
@@ -19,11 +16,32 @@ ACBLobbyGameMode::ACBLobbyGameMode()
 	GameStateClass = ACBLobbyGameState::StaticClass();
 }
 
+void ACBLobbyGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// 로비는 참가를 받는 상태. 매치 시작 때 닫은 세션을 게임플레이에서 돌아오면 다시 엶 (안 열면 방 목록에 계속 참가 불가로 남음).
+	// 처음 방을 열었을 때는 이미 열려 있어 값이 바뀌지 않음. 세션 없이 연 로비면 아무것도 하지 않음
+	if (UCBSessionSubsystem* SessionSubsystem = Local_GetSessionSubsystem())
+	{
+		SessionSubsystem->Auth_SetSessionAcceptingPlayers(true);
+	}
+}
+
 void ACBLobbyGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
 
 	// 전체 인원이 늘었으므로 다시 집계
+	Auth_RefreshReadyState();
+}
+
+// [서버] 게임플레이 레벨에서 함께 돌아온 플레이어 처리. seamless travel 로 넘어온 플레이어는 PostLogin 을 타지 않음
+void ACBLobbyGameMode::HandleSeamlessTravelPlayer(AController*& C)
+{
+	Super::HandleSeamlessTravelPlayer(C);
+
+	// PostLogin 대신 여기서 다시 집계. 아직 로딩 중인 플레이어는 이전 레벨의 PlayerState 로 목록에 남아 있어 인원에 포함됨 (준비 전으로)
 	Auth_RefreshReadyState();
 }
 
@@ -180,21 +198,13 @@ void ACBLobbyGameMode::Auth_TravelToGameplayLevel()
 		return;
 	}
 
-	UWorld* World = GetWorld();
-	if (!World) return;
-
 	bTravelStarted = true;
 
-	// 매치가 시작되면 난입을 받지 않으므로 세션을 닫음.
+	// 매치가 시작되면 난입을 받지 않으므로 세션을 닫음. (로비로 돌아오면 BeginPlay 에서 다시 엶)
 	if (UCBSessionSubsystem* SessionSubsystem = Local_GetSessionSubsystem())
 	{
 		SessionSubsystem->Auth_SetSessionAcceptingPlayers(false);
 	}
-
-	// 소프트 참조의 경로는 "/Game/.../L_X.L_X" 형태라 패키지 이름만 뽑아 씀
-	const FString LevelPath = FPackageName::ObjectPathToPackageName(GameplayLevel.ToString());
-
-	UE_LOG(LogTemp, Log, TEXT("[Lobby] 게임플레이 레벨로 이동: %s"), *LevelPath);
 
 	// 이동 직전에 전원에게 알림.
 	// 위젯 제거 등 로컬에서 게임 시작 전 처리 작업을 할 수 있도록 전원에게 신호를 보냄
@@ -204,14 +214,6 @@ void ACBLobbyGameMode::Auth_TravelToGameplayLevel()
 		LobbyGameState->Multicast_NotifyMatchStarting();
 	}
 
-	// ServerTravel 시 "?listen" 옵션을 붙여 호스트가 Listen 서버가 되도록 함
-	FString TravelURL = LevelPath + TEXT("?listen");
-
-	// AGameSession 이 레벨마다 새로 스폰되기 때문에 URL 다시 설정
-	if (GameSession && GameSession->MaxPlayers > 0)
-	{
-		TravelURL += FString::Printf(TEXT("?MaxPlayers=%d"), GameSession->MaxPlayers);
-	}
-
-	World->ServerTravel(TravelURL);
+	// 전원을 게임플레이 레벨로 이동 (?listen·?MaxPlayers 는 베이스가 붙임)
+	Auth_ServerTravelToLevel(GameplayLevel);
 }

@@ -11,6 +11,7 @@ class UCBSessionSubsystem;
  * 로비 레벨의 게임모드.
  * 플레이어들의 준비 상태를 집계해 게임 스테이트에 반영하고, 호스트의 시작 요청을 검증해 게임플레이 레벨로 전원을 이동시킴.
  * 집계한 인원은 세션 광고에도 실어 보내 방 목록의 현재 인원이 맞게 보이도록 하고, 매치가 시작되면 세션을 닫아 난입을 막음.
+ * 매치가 끝나 게임플레이 레벨에서 전원이 돌아오면 세션을 다시 열고, 돌아온 플레이어로 인원을 다시 셈.
  * 캐릭터(무기) 변경 요청이 오면 같은 자리에서 폰을 다시 스폰해 고른 캐릭터로 갈아끼움.
  */
 UCLASS()
@@ -40,8 +41,15 @@ public:
 	void Auth_RespawnWithSelectedCharacter(APlayerController* InPlayer);
 
 protected:
+	//~ Begin AActor Interface.
+	/** [서버] 세션을 참가 가능으로 엶. 매치 시작 때 닫았으므로 게임플레이에서 돌아오면 다시 열어야 함. */
+	virtual void BeginPlay() override;
+	//~ End AActor Interface.
+
 	//~ Begin AGameModeBase Interface.
 	virtual void PostLogin(APlayerController* NewPlayer) override;
+	/** [서버] 게임플레이 레벨에서 함께 돌아온 플레이어 처리. seamless travel 도착은 PostLogin 을 타지 않으므로 여기서 준비 인원을 다시 셈. */
+	virtual void HandleSeamlessTravelPlayer(AController*& C) override;
 	virtual void Logout(AController* Exiting) override;
 	/** [서버] 플레이어의 스폰 지점을 정함. 한 번 배정한 자리를 기억해 재스폰해도 같은 자리를 씀. */
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;

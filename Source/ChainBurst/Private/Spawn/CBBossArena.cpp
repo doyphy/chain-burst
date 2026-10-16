@@ -6,6 +6,7 @@
 #include "Characters/CBAICharacter.h"
 #include "Characters/CBBaseCharacter.h"
 #include "Controllers/CBAIController.h"
+#include "GameModes/CBGameplayGameMode.h"
 #include "PlayerState/CBPlayerState.h"
 
 // engine
@@ -192,8 +193,15 @@ void ACBBossArena::Auth_ScanTick()
 		return;
 	}
 
-	case ECBBossArenaPhase::Cleared: // 완료 (스캔이 멈춰 있어 오지 않음)
+	case ECBBossArenaPhase::Cleared: // 보스 처치 - 시체가 사라지기를 기다림 (DespawnDelay 뒤 보스가 스스로 파괴됨)
+	{
+		// 파괴되면 약참조가 바로 비므로 다음 스캔에서 클리어 화면을 요청하고 스캔을 멈춤
+		if (!SpawnedBoss.IsValid())
+		{
+			Auth_FinishClear();
+		}
 		return;
+	}
 	}
 }
 
@@ -363,14 +371,47 @@ void ACBBossArena::Auth_ClearArena()
 	// 연출 도중 끝나면 종료 태그가 오지 않으므로 여기서 카메라를 되돌림 (연출 중이 아니면 아무 일 없음)
 	Auth_EndBossIntro();
 
+	// 보스 처치 = 매치 클리어 (규칙은 게임모드). 졸개 사망 처리보다 먼저 알려, 졸개 처치 보상이 클리어 뒤 레벨업을 일으키지 않게 함
+	if (ACBGameplayGameMode* GameplayGameMode = GetWorld()->GetAuthGameMode<ACBGameplayGameMode>())
+	{
+		GameplayGameMode->Auth_HandleBossDefeated();
+	}
+
 	// 보스와 함께 쓰러지는 그림 - 사망 몽타주·소멸 연출이 평소처럼 진행됨
 	Auth_RemoveMinions(/*bInKill =*/ true);
 
 	Phase = ECBBossArenaPhase::Cleared;
 	Auth_OpenEntrance();
-	GetWorldTimerManager().ClearTimer(ScanTimerHandle);
 
 	UE_LOG(LogTemp, Log, TEXT("[BossArena][%s] 보스 처치 - 입구 개방"), *GetName());
+
+	// 클리어 화면은 보스 시체가 사라진 뒤 - 스캔이 보스 파괴를 기다림 (값을 따로 두지 않고 보스의 DespawnDelay 를 그대로 따름).
+	// 이미 사라졌거나 스스로 사라지지 않는 보스면 기다릴 것이 없으므로 바로 끝냄
+	const ACBBaseCharacter* Boss = SpawnedBoss.Get();
+	if (Boss && Boss->GetDespawnDelay() <= 0.f)
+	{
+		// 기다리면 클리어 화면이 영영 뜨지 않으므로 경고 후 바로 띄움
+		UE_LOG(LogTemp, Warning, TEXT("[BossArena][%s] %s 는 스스로 사라지지 않아(DespawnDelay 0 이하) 클리어 화면을 바로 띄움"),
+			*GetName(), *Boss->GetName());
+	}
+
+	if (!Boss || Boss->GetDespawnDelay() <= 0.f)
+	{
+		Auth_FinishClear();
+	}
+}
+
+// [서버] 처치한 보스가 사라짐. 게임모드에 알려 클리어 화면을 띄우고 스캔을 멈춤
+void ACBBossArena::Auth_FinishClear()
+{
+	GetWorldTimerManager().ClearTimer(ScanTimerHandle);
+
+	if (ACBGameplayGameMode* GameplayGameMode = GetWorld()->GetAuthGameMode<ACBGameplayGameMode>())
+	{
+		GameplayGameMode->Auth_HandleBossDespawned();
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[BossArena][%s] 보스 소멸 - 구역 종료"), *GetName());
 }
 
 // [서버] 전멸. 보스를 없애고 입구를 열어 처음부터 다시 시작하게 함.

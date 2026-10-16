@@ -237,6 +237,9 @@ public:
 	/** 사망 상태인지 여부 (Status.Dead 보유 여부의 로컬 캐시) */
 	FORCEINLINE bool IsDead() const { return bIsDead; }
 
+	/** [Getter] 사망 후 스스로 파괴되기까지의 지연(초). 0 이하면 스스로 파괴되지 않음 (보스 구역이 시체가 사라질지 판단할 때 씀) */
+	FORCEINLINE float GetDespawnDelay() const { return DespawnDelay; }
+
 protected:
 	//~ Begin ACharacter Interface.
 	/**

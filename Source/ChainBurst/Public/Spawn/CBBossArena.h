@@ -20,7 +20,7 @@ enum class ECBBossArenaPhase : uint8
 	Waiting,	// 전원 진입 대기 (구역 안 플레이어에게 대기 태그를 붙임)
 	Countdown,	// 전원 진입 - 보스 등장까지 대기 (한 명이라도 빠지면 Waiting 으로)
 	Fighting,	// 보스전 진행 중 (입구 차단)
-	Cleared		// 보스 처치 - 입구 개방 후 더 이상 진행하지 않음
+	Cleared		// 보스 처치 - 입구 개방. 보스 시체가 사라지면 클리어 화면을 요청하고 스캔을 멈춤
 };
 
 /** 플레이어 한 명에게 붙은 보스전 졸개 묶음 (서버 전용) */
@@ -40,7 +40,8 @@ struct FCBArenaMinionSquad
  * - Waiting   : 살아서 구역 안에 있는 플레이어에게 Status.Arena.Waiting 태그를 붙임 (HUD 의 "다른 플레이어 대기 중" 표시)
  * - Countdown : 접속한 플레이어 전원이 살아서 구역 안에 들어오면 시작. 플레이어마다 카운트다운 기간 GE 를 걸고 BossAppearDelay 타이머를 셈.
  *               한 명이라도 나가거나 죽으면 GE 를 걷어내고 Waiting 으로
- * - Fighting  : 보스 소환 + 입구 차단 액터 소환. 보스가 죽으면 입구를 열고 Cleared,
+ * - Fighting  : 보스 소환 + 입구 차단 액터 소환. 보스가 죽으면 게임모드에 알리고(매치 클리어) 입구를 열어 Cleared
+ *               (Cleared 에서는 보스 시체가 사라지기를 기다렸다가 게임모드에 알려 클리어 화면을 띄움),
  *               구역 안에 살아있는 플레이어가 없으면(전멸) 보스를 없애고 입구를 열어 Waiting 으로 되돌림
  *
  * 인원 비례 내구도: 보스가 (서버에서) 준비되면 최대 체력·최대 기절 게이지를 접속 인원만큼 곱하고 체력을 가득 채움.
@@ -125,8 +126,14 @@ protected:
 	 */
 	void Auth_ScaleBossByPlayerCount(UAbilitySystemComponent* InBossASC) const;
 
-	/** [서버] 보스 처치 - 남은 졸개를 사망 처리하고 입구를 열고 스캔을 멈춤. (등장 연출 중이었으면 끝냄) */
+	/**
+	 * [서버] 보스 처치 - 게임모드에 알리고(매치 클리어), 남은 졸개를 사망 처리하고 입구를 엶. (등장 연출 중이었으면 끝냄)
+	 * 스캔은 멈추지 않고 보스 시체가 사라지기를 기다림. 이미 사라졌거나 스스로 사라지지 않는 보스면 바로 Auth_FinishClear
+	 */
 	void Auth_ClearArena();
+
+	/** [서버] 처치한 보스가 사라짐 - 게임모드에 알려 클리어 화면을 띄우게 하고 스캔을 멈춤 */
+	void Auth_FinishClear();
 
 	/** [서버] 전멸 - 보스와 졸개를 없애고 입구를 열어 Waiting 으로 되돌림. (다시 전원이 들어오면 새 보스가 나옴. 등장 연출 중이었으면 끝냄) */
 	void Auth_ResetBossFight();

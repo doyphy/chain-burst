@@ -3,6 +3,7 @@
 #include "Characters/CBBaseCharacter.h"
 #include "DataAssets/Movement/CBCharacterMovementData.h"
 #include "CBGameplayTags.h"
+#include "PlayerState/CBPlayerState.h"
 
 // engine
 #include "Net/UnrealNetwork.h"
@@ -41,6 +42,12 @@ void UCBAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallback
 	// 체력이 변경된 경우에만 처리
 	if (Data.EvaluatedData.Attribute == GetCurrentHealthAttribute())
 	{
+		// 데미지 기록은 클램프 전 체력이 필요하므로 먼저 함 (막타의 오버킬을 빼려면 0 아래로 간 값을 봐야 함)
+		if (Data.EvaluatedData.Magnitude < 0.f)
+		{
+			Auth_RecordDamageDealt(Data);
+		}
+
 		// 체력 클램프 (데미지 원인과 무관하게 항상 0 ~ MaxHealth 보장)
 		SetCurrentHealth(FMath::Clamp(GetCurrentHealth(), 0.f, GetMaxHealth()));
 
@@ -100,6 +107,23 @@ void UCBAttributeSet::Auth_SendDeathEvent(AActor* InInstigator)
 
 	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
 		TargetActor, CBGameplayTags::Event_Combat_Death, Payload);
+}
+
+// [서버] 실제로 깎인 체력을 공격한 플레이어의 매치 기록에 더함. 클램프 전에 호출됨
+void UCBAttributeSet::Auth_RecordDamageDealt(const FGameplayEffectModCallbackData& Data) const
+{
+	// 공격한 쪽 ASC 의 주인이 PlayerState 일 때만 (플레이어 ASC 는 PlayerState 소유 - 폰이 먼저 죽었어도 찾아감).
+	// AI 의 공격은 ASC 주인이 캐릭터라 여기서 걸러짐
+	const UAbilitySystemComponent* InstigatorASC = Data.EffectSpec.GetContext().GetInstigatorAbilitySystemComponent();
+	ACBPlayerState* InstigatorPlayerState = InstigatorASC ? Cast<ACBPlayerState>(InstigatorASC->GetOwnerActor()) : nullptr;
+	if (!InstigatorPlayerState) return;
+
+	// 아직 클램프 전이라 막타면 체력이 0 아래에 있음. 0 아래로 간 만큼(오버킬)은 빼고, 맞기 전 체력이 이미 0 이면(시체 타격) 0
+	const float HealthAfterHit = GetCurrentHealth();
+	const float HealthBeforeHit = HealthAfterHit - Data.EvaluatedData.Magnitude;
+	const float ActualDamage = FMath::Max(HealthBeforeHit, 0.f) - FMath::Max(HealthAfterHit, 0.f);
+
+	InstigatorPlayerState->Auth_AddDamageDealt(ActualDamage);
 }
 
 void UCBAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

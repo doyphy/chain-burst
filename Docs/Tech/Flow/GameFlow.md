@@ -83,6 +83,7 @@ PlayerStateClass      = ACBPlayerState::StaticClass();
 `bUseSeamlessTravel = false`면 클라이언트가 **완전히 재접속**하는 형태라 PlayerState가 백지에서 시작한다. **에러 없이 조용히 값이 사라지므로** 새 게임모드를 만들 때마다 확인 대상이다(베이스에서 고정한 이유).
 
 - **전환 맵**: Project Settings → Maps & Modes → `Transition Map`. 비워두면 엔진이 임시 빈 월드를 쓰지만 명시하는 편이 안전하다.
+- **월드 시간은 이어진다.** 새 레벨의 월드가 이전 레벨의 `TimeSeconds`·`RealTimeSeconds`를 그대로 복사한다(`FSeamlessTravelHandler::CopyWorldData`). 레벨 안에서 흐른 시간이 필요하면 레벨 시작 시각을 따로 기록해 뺀다 (→ 아래 "클리어 기록" — `ACBGameplayGameState::GetMatchElapsedTime`).
 - **PlayerController는 클래스가 같아도 새로 만들어진다 (UE 5.8).** `AGameModeBase::HandleSeamlessTravelPlayer`가 이전 PC를 데리고 온 뒤 **항상** 새 PC를 스폰해 바꿔 끼운다(`SeamlessTravelTo/From` → `SwapPlayerControllers`). 넘어오는 것은 PlayerState 복사(`CopyProperties`)뿐이고, 컨트롤러의 로컬 상태(1회성 플래그 `bReadyStateApplied`, 위젯 참조)는 **레벨마다 새로 시작한다.** 새 PC 도 `ReceivedPlayer`를 다시 타므로 페이드 덮기도 레벨마다 다시 걸린다 — 로비로 돌아왔을 때 로비 UI 가 다시 뜨는 이유다. 클래스는 여전히 베이스에서 고정한다(BP 누락이 조용하므로).
 
 ## 맵을 넘을 때 무엇이 살아남나
@@ -268,7 +269,7 @@ AI(Rogue/Outlaw)는 이 경로를 타지 않는다. 기존대로 `DespawnDelay` 
 [서버] ACBBossArena 스캔이 보스 사망 확인 → Auth_ClearArena
   ├ ACBGameplayGameMode::Auth_HandleBossDefeated()        ← 졸개 사망 처리보다 먼저
   │    ├ bMatchCleared = true   (이후 Auth_AddExperience 무시)
-  │    └ MatchClearTime = 월드 시간 (레벨 시작부터, 레벨업 정지 제외)
+  │    └ MatchClearTime = ACBGameplayGameState::GetMatchElapsedTime() (레벨 시작부터, 레벨업 정지 제외 — HUD 시계와 같은 함수)
   ├ 졸개 사망 처리 · 입구 개방 · Phase = Cleared   (스캔은 계속)
   └ 보스가 이미 없거나 스스로 사라지지 않으면(DespawnDelay ≤ 0, 경고) 바로 아래로
 [서버] Cleared 스캔 — 보스 약참조가 비면 (DespawnDelay 뒤 보스가 Auth_Despawn 으로 파괴됨)
@@ -323,7 +324,7 @@ AI(Rogue/Outlaw)는 이 경로를 타지 않는다. 기존대로 `DespawnDelay` 
 
 | 값 | 규칙 | 이유 |
 |---|---|---|
-| 경과 시간 | **보스 처치 순간의 월드 시간**(`GetTimeSeconds`). 화면이 뜨는 소멸 시점이 아니라 처치 시점 | 게임플레이 월드는 레벨이 시작될 때 0 부터 흐르므로 **시작 시각을 따로 기록하지 않는다.** 레벨업 정지 동안 월드 시간이 멈춰 **카드를 고르는 시간은 빠진다**(정지형 레벨업 장르의 클리어 타임과 같은 기준). 클라이언트가 늦게 로딩된 몇 초는 들어간다 |
+| 경과 시간 | **보스 처치 순간의 `ACBGameplayGameState::GetMatchElapsedTime()`** = 서버 월드 시간 − 레벨 시작 시각(`MatchStartTime`, 게임 스테이트 `BeginPlay`에서 서버가 기록·복제). 화면이 뜨는 소멸 시점이 아니라 처치 시점 | **seamless travel 은 월드 시간을 새 레벨로 그대로 복사한다**(`FSeamlessTravelHandler::CopyWorldData` — `LoadedWorld->TimeSeconds = CurrentWorld->TimeSeconds`). 월드 시간만 쓰면 세션 시작(호스트가 로비를 연 순간)부터 센 값이 되어, 로비로 돌아갔다 다시 시작해도 이어진다 — 그래서 레벨 시작 시각을 빼야 한다. 레벨업 정지 동안 월드 시간이 멈춰 **카드를 고르는 시간은 빠진다**(정지형 레벨업 장르의 클리어 타임과 같은 기준). 클라이언트가 늦게 로딩된 몇 초는 들어간다 |
 | 내 데미지 | 레벨 전체(일반 몬스터·보스·졸개)에서 **적의 체력을 실제로 깎은 양**의 합. 오버킬·시체 타격은 빠짐 | 막타에 체력 10 남은 적을 500 으로 때려도 10 — 총합이 부풀지 않는다. 계산된 데미지 그대로를 원하면 `Auth_RecordDamageDealt`의 한 줄을 바꾼다 |
 
 - **데미지는 적용되는 곳(서버의 `UCBAttributeSet::PostGameplayEffectExecute`)에서 센다.** 데미지 계산(`UCBDamageExecCalc`)은 클램프 전 값만 알고, 적중 이벤트(`Event.Combat.Attack.Hit` — 버스트 게이지가 씀)에는 데미지 값이 없다. 체력 클램프 **전에** 세야 0 아래로 간 오버킬을 뺄 수 있고, 사망 이벤트로 빠지기 전이라 막타도 포함된다. 모든 적이 같은 어트리뷰트 셋을 쓰므로 일반 몬스터·보스·졸개가 따로 갈리지 않는다.
@@ -373,7 +374,7 @@ AI(Rogue/Outlaw)는 이 경로를 타지 않는다. 기존대로 `DespawnDelay` 
 | 데미지를 PlayerState 에 실시간 복제 | 맞을 때마다 복제가 나가는데 쓰는 것은 마지막 한 번. 파티원 데미지 표가 필요해지면 다시 봄 |
 | 클리어 시간을 게임 스테이트에 복제 | 클리어 화면 RPC 하나에 실으면 충분 |
 | 적중 이벤트에 데미지 값을 실어 집계 | 이벤트 쪽은 클램프 전 값만 있어 오버킬·시체 타격을 뺄 수 없음 |
-| 매치 시작 시각 기록 | 게임플레이 월드 시간이 레벨 시작 때 0 부터 흘러 처치 순간의 월드 시간이 곧 경과 시간 |
+| 레벨 시작 시각을 클라가 각자 기록 | 클라는 로딩이 끝난 뒤 시작해 서버 기록(클리어 시간)과 숫자가 어긋남. 서버 시각 하나를 게임 스테이트로 복제 (처음엔 "월드 시간이 레벨마다 0 부터"라고 잘못 보고 시작 시각 없이 만들었다가 세션 내내 시간이 이어지는 버그가 났음 — 위 "경과 시간") |
 | 경과 시간에 레벨업 정지 포함(실제 시간) | 카드를 고르는 동안은 시계를 멈추기로 함 |
 | 클리어 화면 표시 지연 값·타이머 | 보스 `DespawnDelay`와 값이 두 곳에 생김. 스캔으로 보스 파괴를 기다림 (위 "클리어 화면은 보스 시체가 사라진 뒤") |
 | 보스 `OnDestroyed` 구독 | 다이내믹 델리게이트라 `UFUNCTION` 핸들러·해제 관리가 따라옴. 이미 도는 스캔으로 충분 |
@@ -419,6 +420,7 @@ AI(Rogue/Outlaw)는 이 경로를 타지 않는다. 기존대로 `DespawnDelay` 
 11. 클리어 위젯의 경과 시간이 서버 로그 "매치 클리어 N초" 와 같다. 레벨업 카드를 고르며 오래 기다린 판은 그 시간만큼 실제 시간보다 짧다
 12. 클리어 위젯의 데미지가 호스트·클라 화면에서 서로 다르다(각자 자기 것). 혼자 보스를 잡으면 보스 최대 체력 + 잡은 일반 몬스터·졸개 체력 합 언저리 — 체력이 남은 적을 때린 만큼만 더해지고, 막타 오버킬은 안 들어감
 13. 중간에 죽었다 리스폰해도 그 전 데미지가 유지된다. 로비로 돌아갔다 다시 시작하면 0 부터
+14. 로비에서 한참 기다렸다 시작해도 우측 상단 시계가 0 부터 센다. 클리어 → 로비 → 다시 시작해도 0 부터(이전 판 시간이 이어지지 않음). 클라 시계도 호스트와 거의 같다
 
 ## 진행 상황
 

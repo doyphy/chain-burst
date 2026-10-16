@@ -203,7 +203,7 @@ private:
 	bool bMatchCleared = false;
 
 	/**
-	 * 레벨 시작부터 보스 처치까지의 시간(초). 처치 순간의 월드 시간 - 게임플레이 월드는 레벨이 시작될 때 0 부터 흐르고,
+	 * 레벨 시작부터 보스 처치까지의 시간(초). 처치 순간의 ACBGameplayGameState::GetMatchElapsedTime (HUD 시계와 같은 기준),
 	 * 레벨업 카드를 고르는 동안(월드 정지)은 멈추므로 그 시간이 빠짐
 	 */
 	float MatchClearTime = 0.f;

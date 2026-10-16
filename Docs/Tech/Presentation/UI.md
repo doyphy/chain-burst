@@ -572,11 +572,12 @@ C++가 모드를 나눠서, WBP는 오는 이벤트대로 바에 값을 넣기�
 
 ## 경과 시간 표시 (HUD 우측 상단)
 
-`WBP_CB_ElapsedTime` — `WBP_CB_HUD` 우측 상단의 경과 시간. **C++ 없이 엔진이 복제하는 서버 시간을 읽는다.**
+`WBP_CB_ElapsedTime` — `WBP_CB_HUD` 우측 상단의 경과 시간. **위젯 C++ 없이 게임 스테이트의 `GetMatchElapsedTime()`을 읽는다.**
 
-- `Event Construct`에서 게임 스테이트를 저장하고, `Tick`마다 `Get Server World Time Seconds`(엔진 `AGameStateBase` — 서버가 0.1초마다 자기 월드 시간을 복제하고 클라가 차이를 평균 내 보정) → 포맷 → `Set Text`.
-- 기준이 클리어 기록과 같은 **서버 월드 시간**이라 레벨 시작 때 0 부터 흐르고, 레벨업 카드를 고르는 동안(월드 정지) 멈춘다(→ [GameFlow.md](../Flow/GameFlow.md) "클리어 기록").
-- **보스를 잡아도 멈추지 않는다.** 클리어 위젯의 시간은 처치 순간 값이라, 클리어 화면이 뜰 때 시계는 그보다 몇 초 앞서 있다. 같이 보이지 않게 하려면 클리어 위젯의 `Global Occluder`를 켜 아래 HUD 를 숨긴다(→ [EasyGameUI.md](EasyGameUI.md) 선언값). 시계를 처치 순간에 멈추려면 클리어 시각을 게임 스테이트에 복제해 두 위젯이 같은 값을 읽게 해야 한다 — 요청이 생기면 그때.
+- `Event Construct`에서 `Get Game State` → `Cast to CBGameplayGameState`를 저장하고, `Tick`마다 `Get Match Elapsed Time` → 포맷 → `Set Text`.
+- 값 = 서버 월드 시간(엔진 `GetServerWorldTimeSeconds` — 서버가 0.1초마다 복제, 클라가 차이를 평균 내 보정) − 레벨 시작 시각(`MatchStartTime`, 복제). **클리어 기록과 같은 함수**라 숫자 기준이 같고, 레벨업 카드를 고르는 동안(월드 정지) 멈춘다(→ [GameFlow.md](../Flow/GameFlow.md) "클리어 기록").
+- **`Get Server World Time Seconds`를 그대로 쓰면 안 된다.** seamless travel 이 월드 시간을 다음 레벨로 이어붙여, 세션 시작부터 센 값이 되고 로비로 돌아갔다 다시 시작해도 이어진다(실제로 겪음).
+- **보스를 잡아도 멈추지 않는다.** 클리어 위젯의 시간은 처치 순간 값이라, 클리어 화면이 뜰 때 시계는 그보다 몇 초 앞서 있다. 같이 보이지 않게 하려면 클리어 위젯의 `Global Occluder`를 켜 아래 HUD 를 숨긴다(→ [EasyGameUI.md](EasyGameUI.md) 선언값). 시계를 처치 순간에 멈추려면 클리어 시각도 게임 스테이트에 복제해 `GetMatchElapsedTime`이 클리어 뒤에는 그 값을 돌려주게 하면 된다 — 요청이 생기면 그때.
 - HUD 컨테이너 자식이라 폰과 함께 사라진다 — 리스폰을 기다리는 동안은 다른 HUD 처럼 보이지 않는다.
 
 ## 위젯 클래스 등록 — 로드아웃

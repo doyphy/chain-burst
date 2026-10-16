@@ -422,8 +422,9 @@ void ACBGameplayGameMode::Auth_HandleBossDefeated()
 	if (bMatchCleared) return;
 	bMatchCleared = true;
 
-	// 레벨 시작부터 흐른 월드 시간 = 클리어 시간. 레벨업 정지 동안은 월드 시간이 멈춰 카드 고르는 시간이 빠짐
-	MatchClearTime = GetWorld()->GetTimeSeconds();
+	// 레벨 시작부터 흐른 시간 = 클리어 시간. HUD 시계와 같은 함수라 기준이 같음 (레벨업 정지 시간은 빠짐)
+	const ACBGameplayGameState* GameplayGameState = GetGameState<ACBGameplayGameState>();
+	MatchClearTime = GameplayGameState ? GameplayGameState->GetMatchElapsedTime() : 0.f;
 
 	UE_LOG(LogTemp, Log, TEXT("[Gameplay] 보스 처치 - 매치 클리어 %.1f초 (보스가 사라지면 클리어 화면)"), MatchClearTime);
 }

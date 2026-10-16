@@ -192,6 +192,61 @@ OnWidgetRemovedFromStack → bClosing = true, CardOut 재생, HandledByWidget? =
 - **`Intro` 직후 `Flush Animations`.** 재생 요청한 애니메이션을 그 자리에서 평가해, 카드가 다 보인 상태로 한 프레임 그려졌다가 시작되는 깜빡임을 막는다.
 - **카드 순차 등장(슬롯별 지연)은 넣지 않았다.** 지연되는 동안 카드를 숨기려면 `Intro`가 움직이는 위젯을 직접 숨겨야 하는데, 그 대상을 애니메이션에 맞춰 따로 관리해야 한다. 필요해지면 카드 루트를 숨긴 뒤 `SlotIndex × 간격` 만큼 Delay 후 재생하면 된다.
 
+### 레벨업 연출 — `WBP_CB_LevelUpFX` (카드보다 먼저)
+
+몬스터가 죽어 레벨이 오르면 **"LEVEL UP" 홀로그램 연출(1.20초)이 먼저 나오고 그 뒤에 카드가 나온다.** 월드가 이미 정지된 상태라 월드 연출(나이아가라 등)은 움직이지 않으므로 **위젯 애니메이션**으로 만든다. C++ 변경은 없다. 원본 가이드는 프로젝트 루트 `references/levelup_fx/`(모듈 시트·피크 프레임·스프라이트시트), 텍스처는 `UI/Gameplay/LevelUp/LevelUpFX/`.
+
+**구성** — 부모 `UserWidget`, 루트 `Overlay`(`HitTestInvisible`), 레이어 전부 가운데 정렬·피벗 (0.5, 0.5)·`Is Variable`(애니메이션 트랙이 이름으로 붙음). 뒤 → 앞:
+
+| 위젯 | 텍스처 | 크기 |
+|---|---|---|
+| `Img_PulseRing_Radial` | `T_LevelUp_Pulse_Ring_Radial_512` | 512×512 |
+| `Img_PulseWave_Wide` | `T_LevelUp_Pulse_Wave_Wide_880` | 880×280 |
+| `Img_AscendChevrons` | `T_LevelUp_Ascend_Chevrons_512` | 512×320 |
+| `Img_BannerFrame` | `T_LevelUp_Banner_Frame_760` | 760×160 |
+| `Img_AnamorphicFlare` | `T_LevelUp_Anamorphic_Flare_960` | 960×200 |
+| `Img_TextEcho` | `T_LevelUp_Text_Echo_640` | 640×140 |
+| `Img_TextCore` | `T_LevelUp_Text_Core_Gold_640` (Cyan 판도 있음) | 640×140 |
+
+디자이너에서는 피크 프레임처럼 전부 보인다. 시작 상태(투명·축소)는 애니메이션 첫 키가 정한다.
+
+**애니메이션 `FXAnimation` (길이 1.20초, 가이드 이름 `Anim_LevelUp_Pulse`)** — 위젯마다 Transform(Scale·Translation Y) + Render Opacity 트랙. 가이드 표 그대로이고, ★ 는 가이드에 없어 이어지도록 보탠 키다(시작 전 숨김 유지, 7~8단계 페이드아웃).
+
+| 위젯 | 키 (시간: Scale X,Y / Opacity / Translation Y) |
+|---|---|
+| `Img_AnamorphicFlare` | 0.00: (0.2, 1.2) / 1.0 → 0.38: (1.1, 0.05) / 0.0 |
+| `Img_BannerFrame` | 0.00: (0.35, 0.8) / 0.0 → 0.16: (1.0, 1.0) / 1.0 → ★0.94: 1.0 → ★1.20: 0.0 |
+| `Img_TextCore` | ★0.00: (1.42, 1.42) / 0.0 → 0.04: (1.42, 1.42) / 0.0 → 0.22: (1.0, 1.0) / 1.0 → ★0.94: 1.0 → ★1.20: 0.0 |
+| `Img_TextEcho` | ★0.00: (1.0, 1.0) / 0.0 → 0.14: (1.0, 1.0) / 0.9 → 0.72: (1.48, 1.55) / 0.0 |
+| `Img_PulseWave_Wide` | ★0.00: (0.78, 0.78) / 0.0 → 0.08: (0.78, 0.78) / 1.0 → 0.66: (1.32, 1.45) / 0.0 |
+| `Img_PulseRing_Radial` | ★0.00: (0.45, 0.45) / 0.0 → 0.06: (0.45, 0.45) / 0.8 → 0.82: (1.40, 1.40) / 0.0 |
+| `Img_AscendChevrons` | ★0.00: Y +38 / 0.0 → 0.10: Y +38 / 0.0 → 0.45: 0.9 → 0.85: Y −42 / 0.0 |
+
+- 문구(`TextCore`)·배너는 "슬램"이라 Scale 키를 **감속(ease out)** 으로, 펄스·잔상은 기본(Auto)으로 둔다. Opacity 는 선형.
+- **끝 상태가 전부 투명**이라 재생이 끝나면 저절로 안 보인다. Restore State 는 쓰지 않는다.
+- 블렌드는 PNG 알파 그대로다. 가이드의 "Additive" 발광이 약하면 UI 가산 머티리얼(Blend Mode Additive + 텍스처 파라미터)로 바꾼다 — 아직 안 함.
+
+**배선 (`WBP_CB_LevelUp` — 화면 가운데에 `LevelUpFX` 변수로 배치)**: 컨트롤러는 카드 제시(`OnCardsOffered`) **다음에** 스택에 올리므로(`Local_ShowLevelUpCards`), 첫 제시는 카드를 보관만 하고 `Construct` 에서 연출을 튼다.
+
+```
+OnCardsOffered(Cards) → PendingCards 보관
+  ├ 카드가 이미 있음(연속 레벨업) → CardOut → BuildPendingCards        ← 기존
+  └ 없음(첫 제시)                → 보관만 (BuildPendingCards 호출 제거)
+Event Construct → bOnScreen = true
+  └ CardBox 에 카드가 없을 때만(첫 표시)
+       Play Animation with Finished event (Widget = LevelUpFX, Animation = LevelUpFX.FXAnimation)
+         ├ then     → Flush Animations (LevelUpFX)   — 피크 상태가 한 프레임 보이는 깜빡임 방지
+         └ Finished → BuildPendingCards              — 카드 등장
+```
+
+- **`Construct` 는 여러 번 불릴 수 있어**(계층에서 빠졌다 다시 붙을 때) "카드가 없을 때만"으로 막는다. 카드가 있는 상태에서 다시 불려도 연출이 또 나오거나 카드를 다시 만들지 않는다.
+- **연속 레벨업에는 연출이 다시 나오지 않는다** — 위젯이 화면에 남아 `CardOut` 으로 카드만 바뀐다. 매번 보이려면 `CardOut` 이 끝난 갈래에서 `FXAnimation` 을 한 번 더 재생한 뒤 `BuildPendingCards`.
+- 종료 이벤트를 따로 바인딩하지 않고 `Play Animation with Finished event`(비동기 노드)의 `Finished` 핀을 쓴다 — 바인딩이 `Construct` 마다 쌓이는 일이 없다.
+
+- **선택 제한 시간(20초)은 연출까지 포함해 센다** — 서버 타임아웃과 화면 남은 시간이 카드 제시 순간부터라서. 1.2초라 체감 차이는 작다. 남은 시간 표시는 연출이 끝난 뒤 보이게 할 수 있다.
+- 연출 동안은 카드가 없어 잘못 고를 수 없고, 위젯은 이미 스택에 올라 게임 입력이 걷혀 있다.
+- 효과음은 `Play Sound 2D` 를 UI 사운드로 — 정지 중에도 들리게(→ [Music.md](../Presentation/Music.md)).
+
 ## 에디터 작업
 
 | 대상 | 작업 |

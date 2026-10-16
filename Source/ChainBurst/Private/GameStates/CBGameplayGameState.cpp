@@ -12,6 +12,25 @@ void ACBGameplayGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 
 	DOREPLIFETIME(ACBGameplayGameState, Level);
 	DOREPLIFETIME(ACBGameplayGameState, Experience);
+	DOREPLIFETIME(ACBGameplayGameState, MatchStartTime);
+}
+
+// [서버] 레벨 시작 시각 기록. seamless travel 은 이전 레벨의 월드 시간을 이어받으므로 0 이 아님 (세션 시작부터 흐름)
+void ACBGameplayGameState::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (HasAuthority())
+	{
+		MatchStartTime = GetServerWorldTimeSeconds();
+	}
+}
+
+// [서버/클라이언트] 레벨 시작부터 흐른 시간. HUD 시계와 클리어 기록이 같은 값을 쓰도록 계산을 여기 한 곳에 둠
+float ACBGameplayGameState::GetMatchElapsedTime() const
+{
+	// 서버 월드 시간은 레벨업 정지 동안 멈추므로 카드 고르는 시간은 빠짐. 클라는 엔진이 복제·보정한 서버 시간을 씀
+	return static_cast<float>(FMath::Max(GetServerWorldTimeSeconds() - MatchStartTime, 0.0));
 }
 
 // [서버] 게임모드가 계산한 결과를 반영 (서버에서 실행)

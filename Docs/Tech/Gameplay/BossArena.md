@@ -41,7 +41,7 @@
 | `ArenaBounds` (`UBoxComponent`, 루트) | 구역 액터 | 보스 구역 범위. 콜리전 없음 — 범위 값과 에디터 시각화 용도 |
 | `BossSpawnPoint` / `EntranceBlockerPoint` / `RespawnPoint` (`UArrowComponent`) | 구역 액터 | 보스 등장 / 입구 차단 / 보스전 중 사망자 부활 위치·방향. 레벨에서 각자 끌어다 둔다. 게임 중에는 보이지 않음 |
 | `IntroCamera` (`UCameraComponent`) | 구역 액터 | 등장 연출 카메라. 레벨에서 보스 등장 장면 구도를 잡아 둔다 |
-| 등장 어빌리티 (`GA_Boss_Intro`) | 보스 로드아웃 | `UCBEventActionAbility` BP, 코드 없음. `Event.Combat.Intro` 로 발동해 등장 몽타주 재생, 활성 동안 `Status.Combat.Intro` + `Staggered` + `SuperArmor` 소유 |
+| 등장 어빌리티 (`GA_Outlaw_Boss_Intro`) | 보스 로드아웃 | `UCBEventActionAbility` BP, 코드 없음. `Event.Combat.Intro` 로 발동해 등장 몽타주 재생, 활성 동안 `Status.Combat.Intro` + `SuperArmor` 소유 |
 | 입구 차단 액터 (`EntranceBlockerClass`) | BP | 벽 메시·이펙트·충돌. 소환 직후 코드가 `SetReplicates(true)` |
 | `Status.Arena.Waiting` | 플레이어 ASC (PlayerState) | `TagOnly` 루스 태그. 붙이고 떼는 것은 구역 액터뿐 (→ [GameplayTags.md](../Foundation/GameplayTags.md)) |
 | 카운트다운 GE (`CountdownEffectClass`) | 플레이어 ASC (PlayerState) | 기간형 GE, 부여 태그 `Status.Arena.Countdown`. 기간은 코드가 `BossAppearDelay`로 덮어씀. 걸고 걷는 것은 구역 액터뿐 |
@@ -127,8 +127,8 @@
   │   + 플레이어 ASC 에 행동 차단 GE (IntroBlockEffectClass — 공격·장착·해제·버스트·이동 계열 어빌리티)
   └ 보스 준비 완료(서버) — 구독 또는 즉시
        ├ 보스 ASC 의 Status.Combat.Intro 변경 구독  (발동보다 먼저)
-       └ Event.Combat.Intro → GA_Boss_Intro
-            ActivationOwnedTags: Status.Combat.Intro + Status.Combat.Staggered + Status.Combat.SuperArmor
+       └ Event.Combat.Intro → GA_Outlaw_Boss_Intro
+            ActivationOwnedTags: Status.Combat.Intro + Status.Combat.SuperArmor
             등장 몽타주(Action.Combat.Intro) → GameplayCue.PlayAction → 전 클라
 
 [서버] Status.Combat.Intro 제거 (몽타주 블렌드 아웃 시작 = 어빌리티 종료)
@@ -162,7 +162,7 @@
 - **보스 처치·전멸 리셋도 연출을 끝낸다.** 보스가 파괴되면 태그 제거 이벤트가 오지 않으므로 두 경로가 먼저 `Auth_EndBossIntro` 를 부른다. 종료는 한 번만 처리된다(`bBossIntroActive`).
 - 되돌릴 때 **폰이 없는 플레이어(리스폰 대기)는 건드리지 않는다.** 다음 빙의가 뷰 타겟을 폰으로 맞춘다.
 
-**보스는 연출 동안 서 있다.** 등장 어빌리티가 `Status.Combat.Staggered` 를 소유해 BT 경직 분기(이동을 끊고 대기)를 그대로 탄다 — 기절과 같은 재사용이라 AI·BT 코드가 바뀌지 않는다 (→ [AI.md](AI.md) "피격 경직"). `SuperArmor` 는 연출 중 맞아도 피격 반응이 몽타주를 끊지 않게 한다(데미지는 들어감).
+**보스는 연출 동안 서 있다.** `BT_Outlaw_Hulk` 의 맨 앞 가지가 엔진 `Check Gameplay Tags On Actor` 로 보스의 `Status.Combat.Intro` 를 직접 보고 대기한다 — 블랙보드·컨트롤러 코드가 필요 없다 (→ [AI.md](AI.md) "전투 사이클 (Outlaw)"). 이 가지는 중단이 없어 가지를 고르는 순간에만 태그를 보고, `Wait` 가 5초 고정이라 연출이 먼저 끝나도 남은 시간만큼 서 있을 수 있다. `SuperArmor` 는 연출 중 맞아도 피격 반응이 몽타주를 끊지 않게 하는 자리다 — 지금 보스 로드아웃에는 피격 반응이 없어 실제로 막을 것은 없다(데미지는 들어감).
 
 - **보스 바는 연출 중에 뜰 수 있다.** 두뇌는 준비 완료에 시작하므로 연출 중에도 퍼셉션이 플레이어를 발견하고 `Engaged` 가 붙는다. 등장 타이틀처럼 보여서 그대로 둔다.
 - **발동 시점은 서버의 보스 준비 완료다.** 등장 어빌리티를 로드아웃이 부여하기 때문이다. 로드아웃이 이미 메모리에 있으면 `SpawnActor` 안에서 준비까지 끝나 있어 즉시 발동한다. 그 경우에도 몽타주 큐(신뢰성 없는 멀티캐스트)는 버려지지 않는다 — 서버는 채널이 없는 연결에 RPC 를 보낼 때 채널을 열고, 신뢰성 없는 멀티캐스트는 액터 첫 복제와 함께 나가도록 큐잉한다(`NetDriver.cpp` `InternalProcessRemoteFunctionPrivate`).
@@ -304,9 +304,9 @@
 | `BP_Outlaw_Hulk` | `Always Relevant` 유지 |
 | 게임플레이 맵 (구역 인스턴스) | `IntroCamera` 를 등장 장면이 잘 보이는 자리로 옮기고 FOV 조정. 카메라를 움직이고 싶으면 구역 BP 에서 타임라인으로 이 컴포넌트를 움직임(각 클라 로컬 연출이라 코드 불필요) |
 | `GE_BossIntro_BlockAction` | `Duration Policy` = Infinite. **Block Abilities with Tags 컴포넌트**에 `Ability.Combat.Attack`, `Ability.Combat.EquipWeapon`, `Ability.Combat.UnequipWeapon`, `Ability.Combat.Burst`, `Ability.Movement` (GE 컴포넌트는 MCP 로 만들 수 없어 에디터에서). 구역 인스턴스의 `IntroBlockEffectClass` 에 지정 |
-| `GA_Boss_Intro` | `UCBEventActionAbility` BP 자식. Triggers `Event.Combat.Intro`(Gameplay Event), Asset Tags `Ability.Combat.Intro`, `BoundActionTag = Action.Combat.Intro`, `ActivationOwnedTags = Status.Combat.Intro + Status.Combat.Staggered + Status.Combat.SuperArmor` |
+| `GA_Outlaw_Boss_Intro` | `UCBEventActionAbility` BP 자식. Triggers `Event.Combat.Intro`(Gameplay Event), Asset Tags `Ability.Combat.Intro`, `BoundActionTag = Action.Combat.Intro`, `ActivationOwnedTags = Status.Combat.Intro + Status.Combat.SuperArmor` |
 | 몽타주 데이터 (Hulk) | `Action.Combat.Intro` 에 등장 몽타주 등록. **루프 섹션 없이** — 블렌드 아웃이 와야 어빌리티가 끝나고 카메라가 돌아옴 (→ [Montage.md](Montage.md)) |
-| `DA_Loadout_Outlaw_Hulk` | 어빌리티 목록 `+= GA_Boss_Intro`. 보스 BGM 은 `BossMusic` (→ [Music.md](../Presentation/Music.md)). **`ExperienceReward` 는 0 권장** — 보스 처치로 매치가 끝나므로 레벨업이 쓸모없고, 오르면 카드를 고른 뒤에야 클리어 화면이 뜸 (→ [GameFlow.md](../Flow/GameFlow.md) "매치 종료") |
+| `DA_Loadout_Outlaw_Hulk` | 어빌리티 목록 `+= GA_Outlaw_Boss_Intro`. 보스 BGM 은 `BossMusic` (→ [Music.md](../Presentation/Music.md)). **`ExperienceReward` 는 0 권장** — 보스 처치로 매치가 끝나므로 레벨업이 쓸모없고, 오르면 카드를 고른 뒤에야 클리어 화면이 뜸 (→ [GameFlow.md](../Flow/GameFlow.md) "매치 종료") |
 | 졸개 캐릭터 | 기존 Rogue BP 를 그대로 쓰거나 Rogue BP 자식 + 로드아웃(메시·BT·공격·`SpawnCueTag`). 지정 타겟은 베이스 컨트롤러 기능이라 컨트롤러 BP 를 따로 둘 필요 없음 |
 | 졸개 로드아웃 | **`ExperienceReward` 는 0 권장** — 계속 소환되므로 0 이 아니면 보스전이 경험치 파밍 구간이 됨. 졸개 적중도 적중 회복·버스트 게이지를 채우므로 밸런스 확인 |
 | `BT_Rogue` | 루트에 `Update Target` 서비스 — 주인이 죽은 뒤 졸개가 남은 플레이어로 넘어가는 반응 속도 (→ [AI.md](AI.md) "타겟 재선정 주기") |
@@ -379,7 +379,7 @@
 10. 보스가 나타나는 순간 **호스트·클라 모두** 카메라가 `IntroCamera` 로 블렌드되고 이동·시점이 막힌다. 보스는 디졸브로 나타나며 등장 몽타주를 재생하고, 그동안 움직이거나 공격하지 않는다
     - 연출 중 **클라에서** 공격·대시·점프·버스트·무기 장착 키를 눌러도 아무 동작이 없다 — 몽타주가 시작됐다 끊기지도 않는다(예측 발동 자체가 막힘). `showdebug abilitysystem` 으로 차단 GE 확인, 연출이 끝나면 사라짐
 11. 등장 몽타주가 블렌드 아웃되는 순간 양쪽 카메라가 자기 캐릭터로 돌아오고 조작이 풀리며, 보스가 싸움을 시작한다
-12. 로드아웃에서 `GA_Boss_Intro` 를 빼면 경고 로그가 남고 카메라가 곧바로 돌아온다 (묶인 채 남지 않음)
+12. 로드아웃에서 `GA_Outlaw_Boss_Intro` 를 빼면 경고 로그가 남고 카메라가 곧바로 돌아온다 (묶인 채 남지 않음)
 13. 연출이 끝나고 `MinionRespawnDelay` 뒤 **호스트·클라 각자의 주변**에 졸개가 3마리씩 디졸브로 나타나 자기 플레이어를 바라보고 쫓는다. 연출 중에는 나오지 않는다
 14. 졸개는 다른 플레이어가 더 가까이 있거나 때려도, 기둥 뒤로 숨어도 자기 플레이어만 쫓는다
 15. 호스트의 졸개 3마리를 다 잡으면 `MinionRespawnDelay` 뒤 **호스트 주변에만** 다시 3마리. 클라의 졸개가 남아 있는 동안 클라 쪽은 새로 나오지 않는다

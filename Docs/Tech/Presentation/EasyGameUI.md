@@ -378,7 +378,7 @@ PlayerController → Get HUD → (BPI_EGUI_HUDInterface 메시지) Add Widget of
 
 **완료 — 로비 UI (우리 고유 위젯 첫 사례)**
 
-- `WBP_CB_Lobby_Main`(`Menu` 레이어) 안에 `WBP_CB_Lobby_PlayerMenu` / `WBP_CB_CosmeticSelector` / `WBP_CB_Lobby_Footer`
+- `WBP_CB_Lobby_Main`(`Menu` 레이어) 안에 `WBP_CB_Lobby_PlayerMenu` / `WBP_CB_CostumeSelector` / `WBP_CB_Lobby_Footer`
 - 머리 위 배치는 `UWidgetComponent`가 아니라 **스택 위젯 + 월드 투영** — 버튼이 달린 위젯은 포커스·오클루전 관리를 받아야 하므로 스택 안에 있어야 한다 → [UI.md](UI.md)
 - 의상 교체 2인 리슨 서버 검증 완료 → [Cosmetic.md](Cosmetic.md)
 

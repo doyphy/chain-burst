@@ -40,7 +40,7 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
     │
     ├── UCBEventActionAbility (Abstract) ← 게임플레이 이벤트로 발동되는 액션 베이스
     │   │   • RegisterEventTrigger(EventTag)로 트리거 등록, CancelAbilityTag로 진행 중인 어빌리티 캔슬
-    │   │   • NetExecutionPolicy 기본값: ServerInitiated
+    │   │   • NetExecutionPolicy 기본값: ServerInitiated (ServerOnly 가 아닌 이유 → 아래 "이벤트 액션이 서버 주도인 이유")
     │   │
     │   ├── UCBHitReactAbility (피격 반응, Event.Combat.HitReact 트리거 — 슈퍼아머 중에는 발동 차단)
     │   └── UCBDeathAbility (사망, Event.Combat.Death 트리거 — 전체 캔슬 + 사망 상태 GE + 사망 몽타주)
@@ -62,6 +62,29 @@ UCBGameplayAbility (베이스) ← 모든 어빌리티의 루트
 - **AI 두뇌(BT)가 발동하는 공격**: `UCBAIAttackAbility` — 아래 "AI 공격" 참조
 
 > **여러 어빌리티가 같은 기능을 써야 하면 새 베이스 클래스를 만들지 말고 기능 조각으로 뺀다.** `UCBGameplayAbility`에는 전 어빌리티 공용 로직만 둔다 → [ActionFragment.md](ActionFragment.md)
+
+## 이벤트 액션이 서버 주도인 이유 — `ServerInitiated` vs `ServerOnly`
+
+이벤트는 서버에서만 발행되므로 서버에서 시작하는 것은 두 정책이 같다. 차이는 **소유 클라이언트에서도 같은 어빌리티를 돌리느냐** 하나다.
+
+| | `ServerInitiated` | `ServerOnly` |
+|---|---|---|
+| 서버 | 실행 | 실행 |
+| 소유 클라이언트 | 서버가 RPC로 실행시킴 (예측 없음, 트리거 이벤트 데이터 동봉 — `ClientActivateAbilitySucceedWithEventData`) | 실행 안 함 |
+| 시뮬레이티드 프록시 | 실행 안 함 | 실행 안 함 |
+
+**어느 쪽이든 같은 것 — 선택 이유가 아니다:**
+- 몽타주: `GameplayCue.PlayAction`으로 전원에게 간다 (→ [Montage.md](Montage.md))
+- 활성 동안 붙는 태그(`Status.Combat.Staggered` 등): 5.8 기본 설정(`ReplicateActivationOwnedTags = true`)으로 복제된다
+- 진행 중 어빌리티 취소: 서버의 취소가 소유 클라이언트에 RPC로 전달된다
+- 사망 상태: `Status.Dead`는 사망 GE가 붙여 복제된다
+- AI: 소유자가 서버 자신이라 두 정책이 완전히 같다
+
+**갈리는 지점 — 소유 클라이언트의 이동 예측에 들어가야 하는 작업.** 피격 넉백은 루트모션 소스(`ApplyRootMotionConstantForce`)로 민다. CMC는 루트모션 소스를 **서버와 클라이언트가 각자 적용**하고 서버 데이터는 대조·보정에만 쓴다(`CharacterMovementComponent.cpp` — "Root Motion Sources are applied independently on servers and clients"). 플레이어는 자기 이동을 클라이언트에서 예측하므로, `ServerOnly`면 서버에서만 밀리고 소유 클라이언트는 그걸 모른 채 움직이다 보정을 받아 위치가 튄다. `ServerInitiated`는 소유 클라이언트에서도 같은 어빌리티·태스크가 같은 이벤트 데이터로 돌아 넉백을 함께 적용한다.
+
+- **지금은 드러나지 않는다.** `UCBHitReactAbility::bKnockbackAIOnly`(기본 켜짐)로 플레이어는 밀리지 않는다 (→ 아래 "피격 넉백"). 이 베이스는 플레이어·AI 공용이므로, 플레이어 넉백을 켜는 순간 필요해지는 쪽에 맞춰 둔다.
+- **비용**: 활성화마다 RPC 하나. 소유 클라이언트 쪽 실행은 예측이 없어 왕복 지연만큼 늦게 시작된다 — 서버가 판정하는 반응 동작이라 허용한다.
+- ⚠️ **플레이어 넉백을 켤 때 확인할 것 — 소유 클라이언트에서 도는 판단은 서버와 같은 결과를 내야 한다.** 넉백의 내비메시 검사(`bClampToNavMesh`)는 클라이언트에 내비게이션 시스템이 없으면(클라이언트 내비게이션 비허용이 엔진 기본) 건너뛰므로, 서버만 "내비메시 밖이라 생략"하는 경우 소유 클라이언트는 밀고 서버는 안 밀어 보정이 생긴다.
 
 ## 기능 조각 — 무기 트레이스 (`UCBFragment_WeaponTrace`)
 

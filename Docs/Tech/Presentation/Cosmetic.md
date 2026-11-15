@@ -234,7 +234,7 @@ PlayerState 복제 도착과 Pawn 생성은 순서가 보장되지 않는다. �
 - PIE 2인 검증 (양쪽 화면 반영 확인)
 
 - 로비 레벨·GameMode BP·고정 카메라 → [Lobby.md](../Flow/Lobby.md)
-- **선택 UI** (`WBP_CB_CosmeticSelector`, `Menu` 레이어) — 화살표 순회 → `Server_RequestCosmeticPart`. 위젯 구성은 → [Lobby.md](../Flow/Lobby.md)
+- **선택 UI** (`WBP_CB_CostumeSelector`, `Menu` 레이어) — 화살표 순회 → `Server_RequestCosmeticPart`. 위젯 구성은 → [Lobby.md](../Flow/Lobby.md)
 - **로비 교체 2인 검증** — 서버·클라 양쪽 화면에 반영 확인
 
 **미구현**

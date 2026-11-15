@@ -257,7 +257,7 @@ Score = BaseTargetScore(1.0)
 - **순환을 끄려면 `MaxFocusTime = 0`.** 그러면 현재 타겟이 조용해질 때만 바뀐다("가능한 한 한 사람에게 집중").
 - **유예 시간 = `RecentDamageMemoryTime`.** "피격을 교전으로 쳐주는 시간"과 같은 개념이라 값을 따로 두지 않았다. 너무 짧으면 보스 콤보를 피하느라 못 때리는 사이 집중이 풀려 분산되고, 길면 도망이 오래 통한다.
 - **공격 중에는 바꾸지 않는다** — 베이스의 전환 금지 구간이 `ReevaluateTarget()` 앞에서 막는다. 등 뒤 대응(회전 베기 등)은 타겟과 무관한 영역 공격이라 이 규칙과 얽히지 않는다.
-- **`BP_OutlawController` 권장값**: `RecentDamageBonus` 1.5 — "때린 사람 > 가까운 사람"을 점수로 보장하려면 피격 가산이 거리 + 시야 최대치(1.5)와 같아야 멀리서 때린 사람이 가깝기만 한 사람과 대등해진다. `SwitchScoreRatio` 는 보스에서 쓰이지 않는다(예전 권장 2.5 는 사실상 교체하지 않는 값이었다).
+- **보스 컨트롤러(`AIC_Outlaw_Hulk`) 값**: `RecentDamageBonus` 1.5 — "때린 사람 > 가까운 사람"을 점수로 보장하려면 피격 가산이 거리 + 시야 최대치(1.5)와 같아야 멀리서 때린 사람이 가깝기만 한 사람과 대등해진다. `SwitchScoreRatio` 는 보스에서 쓰이지 않는다(예전 권장 2.5 는 사실상 교체하지 않는 값이었다).
 - **위치를 따로 공급하지 않는다.** 블랙보드에 액터 참조가 들어 있는 한 `MoveTo`·`Strafe Focus`·EQS 컨텍스트가 그 액터의 실제 위치를 읽는다. 즉 "놓지 않기"만 하면 "위치를 계속 안다"는 저절로 성립한다.
 - **최초 획득은 여전히 퍼셉션이다.** 인지 검사를 빼는 것은 이미 들고 있는 타겟의 유지 조건뿐이라, 보거나 듣거나 맞기 전에는 어그로가 끌리지 않는다.
 - **타겟이 풀리는 경우는 사망·파괴·진영 변화뿐**(교체는 위 규칙). 접속 종료와 캐릭터 교체(무기 변경 = 폰 재스폰 → [GameFlow.md](../Flow/GameFlow.md))는 옛 폰이 파괴돼 풀린다. 새 폰은 다시 퍼셉션으로 잡아야 한다.
@@ -318,8 +318,9 @@ BehaviorTree  →  경직 분기 (Blackboard 데코레이터, Observer Aborts = 
 - 키 이름은 `ACBAIController::StaggeredKey`(= `"bIsStaggered"`) 상수. **에디터 BB 키 이름과 반드시 일치.**
 - **연속 피격 시 태그가 1 → 0 → 1로 한 번 튄다** (피격 어빌리티 재발동 → `ActivationOwnedTags` 재부여). 같은 호출 스택이라 BT 는 다음 틱에 최종값만 보지만, 데코레이터 옵저버가 두 번 울려 경직 브랜치가 한 번 재진입(= `Wait` 재시작)할 수 있다. 동작상 무해하다.
 - 구독/해제는 위협 판정과 같은 진입점(`BindPawnASCEvents()`)을 탄다. 단 **구독은 `RunBehaviorTree()` 보다 앞서므로 초기 값 1회 반영은 블랙보드가 없어 버려진다.** 태그·BB 키 둘 다 기본값이 false 라 어긋나지 않는다.
-- **기절(보스)도 이 경로를 그대로 탄다.** 기절 어빌리티가 `Status.Combat.Staggered` 를 함께 소유하므로 컨트롤러·블랙보드·BT 경직 분기를 하나도 바꾸지 않고 "이동을 끊고 기절 동안 대기"가 된다. 기절 고유의 판단(게이지 적립 중단 등)은 별도 태그 `Status.Combat.Stunned` 가 맡는다 → [Stun.md](Stun.md).
-- **보스 등장 연출도 같다.** 등장 어빌리티가 `Staggered` 를 소유해 등장 몽타주 동안 BT 가 대기한다. 등장 고유의 판단(카메라 복귀)은 `Status.Combat.Intro` 가 맡는다 → [BossArena.md](BossArena.md) "등장 연출".
+- **보스는 이 경로를 쓰지 않는다.** 보스 로드아웃에 피격 반응 어빌리티가 없어 경직되지 않고, `BB_Outlaw_Hulk` 에 `bIsStaggered` 키도, `BT_Outlaw_Hulk` 에 경직 분기도 없다(키가 없으면 `SetValueAsBool` 은 아무 일도 하지 않는다).
+  - **기절**: 기절 어빌리티(`GA_Outlaw_Stunned`)는 `Status.Combat.Stunned` 만 소유하고, 진행 중인 공격을 캔슬(`CancelAbilityTag`)하며 기절 동안 새 공격을 막는다(`Block Abilities with Tag = Ability.Combat.Attack`). BT 는 멈추지 않는다 — 공격 태스크가 실패해 다른 가지로 넘어간다 → [Stun.md](Stun.md).
+  - **등장 연출**: 등장 어빌리티가 `Status.Combat.Intro` 를 소유하고, BT 맨 앞 가지가 엔진 `Check Gameplay Tags On Actor` 로 그 태그를 직접 보고 대기한다(블랙보드를 거치지 않음) → 아래 [전투 사이클 (Outlaw)](#전투-사이클-outlaw), [BossArena.md](BossArena.md) "등장 연출".
 
 ### 이벤트가 아니라 태그를 구독하는 이유
 
@@ -400,8 +401,9 @@ Selector
 ### 공통 규칙
 
 - **어느 어빌리티가 켜졌는지 알아야 하므로** `TryActivateAbilitiesByTag` 대신 `GetActivatableGameplayAbilitySpecsByAllMatchingTags` 로 스펙을 찾아 `TryActivateAbility(Handle)` 를 부른다. 대기형은 종료 콜백에서 `FAbilityEndedData::AbilitySpecHandle` 을 이 핸들과 대조해 **같은 ASC 의 다른 어빌리티(피격 반응 등) 종료를 걸러낸다.**
-- **쿨다운 데코레이터가 필요 없다.** 쿨다운은 어빌리티의 GAS 표준 쿨다운(`CommitAbility`)이 담당하고, 쿨다운 중에는 활성화가 실패해 `Failed` 가 반환된다. → [Abilities.md](Abilities.md)
-  - ⚠️ 다만 **그 `Failed` 를 받아줄 형제가 있어야** 한다. Rogue 의 전투 브랜치처럼 Sequence 안에 있으면 시퀀스가 통째로 실패하므로, 쿨다운으로 활성화가 막히는 상황 자체를 만들지 않는 편이 안전하다(아래 [전투 사이클](#전투-사이클-rogue)).
+- **활성화가 막히면 `Failed` 다.** GAS 쿨다운·차단 태그(기절 중 `Ability.Combat.Attack` 차단 등)로 발동하지 못하면 실패가 반환된다. → [Abilities.md](Abilities.md)
+  - ⚠️ 다만 **그 `Failed` 를 받아줄 형제가 있어야** 한다. Rogue 의 전투 브랜치처럼 Sequence 안에 있으면 시퀀스가 통째로 실패하므로, 활성화가 막히는 상황 자체를 만들지 않는 편이 안전하다(아래 [전투 사이클](#전투-사이클-rogue)).
+  - 현재 AI 공격 GA 에는 쿨다운 GE 가 없다. **보스 스킬의 쿨다운은 BT 의 엔진 `Cooldown` 데코레이터가 가진다**(→ [전투 사이클 (Outlaw)](#전투-사이클-outlaw) "스킬 선택").
 - **대기형의 반환값 규칙**: 활성화 실패·캔슬 종료 = `Failed` / 정상 종료 = `Succeeded`. **"활성화 직후 즉시 종료"는 `Succeeded`** 다 — 기다릴 것이 없었을 뿐이므로, 즉시 완료되는 어빌리티에 이 태스크를 써도 결과가 올바르다.
   - 이것이 성립하려면 **어빌리티가 발동 전제 조건을 `CanActivateAbility` 에서 검사**해야 한다. `ActivateAbility` 안에서 `EndAbility` 로 튕기면 "즉시 끝남"이 실패인지 정상 완료인지 구분할 수 없다. 안전망으로 남기는 검사는 `bWasCancelled = true` 로 끝내 실패로 식별되게 한다. → [Abilities.md](Abilities.md)
 - **이미 재생 중이면 재활성화를 시도하지 않는다** (`FindActiveAbilityHandle` 가드). 어빌리티가 `InstancedPerActor`(`UCBGameplayAbility` 생성자)이고 `bRetriggerInstancedAbility` 가 기본 false 라 엔진도 재활성화를 막지만, 그냥 두면 매 틱 실패 시도가 반복되며 엔진 로그만 쌓인다. 가드가 그 앞에서 걸러낸다.
@@ -453,25 +455,16 @@ bUseControllerDesiredRotation = true;
 
 ### 노드 실행 중 이동 속도 — `UCBBTService_MovementSpeed`
 
-붙은 노드가 실행되는 동안만 이동 속도 어빌리티(`SpeedAbilityTag`, 기본 `Ability.Movement.Sprint`)를 켜 둔다. 보스가 **멀리 있는 타겟에게 다가가는 `MoveTo`** 에 붙여, 그 이동 동안 전력질주하고 `MoveTo` 가 끝나거나 끊기면 일반 달리기로 돌아오게 한다(→ [전투 사이클 (Outlaw)](#전투-사이클-outlaw) ①).
+붙은 노드가 실행되는 동안만 이동 속도 어빌리티(`SpeedAbilityTag`, 기본 `Ability.Movement.Sprint`)를 켜 둔다. 보스가 **멀리 있는 타겟에게 다가가는 `MoveTo`** 에 붙여, 그 이동 동안 전력질주하고 `MoveTo` 가 끝나거나 끊기면 일반 달리기로 돌아오게 한다. `BT_Outlaw_Hulk` 에서는 **추격 `MoveTo`(`TargetDistance ≥ 2000`)와 원거리 가지의 폴백 `MoveTo`(`TargetDistance ≥ 1000`)** 두 곳에 붙어 있다(→ [전투 사이클 (Outlaw)](#전투-사이클-outlaw)). 어빌리티는 보스 로드아웃의 `GA_Outlaw_Sprint`, 속도는 `DA_Movement_Outlaw_Hulk` 의 Sprint 항목이다.
 
-- **Strafe Focus 의 속도 부분만 떼어낸 것이다.** 진입(`OnBecomeRelevant`)에 켜고 이탈(`OnCeaseRelevant`)에 태그로 취소한다 — 이탈은 정상 완료·거리 데코레이터의 중단·경직/기절 분기의 중단·BT 정지 모두에서 호출되므로 질주가 켜진 채 남지 않는다. 켜기·취소 규칙은 `UCBAbilitySystemLibrary::SetAbilityActiveByTag()` 를 Strafe Focus 와 공유한다.
+- **Strafe Focus 의 속도 부분만 떼어낸 것이다.** 진입(`OnBecomeRelevant`)에 켜고 이탈(`OnCeaseRelevant`)에 태그로 취소한다 — 이탈은 정상 완료·거리 데코레이터의 중단·BT 정지 모두에서 호출되므로 질주가 켜진 채 남지 않는다. 켜기·취소 규칙은 `UCBAbilitySystemLibrary::SetAbilityActiveByTag()` 를 Strafe Focus 와 공유한다.
 - **속도를 CMC 에 직접 쓰지 않는다** — Strafe Focus "③ 이동 속도" 와 같은 이유(개이트 태그·어트리뷰트·가속/제동이 함께 따라와야 함). 질주 중에는 `Status.Movement.Gait.Sprint` 라 `UCBLocomotionProcessor` 가 Sprint 가속·제동을 적용하고, 애님 개이트도 Sprint 가 된다.
-- **"멀 때"는 서비스가 판단하지 않는다.** 거리 조건은 붙은 가지의 데코레이터(① `TargetDistance ≥ 1500`)가 이미 정하므로, 어디에 붙이느냐가 곧 조건이다. 1500 안으로 들어오면 데코레이터가 `MoveTo` 를 끊고 → 이탈 → 질주 취소.
-- **틱이 없다.** 진입·이탈에만 반응한다(`INIT_SERVICE_NODE_NOTIFY_FLAGS` 가 `TickNode` 미오버라이드를 보고 틱을 끔). 질주 도중 활성화가 풀리는 경로(경직·기절)는 `MoveTo` 자체가 중단되므로 재시도할 상황이 없다.
-- **AI 용 질주 어빌리티가 따로 필요하다.** 플레이어의 `GA_Sprint` 는 대시에 종속(`ActivationRequiredTags = Status.Movement.Dashing`)이고 무가속이면 자동 종료라 AI 가 켤 수 없다(→ [Locomotion.md](Locomotion.md) "대시 & Sprint"). `UCBGAChangeSpeed` 자식으로 조건 없이 만든다(아래 "에디터 작업").
+- **"멀 때"는 서비스가 판단하지 않는다.** 거리 조건은 붙은 가지의 데코레이터(추격 `TargetDistance ≥ 2000`)가 이미 정하므로, 어디에 붙이느냐가 곧 조건이다. 2000 안으로 들어오면 데코레이터가 `MoveTo` 를 끊고 → 이탈 → 질주 취소.
+- **틱이 없다.** 진입·이탈에만 반응한다(`INIT_SERVICE_NODE_NOTIFY_FLAGS` 가 `TickNode` 미오버라이드를 보고 틱을 끔).
+- **AI 용 질주 어빌리티가 따로 필요하다.** 플레이어의 `GA_Sprint` 는 대시에 종속(`ActivationRequiredTags = Status.Movement.Dashing`)이고 무가속이면 자동 종료라 AI 가 켤 수 없다(→ [Locomotion.md](Locomotion.md) "대시 & Sprint"). 그래서 `UCBGAChangeSpeed` 자식으로 조건 없이 만든 `GA_Outlaw_Sprint`(Asset Tags `Ability.Movement.Sprint`, `SpeedDataTag` = `Status.Movement.Gait.Sprint`, `bEndWhenNoAcceleration` 끔, `ActivationRequiredTags` 비움)를 쓴다.
 - **이동 데이터에 Sprint 항목이 있어야 한다.** 없으면 `GetSpeedForTag` 가 0 이라 보스가 멈추는데, 거리가 줄지 않아 `MoveTo` 도 끊기지 않으므로 **영구히 멈춘다.** 그래서 `UCBGAChangeSpeed` 가 속도 0 이면 경고 로그를 남기고 취소 종료한다 — 보스는 일반 달리기로 계속 간다.
 - 서비스는 **태스크 노드에도 붙일 수 있다**(엔진 BT). 가지(Sequence)가 아니라 그 `MoveTo` 에 붙여야 이동이 끝나는 순간 풀린다.
-
-**에디터 작업**
-
-| 대상 | 작업 |
-|---|---|
-| `GA_AI_Sprint` (새 BP, `GameAbilities/Shared`) | 부모 `UCBGAChangeSpeed`. Asset Tags `Ability.Movement.Sprint`, `SpeedDataTag` = `Status.Movement.Gait.Sprint`, `MovementModifierGEClass` = `GE_MovementModifier`, **`bEndWhenNoAcceleration` 끔**, `ActivationRequiredTags` 비움 |
-| `DA_Loadout_Outlaw_Hulk` | 어빌리티 목록 `+= GA_AI_Sprint` |
-| `DA_Movement_Outlaw_Hulk` | 개이트 맵에 **`Status.Movement.Gait.Sprint`** 항목 추가 (`MaxSpeed` 등 — 지금은 Run·Walk 뿐) |
-| `BT_Outlaw_Hulk` | ① 아주 멂 `MoveTo` 에 서비스 `Movement Speed` 부착 (태그 기본값 그대로) |
-| `ABP_Outlaw_Hulk` | 질주 클립이 없음(조깅 블렌드스페이스 `BS_Outlaw_Hulk_Run` 하나, Crunch 팩에도 스프린트 없음) — 속도만 오르면 발이 미끄러져 보일 수 있어 재생 속도를 속도 비율로 올리는 등 애님 측 처리 확인 |
+- `ABP_Outlaw_Hulk` 에 질주 클립이 없다(조깅 블렌드스페이스 `BS_Outlaw_Hulk_Run` 하나, Crunch 팩에도 스프린트 없음) — 속도만 오르면 발이 미끄러져 보일 수 있어 재생 속도를 속도 비율로 올리는 등 애님 측 처리를 확인한다.
 
 **채택하지 않은 것**
 
@@ -499,14 +492,14 @@ bUseControllerDesiredRotation = true;
 - **`bCallTickOnSearchStart = true`** — 가지를 고르는 순간에도 최신 거리로 판단한다. 없으면 이전 주기의 값으로 구역을 고를 수 있다.
 - **BT 루트에 붙인다**(`Update Target` 옆). 어느 가지가 돌든 거리가 갱신돼야 다른 가지의 중단 데코레이터가 반응한다.
 - **수평 거리**(`Dist2D`) — 계단·경사 등 높이 차이로 구역이 바뀌지 않게.
-- 타겟이 없으면 쓰지 않는다. 전투 가지가 `TargetActor Is Set` 으로 이미 막혀 있어 낡은 값이 쓰일 경로가 없다.
-- 판정(어느 구역인가)은 들고 있지 않다 — 기준값(700·1500 등)은 BT 데코레이터에 있어 코드 수정 없이 조정한다.
+- 타겟이 없으면 쓰지 않는다(값이 지난 것으로 남음). 보스 BT 는 "타겟 없음" 가지가 거리 가지들보다 앞에 있어, 타겟이 없을 때 낡은 값으로 구역을 고를 일이 없다.
+- 판정(어느 구역인가)은 들고 있지 않다 — 기준값(1000·2000)은 BT 데코레이터에 있어 코드 수정 없이 조정한다.
 
 ### 무작위 선택 — `UCBBTComposite_RandomSelector`
 
 엔진 컴포짓은 `Selector`·`Sequence`·`SimpleParallel` 뿐이라 무작위 선택이 없다. 엔진 `Selector` 와 **규칙은 같고 시도 순서만 매번 무작위**인 컴포짓을 하나 뒀다 — 하나가 성공하면 멈추고, 전부 실패하면 실패.
 
-- **실패하면 남은 자식 중에서 다시 뽑는다.** 쿨다운으로 활성화에 실패한 공격(`Activate Ability And Wait` → `Failed`)이나 데코레이터에 막힌 자식은 건너뛰고, **지금 쓸 수 있는 공격 중 하나**가 나온다. 엔진은 데코레이터에 막힌 자식도 실패로 다시 `GetNextChildHandler()` 를 부르므로 같은 경로로 걸러진다.
+- **실패하면 남은 자식 중에서 다시 뽑는다.** 쿨다운 데코레이터 등 데코레이터에 막힌 자식이나 활성화에 실패한 공격(`Activate Ability And Wait` → `Failed`)은 건너뛰고, **지금 쓸 수 있는 공격 중 하나**가 나온다. 엔진은 데코레이터에 막힌 자식도 실패로 다시 `GetNextChildHandler()` 를 부르므로 같은 경로로 걸러진다.
 - **대안이었던 방식 — 블랙보드 인덱스 + 데코레이터**(BP 태스크로 랜덤 정수를 쓰고 자식마다 `AttackIndex == N`): 뽑힌 공격이 쿨다운이면 **다른 공격으로 넘어가지 못하고** 시퀀스 전체가 실패해 보스가 한 박자 멍하니 선다. 블랙보드 키·태스크도 하나씩 늘어 "분기는 조건으로만, 상태 변수 없이" 원칙과도 어긋나 택하지 않았다.
 - 구현: `GetNextChildHandler()` 오버라이드 + **이번 실행에서 시도한 자식을 비트마스크로 노드 메모리**에 기록(엔진 `SimpleParallel` 처럼 `FBTCompositeMemory` 확장). 노드에 들어올 때(`NotInitialized`)마다 비운다. 인스턴스화·블랙보드 키 불필요. 자식은 **최대 32개**.
 - **자식의 `Observer Aborts = Lower Priority` 는 고를 수 없다**(`CanAbortLowerPriority() = false`, 엔진 `Sequence`·`SimpleParallel` 과 같은 처리). 실행 순서가 무작위라 "낮은 우선순위"가 성립하지 않는다.
@@ -515,7 +508,7 @@ bUseControllerDesiredRotation = true;
 
 ### 시야 판정 — `UCBBTDecorator_HasLineOfSight`
 
-**폰 중심 → 블랙보드 타겟 중심**이 벽에 막히지 않았으면 통과. `Inverse Condition` 이면 "안 보일 때". 원거리 공격의 "쏠 수 있는가" 조건이다.
+**폰 중심 → 블랙보드 타겟 중심**이 벽에 막히지 않았으면 통과. `Inverse Condition` 이면 "안 보일 때". 보스 공격의 "칠 수 있는가" 조건이다(원거리 묶음·근접 공격 묶음에 하나씩).
 
 - **퍼셉션 시야 감각을 쓰지 않는 이유**: 시야 감각은 **전방 120° 부채꼴 + 반경(발견 1500 / 상실 2000)** 이 섞인 "발견" 판정이다. 타겟이 등 뒤나 멀리 있으면 벽이 없어도 "안 보임"이 되어 원거리 공격이 엉뚱하게 막힌다. 보스는 타겟을 인지 밖에서도 유지하므로(→ [보스의 타겟 유지](#보스의-타겟-유지--acboutlawcontroller)) 인지 여부와 쏠 수 있는지는 다른 질문이다.
 - **Weapon 채널 — `UCBAbilitySystemLibrary::IsBlockedByWall()`**. 투사체가 Weapon 채널 스윕으로 벽에 막히므로 **"보인다 = 탄이 지나간다"** 가 같은 기준이 된다. 무기 트레이스·영역 공격의 벽 검사와도 같은 함수다 → [Combat.md](Combat.md).
@@ -529,20 +522,20 @@ bUseControllerDesiredRotation = true;
 
 플레이어가 전부 근접이라 보스가 한 명을 때리는 동안 나머지가 등 뒤를 치면 너무 쉬워진다. **이건 타겟팅으로 풀리지 않는다** — 누구를 노리든 나머지는 옆·뒤에 있다. 그래서 "뒤에 있으면 맞는 공격"을 조건부로 고르게 한다.
 
-- **퍼셉션이 아니라 실제 위치로 판정한다.** 시야는 전방 120° 이고, 가만히 서서 때리는 플레이어는 소리가 없어 인지되지 않는다(→ 위 [두 감각의 역할 분리](#두-감각의-역할-분리)). 등 뒤에 붙은 플레이어가 정확히 그 경우다.
+- **퍼셉션이 아니라 실제 위치로 판정한다.** 인지는 "누가 있는지"만 알려 주고 지금 등 뒤에 있는지는 알려 주지 않는다. 등 뒤에 가만히 붙은 플레이어는 때리기 전까지는 인지조차 되지 않는다(시야 전방 120°, 정지 = 무소음 → 위 [세 감각의 역할 분리](#세-감각의-역할-분리)).
 - **후보는 서버의 `GetPlayerControllerIterator` → 폰, `IsDead()` 제외.** 스포너의 인원 집계(→ [Spawner.md](Spawner.md))와 같은 방식이다. 보스의 적이 플레이어뿐이라 진영 검사는 생략했다 — 플레이어가 아닌 적(소환수 등)이 생기면 진영 기준(`GetAttitude == Hostile`)으로 바꾼다.
 - **판정**: 수평 거리 ≤ `Radius` 이고 `Dot(정면, 보스→플레이어) < 0`(뒤쪽 반원). 높이는 무시한다(`Update Target Distance` 와 같은 수평 기준). 중심 간 거리이므로 **`Radius` 는 보스 캡슐 반경을 포함한 값**으로, 등 뒤 대응 공격이 닿는 거리에 맞춘다(기본 300).
 - **선택 시점 계산·중단 없음.** 위치는 블랙보드 값이 아니라 변화를 감지할 수 없고, 진행 중인 공격을 끊어서도 안 된다(`HasLineOfSight` 와 같은 처리). 반전은 엔진 `Inverse Condition`.
-- **1~4인에 저절로 맞는다.** 위치 판정이라 아무도 뒤에 없으면 고르지 않고, 솔로는 혼자 뒤로 돌 때만 고른다. 빈도는 그 공격의 GAS 쿨다운이 정한다.
+- **1~4인에 저절로 맞는다.** 위치 판정이라 아무도 뒤에 없으면 고르지 않고, 솔로는 혼자 뒤로 돌 때만 고른다. 쿨다운이 없어 빈도는 근접 무작위 선택이 정한다(→ [전투 사이클 (Outlaw)](#전투-사이클-outlaw)).
 
 **채택하지 않은 것**
 
 | 안 | 이유 |
 |---|---|
-| 퍼셉션 인지 목록에서 찾기 | 등 뒤에서 가만히 때리는 플레이어가 빠진다 (위) |
+| 퍼셉션 인지 목록에서 찾기 | 때리기 전의 등 뒤 플레이어가 빠지고, 인지돼도 위치는 따로 봐야 한다 (위) |
 | 서비스 + 블랙보드 키 | 가지를 고를 때 한 번이면 충분하고, 공격을 끊는 중단이 필요 없다 |
 | 각도 파라미터 | 뒤쪽 반원(정면 기준 90° 밖)으로 고정. 보스마다 정면 공격 폭이 달라 좁혀야 할 근거가 생기면 추가 |
-| 최소 인원 조건 | 빈도는 쿨다운이 정하고, 인원 차이는 위치 판정이 만든다 |
+| 최소 인원 조건 | 빈도는 무작위 선택이 정하고, 인원 차이는 위치 판정이 만든다 |
 | 벽 검사 | 반경이 근접 사거리라 사이에 벽이 끼는 경우가 사실상 없다. 공격 판정에도 벽 검사가 있다 |
 | 현재 타겟 제외 | 타겟 자신이 등 뒤로 돌아가도 등 뒤 공격이 맞는 대응이다 |
 | 플레이어 순회 공용 함수 추출 | 스포너와 루프가 겹치지만 몇 줄이고, 추출하면 동작 중인 스포너를 고쳐야 한다. 세 번째 사용처가 생기면 `UCBAbilitySystemLibrary` 로 묶는다 |
@@ -592,25 +585,26 @@ bUseControllerDesiredRotation = true;
 
 ## 전투 사이클 (Rogue)
 
-**멀면 추격 → 가까우면 경계(주시하며 원호 이동) → 잠깐 대기 → 공격 → 반복.** 분기 조건으로만 표현하고 상태 변수를 두지 않는다.
+**멀면 쫓아가서 바로 공격 → 가까우면 경계(주시하며 원호 이동) → 잠깐 대기 → 공격 → 반복.** 분기 조건으로만 표현하고 상태 변수를 두지 않는다. 아래는 `BT_Rogue_Dog`(블랙보드 `BB_Rogue_Dog`: `TargetActor`·`MoveLocation`·`bIsStaggered`).
 
 ```
-Root
-└─ Selector
-   ├─ Sequence "추격"        [Deco: IsAtLocation(TargetActor, 근접 반경) ❌]   ← 멀 때
-   │   └─ MoveTo (TargetActor)
-   │
-   └─ Sequence "경계/공격"   [Deco: IsAtLocation(TargetActor, 근접 반경) ✅]   ← 가까울 때
-       ├─ Sequence "경계"     + Service: Strafe Focus (TargetActor)
-       │   ├─ Run EQS Query (EQS_CombatPosition, Random Best 25% → MoveLocation)
-       │   ├─ MoveTo (MoveLocation, Allow Strafe ✅)      ← 주시하며 원호 이동
-       │   └─ Wait (WaitTime ± RandomDeviation)           ← 공격까지의 템포
-       └─ Sequence "공격"
-           ├─ MoveTo (TargetActor, AcceptableRadius = 공격 사거리, Allow Strafe ❌)
-           └─ Activate Ability And Wait (Ability.Combat.Attack.Basic)
+Root  Selector  [Service: Update Target]
+├─ [bIsStaggered Is Set, Aborts = Both] Sequence → Wait (5)                         ← 경직
+├─ [IsAtLocation(TargetActor, 500) 반전, Aborts = None] Sequence "Chase-Attack"     ← 멀 때 (500 밖)
+│   ├─ MoveTo (TargetActor, AcceptableRadius = 200)
+│   └─ Activate Ability And Wait (Ability.Combat.Attack.Basic)
+└─ Sequence   (데코레이터 없음 = 나머지, 500 안)
+    ├─ Sequence "Strafe"   + Service: Strafe Focus (TargetActor, Walk)
+    │   ├─ Run EQS Query (EQS_CombatPosition, Random Best 25% → MoveLocation)
+    │   ├─ MoveTo (MoveLocation)                       ← 주시하며 원호 이동 (회전은 Strafe Focus 가 맡음)
+    │   └─ Wait (1.0 ± 0.5)                            ← 공격까지의 템포
+    └─ Sequence "Approch-Attack"
+        ├─ MoveTo (TargetActor, AcceptableRadius = 200)
+        └─ Activate Ability And Wait (Ability.Combat.Attack.Basic)
 ```
 
-- **순서는 Sequence 가 보장한다.** 경계 → 공격이 한 시퀀스 안에 묶여 있어 **공격 전에 반드시 경계를 거친다.** "방금 공격했다"를 나타내는 상태 변수도, 재공격을 막는 쿨다운 게이트도 필요 없다 — 구조가 그 역할을 한다.
+- **멀면 경계 없이 쫓아가서 친다.** 추격 가지가 `MoveTo` 와 공격을 한 시퀀스로 묶는다 — 처음 붙을 때는 추격 공격, 그 뒤로는 가까운 가지의 경계 → 공격이 반복된다. 추격 가지 데코레이터는 중단이 없어(`IsAtLocation` 은 이동 중 재평가가 안 됨 → [거리 판정](#거리-판정--끊는-건-이동뿐-공격은-끊지-않는다)), 들어서면 공격까지 마치고 다음 판단에서 거리를 다시 본다.
+- **순서는 Sequence 가 보장한다.** 가까울 때는 경계 → 공격이 한 시퀀스 안에 묶여 있어 **공격 사이에 반드시 경계를 거친다.** "방금 공격했다"를 나타내는 상태 변수도, 재공격을 막는 쿨다운 게이트도 필요 없다 — 구조가 그 역할을 한다.
   - 그래서 **공격 어빌리티에 쿨다운 GE 가 없어도 된다.** 실제로 `GA_Rogue_Attack_Basic` 에는 없다. GAS 쿨다운은 어빌리티 개별 제약용으로 남겨두고, 전투 리듬은 BT 가 소유한다. → [Abilities.md](Abilities.md)
 - **공격 사이 템포 = 경계 브랜치 끝의 `Wait` 노드.** 엔진 `BTTask_Wait` 가 `FRandRange(max(0, WaitTime − RandomDeviation), WaitTime + RandomDeviation)` 로 매 반복 새로 뽑으므로, **`RandomDeviation` 하나로 템포가 랜덤해진다**(예: 1.0 ± 0.5 → 0.5~1.5초). 커스텀 노드도 코드도 필요 없다.
 - ⚠️ **공격을 확률로 건너뛰게 만들면 안 된다.** 공격은 Sequence 의 자식이라 여기서 실패하면 **시퀀스 전체가 Failed** 가 되고, 부모 Selector 에는 남은 형제가 없어 **적을 눈앞에 두고 전투 브랜치 자체가 실패로 빠진다.** 리듬을 흔들 자리는 `Wait` 노드이지 분기 조건이 아니다.
@@ -623,57 +617,54 @@ Root
 
 ## 전투 사이클 (Outlaw)
 
-**거리로 세 구역을 나눈다 — 아주 멂(1500 이상) → 접근, 중간(700~1500) → 원거리·돌진, 가까움(700 미만) → 붙어서 근접. 공격 뒤엔 타겟을 주시하며 대기 → 반복.** 이동 중 거리가 구역을 넘으면 **이동만 끊고** 다시 고른다. Rogue 와 달리 원을 그리는 경계 이동(EQS)이 없다 — 보스는 제자리에서 버티며 몸만 돌린다.
+**거리로 세 구역을 나눈다 — 아주 멂(2000 이상) → 추격, 중간(1000~2000) → 원거리·돌진, 가까움(1000 미만) → 붙어서 근접 → 주시하며 대기 → 반복.** 이동 중 거리가 구역을 넘으면 **이동만 끊고** 다시 고른다. Rogue 와 달리 원을 그리는 경계 이동(EQS)이 없다 — 보스는 제자리에서 버티며 몸만 돌린다. 아래는 `BT_Outlaw_Hulk`(블랙보드 `BB_Outlaw_Hulk`: `TargetActor`·`TargetDistance`).
 
-| 어빌리티 | 태그 | 구역 |
-|---|---|---|
-| 기본 근접 | `Ability.Combat.Attack.Basic` | 근접 |
-| 특수 근접 | `Ability.Combat.Attack.Skill.A` | 근접 |
-| 기본 원거리 | `Ability.Combat.Attack.Skill.B` | 중간 (시야 필요) |
-| 특수 원거리 | `Ability.Combat.Attack.Skill.C` | 중간 (시야 필요) |
-| 돌진 | `Ability.Combat.Attack.Skill.D` | 중간 (시야 필요 — 아래) |
+| 어빌리티 | 태그 | 구역 | BT 쿨다운 |
+|---|---|---|---|
+| 기본 근접 (콤보) | `Ability.Combat.Attack.Basic` | 근접 | — |
+| 특수 근접 | `Ability.Combat.Attack.Skill.A` | 근접 | 5초 |
+| 등 뒤 대응 (360 공격) | `Ability.Combat.Attack.Skill.E` | 근접 (등 뒤 300 안) | — |
+| 기본 원거리 | `Ability.Combat.Attack.Skill.C` | 중간 | 5초 (+ 묶음 2초) |
+| 특수 원거리 (3연발) | `Ability.Combat.Attack.Skill.B` | 중간 | 10초 (+ 묶음 2초) |
+| 돌진 | `Ability.Combat.Attack.Skill.D` | 중간 | 묶음 2초 |
 
 ```
-Root  [Service: Update Target] [Service: Update Target Distance → TargetDistance]
-└─ Selector
-   ├─ [bIsStaggered Is Set, Aborts = Lower Priority] Wait                          ← 경직
-   ├─ [TargetActor Is Set] Selector "전투"   (위에서부터 검사)
-   │   │
-   │   ├─ [Is Player Behind (Radius)] Sequence "등 뒤 대응"                         ← ⓪ 구역과 무관
-   │   │   ├─ Activate Ability And Wait (등 뒤 대응 스킬 — 회전 베기 등)
-   │   │   └─ Wait (템포 ± 편차)   + Service: Strafe Focus (TargetActor)
-   │   │
-   │   ├─ MoveTo (TargetActor)   [TargetDistance ≥ 1500, Aborts = Self]   + Service: Movement Speed (Sprint)
-   │   │                         ← ① 아주 멂: 전력질주로 접근하다 1500 안으로 들어오는 순간 끊고(질주 해제) 다시 고름
-   │   │
-   │   ├─ [TargetDistance ≥ 700, Aborts = None]  Sequence "원거리"               ← ② 700~1500
-   │   │   ├─ Selector
-   │   │   │   ├─ CB Random Selector
-   │   │   │   │   ├─ [Has Line Of Sight] Activate Ability And Wait (Skill.D 돌진)
-   │   │   │   │   ├─ [Has Line Of Sight] Activate Ability And Wait (Skill.C)
-   │   │   │   │   └─ [Has Line Of Sight] Activate Ability And Wait (Skill.B)
-   │   │   │   └─ MoveTo (TargetActor)   [TargetDistance ≥ 650, Aborts = Self]
-   │   │   │                             ← 시야 없음·전부 쿨다운 → 접근하다 근접 구역에 들어오면 끊음
-   │   │   └─ Wait (템포 ± 편차)   + Service: Strafe Focus (TargetActor, SpeedAbilityTag 비움)
-   │   │
-   │   └─ Sequence "근접"   (데코레이터 없음 = 나머지, 700 미만)                ← ③
-   │       ├─ MoveTo (TargetActor, AcceptableRadius = 근접 사거리)   [TargetDistance < 750, Aborts = Self]
-   │       │                             ← 쫓다가 750 밖으로 도망가면 끊음
-   │       ├─ CB Random Selector
-   │       │   ├─ Activate Ability And Wait (Skill.A)
-   │       │   └─ Activate Ability And Wait (Basic)
-   │       └─ Wait (템포 ± 편차)   + Service: Strafe Focus
-   │
-   └─ [TargetActor Is Not Set] Wait                                                ← 타겟 없음
+Root  Selector  [Service: Update Target] [Service: Update Target Distance → TargetDistance]
+├─ [Check Gameplay Tags On Actor: Status.Combat.Intro, Aborts = None] Wait (5)     ← 등장 연출
+├─ [TargetActor Is Not Set, Aborts = Self] Wait (5)                                 ← 타겟 없음
+├─ MoveTo (TargetActor, 500)   [TargetDistance ≥ 2000, Aborts = Self]   + Service: Movement Speed (Sprint)
+│                                                                                    ← ① 아주 멂: 전력질주로 추격
+├─ [TargetDistance ≥ 1000, Aborts = None] Selector "원거리"                         ← ② 1000~2000
+│   ├─ [Cooldown 2초, Aborts = Lower Priority] [Has Line Of Sight] Sequence
+│   │   └─ CB Random Selector
+│   │       ├─ [Cooldown 5초] Activate Ability And Wait (Skill.C 기본 원거리)
+│   │       ├─ [Cooldown 10초] [Loop 3] Activate Ability And Wait (Skill.B 특수 원거리)
+│   │       └─ Activate Ability And Wait (Skill.D 돌진)
+│   └─ MoveTo (TargetActor, 500)   [TargetDistance ≥ 1000, Aborts = Self]   + Service: Movement Speed (Sprint)
+│                                  ← 쿨다운·시야 없음 → 전력질주로 접근하다 근접 구역에 들어오면 끊음
+└─ Sequence "근접 전투"   + Service: Strafe Focus (TargetActor, Walk)               ← ③ 나머지 = 1000 미만
+    ├─ MoveTo (TargetActor, 300)   [TargetDistance < 1000, Aborts = Self]           ← 쫓다가 1000 밖으로 도망가면 끊음
+    └─ [Has Line Of Sight] Sequence
+        ├─ Rotate To Face BB Entry (TargetActor, 30°)
+        ├─ CB Random Selector
+        │   ├─ Activate Ability And Wait (Basic 콤보)
+        │   ├─ [Is Player Behind (300)] Activate Ability And Wait (Skill.E 360 공격)
+        │   └─ [Cooldown 5초] Activate Ability And Wait (Skill.A 특수 근접)
+        └─ Wait (1.5 ± 0.5)
 ```
 
 거리 데코레이터는 전부 엔진 **`Blackboard` 데코레이터**(`TargetDistance`, `Key Query` = `Is Greater Than Or Equal To` / `Is Less Than`, `Notify Observer` = **`On Result Change`**)다. 거리는 `Update Target Distance` 서비스가 쓴다(아래 "거리 판정").
 
-### 등 뒤 대응 — 구역보다 먼저
+### 등장 연출 — 태그를 직접 본다
 
-- **근접 구역 안이 아니라 "전투" 의 첫 자식이다.** 타겟이 700 밖이면 보스는 원거리 구역을 고르는데, 그동안 다른 플레이어가 등 뒤에 붙어 있을 수 있다. 근접 구역 안에 두면 그때 대응하지 못한다.
-- **빈도는 그 스킬의 GAS 쿨다운이 정한다.** 쿨다운 중이면 활성화 `Failed` → 시퀀스 실패 → Selector 가 다음 구역으로 넘어간다(원거리 스킬과 같은 흐름). 쿨다운 GE 가 없으면 등 뒤에 누가 있는 한 이것만 반복한다.
-- **끝에 `Wait` + `Strafe Focus`.** 회전 베기가 180° 로 끝나면 뒤를 본 채 서 있게 되는데, 대기 동안 타겟 쪽으로 몸을 돌린다. 다른 구역과 템포도 맞춘다.
+- 맨 앞 가지가 엔진 **`Check Gameplay Tags On Actor`** 로 보스 자신의 `Status.Combat.Intro`(등장 어빌리티가 활성인 동안 소유)를 본다. 캐릭터가 `IGameplayTagAssetInterface` 로 ASC 태그를 넘겨주므로(→ [GameplayTags.md](../Foundation/GameplayTags.md)) 블랙보드 키·컨트롤러 코드가 필요 없다.
+- **중단이 없어(Aborts = None) 이 가지를 고르는 순간에만 본다.** 다른 가지가 돌던 중에 등장이 시작되면 그 가지가 끝날 때까지 반영되지 않는다. `Wait` 는 5초 고정이라 연출이 먼저 끝나도 남은 대기 시간만큼 서 있을 수 있다.
+- 보스는 피격 경직이 없어(→ [피격 경직](#피격-경직-stagger)) 경직 분기를 두지 않는다. 기절은 BT 가 아니라 기절 어빌리티가 공격을 차단해 처리한다 → [Stun.md](Stun.md).
+
+### 등 뒤 대응 — 근접 무작위 선택지 하나
+
+- **근접 공격 무작위 셀렉터의 한 자식이다.** 뒤 300 안에 플레이어가 없으면 데코레이터가 막아 남은 근접 공격 중에서 뽑힌다. 반경이 근접 거리라 보스가 근접 구역(1000 미만)에서 공격할 때만 고려된다 — 원거리 구역을 고르는 동안에는 등 뒤 플레이어에게 대응하지 않는다.
+- **쿨다운이 없다.** 등 뒤에 누가 있으면 근접 공격 셋 중 하나로 같은 확률에 뽑힌다.
 - 판정·근거 → 위 [등 뒤 판정](#등-뒤-판정--ucbbtdecorator_isplayerbehind).
 
 ### 거리 판정 — 끊는 건 이동뿐, 공격은 끊지 않는다
@@ -682,38 +673,38 @@ Root  [Service: Update Target] [Service: Update Target Distance → TargetDistan
 
 - **가지 선택용 데코레이터는 `Aborts = None`, `MoveTo` 에 붙은 것만 `Aborts = Self`.** 가지 전체에 중단을 걸면 **공격 도중** 플레이어가 경계를 넘을 때 공격 어빌리티가 캔슬된다(`Activate Ability And Wait` 의 `AbortTask` → `CancelAbilityHandle`). 이동만 끊어야 공격·대기가 끝까지 재생된다 — 거리 변화는 공격이 끝난 뒤 다음 판단에서 반영된다.
 - **끊긴 `MoveTo` → 그 가지 실패 → 부모가 즉시 다시 고른다.** 서비스가 최신 거리를 써 두었으므로 맞는 구역으로 넘어간다.
-- **근접은 마지막 가지라, 거기서 끊기면 "전투" Selector 가 통째로 실패한다.** 그래서 "타겟 없음" `Wait` 에 **`TargetActor Is Not Set`** 을 붙인다 — 타겟이 있으면 루트가 곧바로 실패하고 다음 틱에 처음부터 다시 판단한다. 이 데코레이터가 없으면 타겟을 두고 대기 시간만큼 멍하니 선다.
-- **경계에 여유(히스테리시스)를 둔다** — 원거리 → 근접 전환은 650, 근접 → 원거리 전환은 750. 같은 700 이면 플레이어가 경계에서 오갈 때 두 `MoveTo` 가 번갈아 끊기며 떤다. 가지 **선택** 기준(700·1500)과 **중단** 기준(650·750·1500)이 다른 이유다.
+- **"타겟 없음" `Wait` 는 `TargetActor Is Not Set` + `Aborts = Self`.** 대기 중에 타겟이 잡히면 대기를 다 채우지 않고 곧바로 다시 판단한다.
+- **원거리·근접 경계가 같은 1000 이다(여유 없음).** 원거리 쪽 접근은 1000 미만이 되면, 근접 쪽 접근은 1000 이상이 되면 끊긴다. 플레이어가 경계에서 오가면 두 `MoveTo` 가 번갈아 끊길 수 있다 — 떨림이 보이면 중단 기준만 650·750 처럼 벌린다(가지 선택 기준은 1000 그대로).
 - **`On Result Change`** 라 기준선을 넘는 순간에만 반응한다. `On Value Change` 면 0.1 초마다 값이 바뀔 때마다 재평가를 요청한다(결과는 같지만 낭비).
-- 원거리·아주 먼 구역의 `MoveTo` 는 도착하기 전에 데코레이터가 먼저 끊으므로 `AcceptableRadius` 가 의미 없다. **근접 `MoveTo` 만** 공격 사거리로 둔다 — 이미 사거리 안이면 즉시 성공하고 바로 친다. 접근과 공격이 **한 시퀀스 안**이라 예전의 "도착했는데 근접 판정이 안 되는 경계 진동"(접근 가지와 공격 가지가 같은 반경으로 갈릴 때의 문제)이 생기지 않는다.
-- 블랙보드(`BB_Outlaw_Hulk`)에 `TargetActor`(Object)·`bIsStaggered`(Bool)·**`TargetDistance`(Float)** 키가 있어야 한다.
+- 추격·원거리 쪽 `MoveTo` 는 도착(500)하기 전에 데코레이터가 먼저 끊으므로 `AcceptableRadius` 가 의미 없다. **근접 `MoveTo`(300)만** 공격 사거리다 — 이미 그 안이면 즉시 성공하고 바로 친다. 접근과 공격이 **한 시퀀스 안**이라 "도착했는데 근접 판정이 안 되는 경계 진동"(접근 가지와 공격 가지가 같은 반경으로 갈릴 때의 문제)이 생기지 않는다.
 
 ### 스킬 선택
 
-- **쿨다운 + 랜덤 셀렉터.** 쿨다운 중인 스킬은 활성화 실패 → 남은 것 중에서 다시 뽑힌다. 쿨다운 데코레이터는 두지 않는다(위 공통 규칙). 각 스킬 GA BP 에 **쿨다운 GE** 가 있어야 리듬이 생긴다.
-  - **기본 원거리(Skill.B)에도 짧은 쿨다운을 둔다.** 없으면 중간 구역에서 항상 성공해, 플레이어가 700~1500 에 있는 한 **보스가 서서 쏘기만** 한다. 쿨다운이 있으면 그 사이 폴백 `MoveTo` 로 다가와 근접전으로 넘어간다.
-  - 태스크에는 **정확한 태그**를 넣는다. 부모 태그(`Ability.Combat.Attack`)는 여러 스펙에 매칭되어 첫 번째 것만 발동된다.
+- **쿨다운 데코레이터 + 랜덤 셀렉터.** 스킬 GA 에는 쿨다운 GE 가 없고, 쿨다운은 BT 의 엔진 `Cooldown` 데코레이터가 가진다(위 표). 쿨다운 중인 자식은 데코레이터가 막아 → 남은 것 중에서 다시 뽑힌다.
+  - 엔진 `Cooldown` 은 **노드 단위**라 같은 스킬을 다른 가지에서도 쓰면 쿨다운을 공유하지 않는다. 스킬마다 쓰는 곳이 하나인 지금 구조에서는 문제없다.
+- **원거리 묶음 전체에 쿨다운 2초(`Aborts = Lower Priority`).** 한 번 쏘면 2초 동안 원거리 가지가 실패해 옆의 폴백 `MoveTo` 로 다가온다 — **보스가 서서 쏘기만 하지 않는다.** 쿨다운이 끝나면 데코레이터가 폴백 `MoveTo` 를 끊고(Lower Priority) 다시 원거리를 고른다.
+- **특수 원거리는 `Loop 3`** — 한 번 뽑히면 3연발.
+- 태스크에는 **정확한 태그**를 넣는다. 부모 태그(`Ability.Combat.Attack`)는 여러 스펙에 매칭되어 첫 번째 것만 발동된다.
 - **폴백 `MoveTo` 는 랜덤 셀렉터 바깥 `Selector` 에 둔다.** 안에 넣으면 공격을 쓸 수 있을 때도 무작위로 접근을 고른다.
-- **시야가 없으면 원거리 대신 접근한다.** 원거리 공격 셋에 `Has Line Of Sight` 를 붙여, 기둥 뒤에 숨은 타겟에게는 랜덤 셀렉터가 전부 실패 → 폴백 `MoveTo` 가 **경로 탐색으로 벽을 돌아** 다가간다.
-  - **돌진에도 붙인다.** 돌진은 시작 순간 방향을 고정한 **직선**이라(→ [Montage.md](Montage.md) "일정 속도 돌진"), 기둥 뒤 타겟에게 돌진하면 기둥에 막혀 멈춘다(막힘 → 정지 섹션). "벽에 들이받는" 연출을 원하면 돌진에서만 데코레이터를 뺀다 — BT 데이터 차이라 코드와 무관하다.
-- **돌진 거리는 1500 을 덮어야 한다.** 돌진은 `Speed × 돌진 구간 길이` 까지만 가므로 구역 끝(1500)에서 쓰면 도중에 선다(예: 구간 1초면 `Speed` ≈ 1500).
+- **시야가 없으면 원거리 대신 접근한다.** 원거리 묶음에 `Has Line Of Sight` 하나를 붙여, 기둥 뒤에 숨은 타겟에게는 묶음이 통째로 실패 → 폴백 `MoveTo` 가 **경로 탐색으로 벽을 돌아** 다가간다.
+  - **돌진도 묶음 안이라 함께 막힌다.** 돌진은 시작 순간 방향을 고정한 **직선**이라(→ [Montage.md](Montage.md) "일정 속도 돌진"), 기둥 뒤 타겟에게 돌진하면 기둥에 막혀 멈춘다.
+  - 근접 공격 묶음에도 같은 데코레이터가 하나 붙어 있다.
+- **돌진 거리는 2000 을 덮어야 한다.** 돌진은 `Speed × 돌진 구간 길이` 까지만 가므로 구역 끝(2000)에서 쓰면 도중에 선다.
 
 ### 회전·대기
 
 - **추격 중 회전은 따로 걸지 않는다.** `MoveTo` 는 `bOrientRotationToMovement` 로 진행 방향을 보는데, 진행 방향이 곧 타겟 방향이다. 타겟이 숨어도 액터 참조로 추격하므로(→ [보스의 타겟 유지](#보스의-타겟-유지--acboutlawcontroller)) 경로가 벽을 돌아가도 끝까지 따라간다.
-- **`Strafe Focus` 는 `Wait` 에만 붙인다**(근접·원거리 모두). 시퀀스 전체에 붙이면 공격 몽타주 도중에도 컨트롤러 포커스가 몸을 타겟 쪽으로 계속 돌려 **공격이 플레이어를 따라 휜다** — 옆으로 피할 수 없는 보스가 된다. 공격 시점의 정렬은 모션 워핑이 한다. `Wait` 가 끝나면 `OnCeaseRelevant` 가 회전 모드·`Status.Movement.Strafe` 를 복원한다.
-- **`SpeedAbilityTag` 는 비운다.** 대기 중에는 이동하지 않으므로 걷기 속도를 걸 일이 없다.
+- **`Strafe Focus` 는 근접 시퀀스 전체에 붙어 있다** — 접근·공격·대기 동안 포커스(Gameplay 우선순위)가 타겟에 걸린다. 공격 직전에는 `Rotate To Face BB Entry`(30° 이내면 통과)로 정면을 맞춘다.
+  - ⚠️ 시퀀스 전체라 **공격 몽타주 도중에도** 컨트롤러 포커스가 몸을 타겟 쪽으로 돌릴 수 있다. 공격이 플레이어를 따라 휘어 보이면 `Strafe Focus` 를 `Wait` 에만 붙이고(이탈 시 `OnCeaseRelevant` 가 회전 모드를 복원) 공격 정렬은 `Rotate To Face` 와 모션 워핑에 맡긴다.
+- 원거리 묶음 뒤에는 `Wait` 가 없다 — 묶음 쿨다운 2초 동안 폴백 접근이 그 자리를 채운다.
 - **공격 → `Wait` 순서.** 공격 직전에 거리가 확정된 시점이라 곧바로 친다. 반대로 두면 대기 중 타겟이 빠져나간 뒤 헛스윙한다.
 
 ## 다음 단계
 
-- **[에디터]** 보스 전력질주: `GA_AI_Sprint` 생성·Hulk 로드아웃 부여, `DA_Movement_Outlaw_Hulk` 에 Sprint 개이트 항목, `BT_Outlaw_Hulk` ① `MoveTo` 에 `Movement Speed` 서비스 (→ [노드 실행 중 이동 속도](#노드-실행-중-이동-속도--ucbbtservice_movementspeed) "에디터 작업"). 질주 모션(발 미끄러짐) 확인.
-
-- **[에디터]** `BT_Outlaw_Hulk` 를 위 [전투 사이클 (Outlaw)](#전투-사이클-outlaw) 대로 배선(세 구역·거리 서비스·랜덤 셀렉터·시야), `BB_Outlaw_Hulk` 에 `TargetDistance`(Float) 키 추가, `BP_OutlawController` 의 `RecentDamageBonus` = 1.5(`SwitchScoreRatio` 는 보스에서 쓰이지 않음 — [보스의 타겟 유지](#보스의-타겟-유지--acboutlawcontroller)), 스킬 GA BP 쿨다운 GE(Skill.B 포함) 확인.
-
-- **[C++ + 에디터]** 등 뒤 대응 스킬: `Ability`/`Action`/`Cooldown.Combat.Attack.Skill.E` 네이티브 태그 추가(A~D 와 같은 방식 → [GameplayTags.md](../Foundation/GameplayTags.md)) → 휩쓸기 몽타주 복제 + `Rotate By` 구간(→ [Montage.md](Montage.md)) → GA BP(쿨다운 GE 포함) → `BT_Outlaw_Hulk` 의 "전투" 첫 자식으로 배선(위 [등 뒤 대응](#등-뒤-대응--구역보다-먼저)), `Is Player Behind` 의 `Radius` 를 그 공격의 사거리에 맞춤.
+- **[애님]** 보스 질주 모션 확인: 질주 클립이 없어 속도만 오르면 발이 미끄러질 수 있다(→ [노드 실행 중 이동 속도](#노드-실행-중-이동-속도--ucbbtservice_movementspeed)).
+- **[미정]** 보스 기절 중 이동 정지: 보스 BT 에 기절 분기가 없어 기절 중에는 공격만 막히고 이동 가지는 돌 수 있다. 필요하면 맨 앞에 `Status.Combat.Stunned` 를 보는 `Check Gameplay Tags On Actor` 가지(`Aborts = Lower Priority`)를 둔다.
+- **[미정]** 보스 원거리·근접 경계 여유(위 [거리 판정](#거리-판정--끊는-건-이동뿐-공격은-끊지-않는다)) — 떨림이 보이면 중단 기준만 벌린다.
 - **[에디터]** `EQS_CombatPosition` 에 `Dot` 필터 추가(후진 후보 제거) → 경계용 반경 파라미터 조정.
-- **[에디터]** `BT_Rogue` 루트에 `Update Target` 서비스 배치(안 붙이면 재선정이 퍼셉션 이벤트에만 의존한다).
 - **[C++]** 여러 마리 스폰 테스트 후, 타겟 앞에 뭉치면 공격 브랜치의 접근 지점도 EQS 로 전환(아군 회피 테스트 추가).
 - **[C++]** 위협도 테이블(누적·감쇠·도발 — `ScoreTarget()` 오버라이드), 수색(LastKnownLocation).
 - **[미정]** 공격 후 후퇴 브랜치 (위 전투 사이클의 미구현 항목).

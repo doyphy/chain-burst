@@ -114,7 +114,7 @@ InitNewPlayer(Options)
 ```
 [클라] 닉네임 입력 확정
  └ ACBChaserController::Server_RequestSetNickname(원본 문자열)
-     ├ 로비 게임모드 없음 / 이미 준비 완료  → 무시 (무기·의상 변경과 같은 정책)
+     ├ 로비 게임모드 없음 / 이미 준비 완료  → 무시 (무기 변경과 같은 정책. 의상은 서버 검사 없이 준비 중 위젯만 잠금)
      ├ ACBGameModeBase::Auth_SanitizeNickname()   ← 다듬기 + 중복 해소
      └ ChangeName()  →  SetPlayerName()  →  OnRep_PlayerName()  →  OnPlayerNicknameChanged
 ```
@@ -359,7 +359,7 @@ AutoManageActiveCameraTarget  → 뷰 타겟 확정 → Local_RequestFadeIn()
 |---|---|
 | `WBP_CB_Lobby_Main` | 스택에 들어가는 **하나**. 선언 3함수 소유, 머리 위 배치 계산 |
 | `WBP_CB_Lobby_PlayerMenu` | 머리 위 진입 버튼(의상·직업) — **로컬 플레이어 것 하나뿐** |
-| `WBP_CB_CosmeticSelector` | 의상 버튼을 누르면 열리는 부위 4개 × 화살표 → [Cosmetic.md](../Presentation/Cosmetic.md) |
+| `WBP_CB_CostumeSelector` | 의상 버튼을 누르면 열리는 부위 4개 × 화살표 → [Cosmetic.md](../Presentation/Cosmetic.md) |
 | `WBP_CB_Lobby_Footer` | 하단 준비완료·나가기 |
 
 닉네임 표시는 이 스택 위젯들과 별개다. **발밑 이름표는 `UCBUIComponent`가 캐릭터에 붙이는 `UWidgetComponent`** 이고(버튼이 없어 스택에 올릴 이유가 없다), 로비에서만 생성된다 → [UI.md](../Presentation/UI.md) "로비 발밑 이름표"
@@ -424,11 +424,11 @@ ACBChaserController::Local_EnterCosmeticView()
 - **레벨 진입 페이드 인** — 뷰 타겟 확정 + 캐릭터 준비 완료까지 검은 화면 (모든 레벨 공통)
 - **로비 UI** — `Menu` 레이어 위젯 + 머리 위 투영 배치, 의상 교체 2인 검증 완료 (위 "로비 UI 구성")
 - **로비 준비 완료 → 게임 시작** — `bIsReady` 복제 + `ACBLobbyGameState` 집계 + 호스트 시작 요청 검증 후 `ServerTravel` (위 "준비 완료와 게임 시작")
-- **닉네임 C++ 경로** — 기본 닉네임 부여(`Player1`, `Player2` ...), 다듬기·중복 접미사, 변경 요청 RPC, 변경 신호 (위 "닉네임"). **컴파일까지 확인, 위젯 배선과 실행 검증 남음**
+- **닉네임** — 기본 닉네임 부여(`Player1`, `Player2` ...), 다듬기·중복 접미사, 변경 요청 RPC, 변경 신호 (위 "닉네임"). 입력 위젯 `WBP_CB_PlayerName` 이 `Server_RequestSetNickname` 을 부르고, 이름 표기는 발밑 이름표(`UCBNamePlateWidget`)가 `OnPlayerNicknameChanged` 를 구독
+- **로비 위젯 배선** (`WBP_CB_Lobby_Footer`) — 준비/시작 위젯 스위처, `OnReadyStateChanged`·`OnCharacterLoadedChanged` 구독, `Server_RequestToggleReady`·`Server_RequestStartMatch` 호출
+- **게임플레이 → 로비 복귀** — 인원 재집계(`HandleSeamlessTravelPlayer`), 세션 재개방(`BeginPlay`) (위 "게임플레이에서 돌아올 때")
 
 **미구현**
-- 로비 위젯 배선 (`WBP_CB_Lobby_Footer`) — 준비/시작 위젯 스위처, `OnReadyStateChanged` 구독, 두 RPC 호출
-- **닉네임 UI 배선** — C++ 창구는 완료(위 "닉네임"). 남은 것: 로비 위젯에 입력창(커밋 시 `Server_RequestSetNickname`) + 이름 표기(`GetPlayerName()` + `OnPlayerNicknameChanged` 구독, 구독 직후 현재 값 1회 읽기)
 - 닉네임 로컬 저장 + 로비 입력창 프리필 후 `Server_RequestSetNickname` 1회 전송 — 매번 입력하지 않도록. 서버 수신부는 완료. **접속 URL `?Name=` 방식은 채택하지 않는다** (위 "닉네임")
 
 ## 관련 문서

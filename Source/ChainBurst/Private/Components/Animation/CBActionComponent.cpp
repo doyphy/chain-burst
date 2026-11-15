@@ -77,51 +77,6 @@ UCBCharacterAnimInstance* UCBActionComponent::GetAnimInstance()
 	return GetCachedAnimInstance(CachedAnimInstance) ? CachedAnimInstance.Get() : nullptr;
 }
 
-FGameplayTag UCBActionComponent::SelectBestActionTag(const FGameplayTagContainer& InTags)
-{
-	FGameplayTag BestTag;
-	int32 BestPriority = -1;
-
-	// 태그 순회
-	for (const FGameplayTag& Tag : InTags)
-	{
-		// Action 카테고리에 속하는 태그만 고려
-		if (!Tag.MatchesTag(CBGameplayTags::Action))
-		{
-			continue;
-		}
-
-		// 태그의 우선 순위 가져오기
-		int32 Priority = GetActionPriority(Tag);
-
-		// 가장 우선 순위가 높은 태그 선택
-		if (Priority > BestPriority)
-		{
-			BestPriority = Priority;
-			BestTag = Tag;
-		}
-	}
-
-	return BestTag;
-}
-
-int32 UCBActionComponent::GetActionPriority(FGameplayTag InTag)
-{
-	if (InTag.MatchesTag(CBGameplayTags::Action_Combat_HitReact))
-		return 100;
-
-	if (InTag.MatchesTag(CBGameplayTags::Action_Combat_Block))
-		return 80;
-
-	if (InTag.MatchesTag(CBGameplayTags::Action_Combat_Skill))
-		return 60;
-
-	if (InTag.MatchesTag(CBGameplayTags::Action_Combat_Attack))
-		return 40;
-
-	return 0;
-}
-
 bool UCBActionComponent::PlayMontage(UAnimMontage* InMontage, bool bAffectedByAttackSpeed)
 {
 	if (!InMontage) return false;

@@ -103,7 +103,7 @@ EOS는 **로그인해서 계정 ID를 얻어야** 세션을 만들 수 있다. N
 ```
 [메인 메뉴 버튼] RequestLogin(모드)
  ├ 진행 중이면 무시 / 같은 모드로 로그인돼 있으면 무시
- ├ 모드가 바뀌었으면 Local_ResetLogin() 으로 비우고 새로
+ ├ 모드가 바뀌었거나 이전 시도가 실패했으면 Local_ResetLogin() 으로 비우고 새로
  │
  ├ LAN → Local_AdoptLocalAccount()
  │        └ GetLocalOnlineUserByPlatformUserId 로 자동 등록된 계정 조회
@@ -121,7 +121,7 @@ EOS는 **로그인해서 계정 ID를 얻어야** 세션을 만들 수 있다. N
 
 - **`UCBSessionSubsystem`은 제공자를 모른다.** 계정 ID는 `GetLocalAccountId()`로, 서비스는 `ResolveServices()`로 받아 쓸 뿐이다. **프로젝트에서 EOS 전용 코드는 `CBAuthSubsystem.cpp` 하나뿐이다**
 - **서브시스템 `Initialize()` 에서 로그인하면 안 된다.** 로그인에 `PlatformUserId` 가 필요하고 그건 로컬 플레이어에게서 나오는데, `Initialize()` 는 `SetupInitialLocalPlayer()` 보다 이르다. 메인 메뉴 위젯이 호출하는 지금 구조에서는 이미 로컬 플레이어가 있으므로 문제가 없다
-- **`ResolveServices()`를 Device ID 생성보다 먼저 부르는 이유.** SDK 매니저는 `(설정 이름 × 인스턴스 이름)` 조합으로 플랫폼 핸들을 캐시한다. 온라인 서비스가 먼저 플랫폼을 만들게 해야 같은 핸들을 얻는다. 순서가 뒤집히면 **플랫폼이 둘 생겨서 "로그인은 됐는데 세션이 계정을 못 찾는"** 상태가 된다
+- **`ResolveServices()`를 Device ID 생성보다 먼저 부르는 이유.** SDK 매니저는 `(설정 이름 × 인스턴스 이름)` 조합으로 플랫폼 핸들을 캐시하는데, **그 캐시가 약참조다**(`EOSSDKManager.cpp`의 `TMap<FName, IEOSPlatformHandleWeakPtr>`). 온라인 서비스가 먼저 플랫폼을 만들어 강참조로 붙들고 있어야 `CreatePlatform()`이 같은 핸들을 돌려준다. 순서가 뒤집히면 새 플랫폼을 지역 변수만 붙들게 되어 함수가 반환되는 순간 파괴되고, **Device ID 콜백이 오지 않아 로그인이 끝나지 않는다**
 - **Device ID 생성만 EOS SDK 직접 호출이다.** `EOS_Connect_CreateDeviceId`를 감싸는 OSSv2 경로가 없다(엔진 전체 검색 0건). 로그인 자체는 `IAuth::Login`으로 한다
 - **SDK 콜백에 `this`를 그대로 넘기지 않는다.** EOS 콜백은 `void*` 하나만 나르므로, 콜백 전에 서브시스템이 사라지면(PIE 정지) 댕글링이 된다. 약참조를 힙에 담아 넘기고 콜백이 회수한다
 - **Device ID는 기기당 하나다.** 한 PC에서 클라이언트를 여럿 띄우면 같은 계정으로 로그인될 수 있다
@@ -259,7 +259,7 @@ ACBLobbyGameMode::PostLogin / Logout
 
 - 생성 시점에 1(호스트)로 미리 채운다 — 로비가 열리기 전에 검색되면 0으로 보이기 때문
 - 속성이 없는 방은 `CurrentPlayers = 0`으로 두되 **참가는 막지 않는다** (알 수 없음과 "빈 방"을 구분하지 않음)
-- `Entry.bIsJoinable`은 `IsJoinable() && CurrentPlayers < MaxPlayers`다. `IsJoinable()` 단독으로는 위 이유로 **언제나 true**라 정원 판정이 되지 않는다
+- `Entry.bIsJoinable`은 `IsJoinable() && CurrentPlayers < MaxPlayers`다. `IsJoinable()`은 `GetNumOpenConnections() > 0 && bAllowNewMembers`(`SessionsCommon.h`)라, 열린 커넥션 수가 위 이유로 언제나 정원과 같아 **정원 판정이 되지 않는다.** 걸러내는 것은 세션을 닫은 방(`bAllowNewMembers = false`, 아래 "매치가 시작되면 세션을 닫는다")뿐이다
 
 ### 매치가 시작되면 세션을 닫는다
 
@@ -363,7 +363,7 @@ Super::HandleDisconnect(InWorld, InNetDriver);                                  
 
 ### 정원 판정은 세션이 아니라 서버가 한다
 
-**세션 계층으로는 정원을 막을 수 없다.** 검색 결과는 스냅샷이고(LAN은 5초짜리), 클릭과 접속 사이에 남이 들어갈 수 있다. 게다가 **엔진의 `IsJoinable()`은 언제나 true다** — `GetNumOpenConnections()`가 멤버 목록에서 계산되는데 그 목록을 채우는 제공자가 없기 때문이다(위 "현재 인원도 우리가 실어 보내야 한다"). `CB_CurrentPlayers`로 정원 판정을 흉내내지만 그것도 **표시용 스냅샷일 뿐 권위가 아니다.**
+**세션 계층으로는 정원을 막을 수 없다.** 검색 결과는 스냅샷이고(LAN은 5초짜리), 클릭과 접속 사이에 남이 들어갈 수 있다. 게다가 **엔진의 `IsJoinable()`은 정원을 반영하지 못한다** — `GetNumOpenConnections()`가 멤버 목록에서 계산되는데 그 목록을 채우는 제공자가 없어 언제나 정원과 같기 때문이다(위 "현재 인원도 우리가 실어 보내야 한다"). 거짓이 되는 것은 매치 시작으로 세션을 닫은 방뿐이다. `CB_CurrentPlayers`로 정원 판정을 흉내내지만 그것도 **표시용 스냅샷일 뿐 권위가 아니다.**
 
 그래서 판정은 **접속 시점의 서버**가 한다. 엔진에 이미 있는 경로다.
 

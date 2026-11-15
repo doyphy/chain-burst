@@ -72,20 +72,6 @@ public:
 	
 protected:
 	/**
-	 * 태그 컨테이너에서 액션 태그 카테고리에 속하는 태그들 중 가장 우선순위가 높은 태그를 선택하여 반환하는 함수.
-	 * @param InTags 캐릭터가 현재 보유한 태그 컨테이너. 이 중에서 액션 태그 카테고리에 속하는 태그들만 고려하여 가장 우선순위가 높은 태그를 선택.
-	 * @return 가장 우선순위가 높은 액션 태그.	
-	 */
-	FGameplayTag SelectBestActionTag(const FGameplayTagContainer& InTags);
-
-	/**
-	 * 태그의 우선순위를 반환하는 함수.
-	 * @param InTag 우선순위를 확인하고 싶은 태그.
-	 * @return 태그의 우선순위 값. 값이 높을수록 우선순위가 높음. 액션 태그 카테고리에 속하지 않는 태그는 기본적으로 0을 반환.
-	 */
-	int32 GetActionPriority(FGameplayTag InTag);
-
-	/**
 	 * 애님 인스턴스에 몽타주 재생 전달
 	 * @param bAffectedByAttackSpeed true면 AttackSpeed 어트리뷰트를 PlayRate에 반영, false면 기본 속도(1.0)로 재생
 	 * @return 재생 성공 여부 (성공 시 LastMontageInstanceID 기록)

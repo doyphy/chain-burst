@@ -148,7 +148,7 @@ void ACBChaserController::Server_RequestSetNickname_Implementation(const FString
 	ACBPlayerState* CBPlayerState = GetPlayerState<ACBPlayerState>();
 	if (!CBPlayerState) return;
 
-	// 준비를 마친 뒤에는 바꿀 수 없음 (무기·의상 변경과 같은 정책)
+	// 준비를 마친 뒤에는 바꿀 수 없음 (무기 변경과 같은 정책. 의상은 서버 검사 없이 준비 중 위젯만 잠금)
 	if (CBPlayerState->IsReady())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[%s] 준비 상태에서 닉네임 변경을 요청해 무시함"), *GetNameSafe(this));

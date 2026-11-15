@@ -39,7 +39,7 @@ void UCBLocomotionProcessor::TickComponent(float DeltaTime, enum ELevelTick Tick
 
 void UCBLocomotionProcessor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// 미러링 태그·구독 정리 — 플레이어 ASC는 PlayerState 소유라 캐릭터보다 오래 살아 태그가 잔류할 수 있음
+	// 미러링 태그·구독 정리 - 플레이어 ASC는 PlayerState 소유라 캐릭터보다 오래 살아 태그가 잔류할 수 있음
 	if (UCBAbilitySystemComponent* ASC = CachedASC.Get())
 	{
 		ApplyLocalStateTag(CBGameplayTags::Status_Movement_Idle, false, bIdleTagApplied);
@@ -60,14 +60,14 @@ void UCBLocomotionProcessor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-// 현재 개이트 태그에 해당하는 이동 데이터 조회 (없으면 nullptr — 호출부에서 폴백 처리)
+// 현재 개이트 태그에 해당하는 이동 데이터 조회 (없으면 nullptr - 호출부에서 폴백 처리)
 const FCBGaitMovementData* UCBLocomotionProcessor::ResolveCurrentGaitData()
 {
-	// 이동 데이터는 로드아웃이 캐릭터에 주입 (미주입이면 폴백 경로) — 런타임 불변이라 캐시 재사용
+	// 이동 데이터는 로드아웃이 캐릭터에 주입 (미주입이면 폴백 경로) - 런타임 불변이라 캐시 재사용
 	UCBCharacterMovementData* MovementData = GetCachedMovementData();
 	if (!MovementData) return nullptr;
 
-	// 개이트 판별은 공용 헬퍼 사용 (Sprint > Walk > 기본 Run — 중복 구현 금지)
+	// 개이트 판별은 공용 헬퍼 사용 (Sprint > Walk > 기본 Run - 중복 구현 금지)
 	return MovementData->FindGaitData(UCBAbilitySystemLibrary::GetCurrentGaitTag(GetASC()));
 }
 
@@ -114,7 +114,7 @@ void UCBLocomotionProcessor::OnCharacterSystemReady()
 	// CachedCMC 초기화
 	GetCachedCMC(CachedCMC);
 
-	// 이동 데이터 캐시 초기화 (로드아웃 주입이 끝난 시점이라 여기서 채워둔다 — 첫 Tick에 조회가 몰리지 않게)
+	// 이동 데이터 캐시 초기화 (로드아웃 주입이 끝난 시점이라 여기서 채워둔다 - 첫 Tick에 조회가 몰리지 않게)
 	GetCachedMovementData();
 
 	// 파생 이동 태그 미러링 초기화 (ASC 준비 완료 이후여야 하므로 여기서)
@@ -132,13 +132,13 @@ void UCBLocomotionProcessor::InitializeDerivedMovementTags()
 	UCBAbilitySystemComponent* ASC = GetASC();
 	if (!ASC) return;
 
-	// 개이트 의도 태그(Walk/Sprint) 변경 이벤트 구독 — Run은 "둘 다 없음"에서 파생되므로 이벤트 시점에만 갱신
+	// 개이트 의도 태그(Walk/Sprint) 변경 이벤트 구독 - Run은 "둘 다 없음"에서 파생되므로 이벤트 시점에만 갱신
 	WalkTagChangedHandle = ASC->RegisterGameplayTagEvent(CBGameplayTags::Status_Movement_Gait_Walk, EGameplayTagEventType::NewOrRemoved)
 		.AddUObject(this, &UCBLocomotionProcessor::OnGaitTagChanged);
 	SprintTagChangedHandle = ASC->RegisterGameplayTagEvent(CBGameplayTags::Status_Movement_Gait_Sprint, EGameplayTagEventType::NewOrRemoved)
 		.AddUObject(this, &UCBLocomotionProcessor::OnGaitTagChanged);
 
-	// 무브먼트 모드 변경 델리게이트 구독 (InAir — 전환 시점에만 실행)
+	// 무브먼트 모드 변경 델리게이트 구독 (InAir - 전환 시점에만 실행)
 	if (ACharacter* OwnerCharacter = GetOwningPawn<ACharacter>())
 	{
 		OwnerCharacter->MovementModeChangedDelegate.AddDynamic(this, &UCBLocomotionProcessor::OnMovementModeChanged);
@@ -155,7 +155,7 @@ void UCBLocomotionProcessor::InitializeDerivedMovementTags()
 	UpdateIdleStateTag();
 }
 
-// Idle 상태 업데이트 (매 틱 — 속도 기반 연속 판정이라 틱 필요, *히스테리시스 적용)
+// Idle 상태 업데이트 (매 틱 - 속도 기반 연속 판정이라 틱 필요, *히스테리시스 적용)
 void UCBLocomotionProcessor::UpdateIdleStateTag()
 {
 	if (!CachedCMC.IsValid()) return;
@@ -185,13 +185,13 @@ void UCBLocomotionProcessor::UpdateIdleStateTag()
 	ApplyLocalStateTag(CBGameplayTags::Status_Movement_Idle, bShouldBeIdle, bIdleTagApplied);
 }
 
-// Run 상태 업데이트 (Walk/Sprint 의도 태그가 둘 다 없을 때의 기본 개이트 — 파생-배타)
+// Run 상태 업데이트 (Walk/Sprint 의도 태그가 둘 다 없을 때의 기본 개이트 - 파생-배타)
 void UCBLocomotionProcessor::UpdateRunGaitTag()
 {
 	UCBAbilitySystemComponent* ASC = GetASC();
 	if (!ASC) return;
 
-	// Run = Walk/Sprint 의도 태그가 둘 다 없을 때의 기본 개이트 (파생-배타 — 항상 개이트 태그 정확히 1개 유지)
+	// Run = Walk/Sprint 의도 태그가 둘 다 없을 때의 기본 개이트 (파생-배타 - 항상 개이트 태그 정확히 1개 유지)
 	// true (=Run 상태 적용), false (=Run 상태 해제)
 	const bool bShouldBeRun =
 		!ASC->HasMatchingGameplayTag(CBGameplayTags::Status_Movement_Gait_Walk) &&
@@ -201,11 +201,11 @@ void UCBLocomotionProcessor::UpdateRunGaitTag()
 	ApplyLocalStateTag(CBGameplayTags::Status_Movement_Gait_Run, bShouldBeRun, bRunTagApplied);
 }
 
-// 전이 시점에만 루스 태그 부여/제거 (루스 태그는 카운트 방식 — 매 틱 Add 호출 시 카운트 누적되기에 방지)
+// 전이 시점에만 루스 태그 부여/제거 (루스 태그는 카운트 방식 - 매 틱 Add 호출 시 카운트 누적되기에 방지)
 // 적용할 목표 상태(bShouldApply)와 실제 적용 여부 플래그(bAppliedFlag)를 같이 전달받아, 이미 적용된 상태라면 무시하고, 전이 시점에만 루스 태그를 부여/제거
 void UCBLocomotionProcessor::ApplyLocalStateTag(const FGameplayTag& Tag, bool bShouldApply, bool& bAppliedFlag)
 {
-	// 전이 시점에만 부여/제거 (루스 태그는 카운트 방식 — 반복 Add 호출 시 카운트 누적)
+	// 전이 시점에만 부여/제거 (루스 태그는 카운트 방식 - 반복 Add 호출 시 카운트 누적)
 	// 목표 상태가 이미 반영돼 있으면 무시 (적용됐는데 또 적용하려는 것, 없는데 또 제거하려는 것)
 	if (bShouldApply == bAppliedFlag) return;
 
@@ -228,7 +228,7 @@ void UCBLocomotionProcessor::ApplyLocalStateTag(const FGameplayTag& Tag, bool bS
 	bAppliedFlag = bShouldApply;
 }
 
-// 무브먼트 모드 변경 델리게이트 구독 콜백 함수 (InAir — 전환 시점에만 실행)
+// 무브먼트 모드 변경 델리게이트 구독 콜백 함수 (InAir - 전환 시점에만 실행)
 void UCBLocomotionProcessor::OnMovementModeChanged(ACharacter* Character, EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
 {
 	// InAir 태그 부여/제거 (전이 시점에만 수행)
@@ -263,7 +263,7 @@ bool UCBLocomotionProcessor::GetCachedCMC(TWeakObjectPtr<UCharacterMovementCompo
 		// 초기 값 설정
 		if (OutCMC.IsValid())
 		{
-			// 첫 Tick 전까지 쓰일 초기값 — 폴백 값으로 맞춤 (이후 매 Tick 개이트 데이터로 덮어씀)
+			// 첫 Tick 전까지 쓰일 초기값 - 폴백 값으로 맞춤 (이후 매 Tick 개이트 데이터로 덮어씀)
 			OutCMC.Get()->bUseSeparateBrakingFriction = true;
 			OutCMC.Get()->MaxAcceleration = DefaultMaxAcceleration;
 			OutCMC.Get()->BrakingDecelerationWalking = DefaultBrakingDeceleration;

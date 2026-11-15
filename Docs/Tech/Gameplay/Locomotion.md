@@ -121,7 +121,7 @@
   - **대시 몽타주(`AM_Chaser_*_Dash`/`*_Combat_Dash`)에는 이동 구간 전체를 덮는 Motion Warping AnimNotifyState가 배치되어 있어야 한다** (Root Motion Modifier: Skew Warp, Translation+Rotation 워프 켜짐, Warp Target Name = **`"Action.Movement.Dash"`** — 액션 태그 문자열과 정확히 일치해야 함). 이 노티파이가 없으면 워프 타겟만 등록되고 아무 효과가 없다(무해하게 무시됨). 다른 액션에 워프를 추가할 때는 그 액션의 태그 문자열을 그대로 Warp Target Name에 쓰면 된다.
   - [루트모션 재생 중 회전 잠금](#루트모션-재생-중-회전-잠금)과 공존한다 — 회전 잠금은 액터 회전을 안 건드리는 쪽으로 막을 뿐이고, 모션 워핑은 루트모션 델타 자체를 보정하는 별개 파이프라인(`ProcessRootMotionPreConvertToWorld`)이라 서로 간섭하지 않는다.
 - **종속 체인**: ① `GA_Sprint`는 `ActivationRequiredTags = Status.Movement.Dashing`으로 대시 없인 활성화 불가 (대시 쿨다운이면 Sprint도 발동 불가) ② 대시 성공 시 `UCBGADash`가 `TryActivateAbilitiesByTag(Ability.Movement.Sprint)`로 Sprint를 직접 활성화(부여 순서 무관) ③ Sprint는 릴리즈 또는 **가속 소실 자동 종료**(`bEndWhenNoAcceleration`, 유예 0.2초 — 정지·피벗 잠금 포함)로 해제.
-  - **AI 질주는 이 체인 밖이다.** AI 는 대시 입력이 없으므로 같은 `UCBGAChangeSpeed` 로 조건 없는 BP(`GA_AI_Sprint` — 대시 요구 없음, 무가속 자동 종료 끔)를 따로 두고, BT 서비스가 노드 실행 동안만 켠다(→ [AI.md](AI.md) "노드 실행 중 이동 속도").
+  - **AI 질주는 이 체인 밖이다.** AI 는 대시 입력이 없으므로 같은 `UCBGAChangeSpeed` 로 조건 없는 BP(`GA_Outlaw_Sprint` — 대시 요구 없음, 무가속 자동 종료 끔)를 따로 두고, BT 서비스가 노드 실행 동안만 켠다(→ [AI.md](AI.md) "노드 실행 중 이동 속도" — 보스의 추격·접근 `MoveTo`).
 - 대시 쿨다운은 GAS 표준(`CooldownGameplayEffectClass`), 활성 중 `Status.Movement.Dashing` 부여(ActivationOwnedTags) — 대시 감속·점프 차단·Sprint 활성화 조건에 사용. 상세: [Abilities.md](Abilities.md)
 - 대시 종료 후 상태 머신 인계는 Idle 고속 출구(`Idle → Move`)가 담당 (위 지상 표).
 
